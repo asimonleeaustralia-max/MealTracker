@@ -1,0 +1,21 @@
+/* 
+  Localizable.strings
+  MealTracker
+
+  Created by Simon Lee on 18/11/2025.
+  
+*/
+
+"add_meal" = "Add Meal";
+"edit_meal" = "Edit Meal";
+"cancel" = "Cancel";
+"save" = "Save";
+"meal_details" = "Meal details";
+"meal_description" = "Meal Description";
+"meal_date" = "Meal Date";
+"nutrition" = "Nutrition";
+"calories" = "Calories";
+"carbohydrates" = "Carbohydrates";
+"protein" = "Protein";
+"fat" = "Fat";
+"salt" = "Salt";

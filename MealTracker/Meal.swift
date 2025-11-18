@@ -18,6 +18,17 @@ public class Meal: NSManagedObject, Identifiable {
     @NSManaged public var salt: Double
     @NSManaged public var fat: Double
     @NSManaged public var date: Date
+
+    // Existing attributes
+    @NSManaged public var starch: Double
+    @NSManaged public var sugars: Double
+    @NSManaged public var fibre: Double
+
+    // New fat breakdown attributes
+    @NSManaged public var monounsaturatedFat: Double
+    @NSManaged public var polyunsaturatedFat: Double
+    @NSManaged public var saturatedFat: Double
+    @NSManaged public var transFat: Double
 }
 
 extension Meal {
@@ -27,3 +38,4 @@ extension Meal {
         return request
     }
 }
+

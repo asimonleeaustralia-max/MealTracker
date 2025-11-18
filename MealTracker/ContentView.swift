@@ -87,11 +87,20 @@ struct MealRow: View {
 
                 Divider()
 
+                // Expanded nutrient badges including new fields
                 HStack(spacing: 8) {
                     NutrientBadge(title: "Carbs", value: meal.carbohydrates)
                     NutrientBadge(title: "Protein", value: meal.protein)
                     NutrientBadge(title: "Fat", value: meal.fat)
                     NutrientBadge(title: "Salt", value: meal.salt)
+                    NutrientBadge(title: "Starch", value: meal.starch)
+                    NutrientBadge(title: "Sugars", value: meal.sugars)
+                    NutrientBadge(title: "Fibre", value: meal.fibre)
+                    // New fat breakdown badges
+                    NutrientBadge(title: "Mono", value: meal.monounsaturatedFat)
+                    NutrientBadge(title: "Poly", value: meal.polyunsaturatedFat)
+                    NutrientBadge(title: "Sat", value: meal.saturatedFat)
+                    NutrientBadge(title: "Trans", value: meal.transFat)
                 }
             }
             .font(.footnote)
@@ -126,3 +135,4 @@ private extension Double {
         truncatingRemainder(dividingBy: 1) == 0 ? String(Int(self)) : String(self)
     }
 }
+
