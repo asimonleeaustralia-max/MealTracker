@@ -18,6 +18,16 @@ struct MealFormView: View {
     @State private var protein: String = ""
     @State private var salt: String = ""
     @State private var fat: String = ""
+    // Added missing nutrient fields
+    @State private var starch: String = ""
+    @State private var sugars: String = ""
+    @State private var fibre: String = ""
+    // New fat breakdown fields
+    @State private var monounsaturatedFat: String = ""
+    @State private var polyunsaturatedFat: String = ""
+    @State private var saturatedFat: String = ""
+    @State private var transFat: String = ""
+
     @State private var date: Date = Date()
 
     var meal: Meal?
@@ -44,6 +54,16 @@ struct MealFormView: View {
                 NumericField(titleKey: "protein", text: $protein)
                 NumericField(titleKey: "fat", text: $fat)
                 NumericField(titleKey: "salt", text: $salt)
+                // Added fields for new attributes
+                NumericField(titleKey: "starch", text: $starch)
+                NumericField(titleKey: "sugars", text: $sugars)
+                NumericField(titleKey: "fibre", text: $fibre)
+
+                // Fat breakdown
+                NumericField(titleKey: "monounsaturated_fat", text: $monounsaturatedFat)
+                NumericField(titleKey: "polyunsaturated_fat", text: $polyunsaturatedFat)
+                NumericField(titleKey: "saturated_fat", text: $saturatedFat)
+                NumericField(titleKey: "trans_fat", text: $transFat)
             }
         }
         .navigationTitle(isEditing ? NSLocalizedString("edit_meal", comment: "Edit Meal") : NSLocalizedString("add_meal", comment: "Add Meal"))
@@ -67,6 +87,14 @@ struct MealFormView: View {
                 protein = meal.protein.cleanString
                 salt = meal.salt.cleanString
                 fat = meal.fat.cleanString
+                // Populate new fields on edit
+                starch = meal.starch.cleanString
+                sugars = meal.sugars.cleanString
+                fibre = meal.fibre.cleanString
+                monounsaturatedFat = meal.monounsaturatedFat.cleanString
+                polyunsaturatedFat = meal.polyunsaturatedFat.cleanString
+                saturatedFat = meal.saturatedFat.cleanString
+                transFat = meal.transFat.cleanString
                 date = meal.date
             } else {
                 date = Date()
@@ -80,7 +108,14 @@ struct MealFormView: View {
         Double(carbohydrates) != nil &&
         Double(protein) != nil &&
         Double(salt) != nil &&
-        Double(fat) != nil
+        Double(fat) != nil &&
+        Double(starch) != nil &&
+        Double(sugars) != nil &&
+        Double(fibre) != nil &&
+        Double(monounsaturatedFat) != nil &&
+        Double(polyunsaturatedFat) != nil &&
+        Double(saturatedFat) != nil &&
+        Double(transFat) != nil
     }
 
     private func save() {
@@ -88,7 +123,15 @@ struct MealFormView: View {
               let carbs = Double(carbohydrates),
               let prot = Double(protein),
               let s = Double(salt),
-              let f = Double(fat) else { return }
+              let f = Double(fat),
+              let sta = Double(starch),
+              let sug = Double(sugars),
+              let fib = Double(fibre),
+              let mono = Double(monounsaturatedFat),
+              let poly = Double(polyunsaturatedFat),
+              let sat = Double(saturatedFat),
+              let trans = Double(transFat)
+        else { return }
 
         if let meal = meal {
             meal.mealDescription = mealDescription
@@ -97,6 +140,13 @@ struct MealFormView: View {
             meal.protein = prot
             meal.salt = s
             meal.fat = f
+            meal.starch = sta
+            meal.sugars = sug
+            meal.fibre = fib
+            meal.monounsaturatedFat = mono
+            meal.polyunsaturatedFat = poly
+            meal.saturatedFat = sat
+            meal.transFat = trans
             meal.date = date
         } else {
             let newMeal = Meal(context: context)
@@ -107,6 +157,13 @@ struct MealFormView: View {
             newMeal.protein = prot
             newMeal.salt = s
             newMeal.fat = f
+            newMeal.starch = sta
+            newMeal.sugars = sug
+            newMeal.fibre = fib
+            newMeal.monounsaturatedFat = mono
+            newMeal.polyunsaturatedFat = poly
+            newMeal.saturatedFat = sat
+            newMeal.transFat = trans
             newMeal.date = date
         }
 
