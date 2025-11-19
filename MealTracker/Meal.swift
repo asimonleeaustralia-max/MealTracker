@@ -29,6 +29,20 @@ public class Meal: NSManagedObject, Identifiable {
     @NSManaged public var polyunsaturatedFat: Double
     @NSManaged public var saturatedFat: Double
     @NSManaged public var transFat: Double
+
+    // Accuracy flags
+    @NSManaged public var caloriesIsGuess: Bool
+    @NSManaged public var carbohydratesIsGuess: Bool
+    @NSManaged public var proteinIsGuess: Bool
+    @NSManaged public var saltIsGuess: Bool
+    @NSManaged public var fatIsGuess: Bool
+    @NSManaged public var starchIsGuess: Bool
+    @NSManaged public var sugarsIsGuess: Bool
+    @NSManaged public var fibreIsGuess: Bool
+    @NSManaged public var monounsaturatedFatIsGuess: Bool
+    @NSManaged public var polyunsaturatedFatIsGuess: Bool
+    @NSManaged public var saturatedFatIsGuess: Bool
+    @NSManaged public var transFatIsGuess: Bool
 }
 
 extension Meal {
@@ -38,4 +52,3 @@ extension Meal {
         return request
     }
 }
-
