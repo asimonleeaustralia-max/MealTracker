@@ -8,8 +8,11 @@ struct SettingsView: View {
     @AppStorage("appLanguageCode") private var appLanguageCode: String = LocalizationManager.defaultLanguageCode
 
     private var availableLanguages: [String] {
-        // List localizations actually present in the app bundle
-        Bundle.main.localizations.sorted()
+        // Prefer explicit localizations, filter out "Base"
+        let codes = Bundle.main.localizations.filter { $0.lowercased() != "base" }
+        // If nothing besides Base, fall back to preferredLocalizations so at least current language shows
+        let list = codes.isEmpty ? Bundle.main.preferredLocalizations : codes
+        return Array(Set(list)).sorted()
     }
 
     var body: some View {

@@ -71,23 +71,54 @@ struct MealFormView: View {
         let l = LocalizationManager(languageCode: appLanguageCode)
 
         Form {
-            Section(header: LocalizedText("nutrition", manager: l)) {
-                MetricField(titleKey: "calories", text: numericBinding($calories), isGuess: $caloriesIsGuess, keyboard: .decimalPad, manager: l, unitSuffix: energyUnit.displaySuffix(manager: l))
-                MetricField(titleKey: "carbohydrates", text: numericBinding($carbohydrates), isGuess: $carbohydratesIsGuess, manager: l)
-                MetricField(titleKey: "protein", text: numericBinding($protein), isGuess: $proteinIsGuess, manager: l)
-                MetricField(titleKey: "fat", text: numericBinding($fat), isGuess: $fatIsGuess, manager: l)
-                MetricField(titleKey: "salt", text: numericBinding($salt), isGuess: $saltIsGuess, manager: l)
+            // Plain section (no "nutrition" header)
+            Section {
+                // Energy
+                MetricField(titleKey: "calories",
+                            text: numericBinding($calories),
+                            isGuess: $caloriesIsGuess,
+                            keyboard: .decimalPad,
+                            manager: l,
+                            unitSuffix: energyUnit.displaySuffix(manager: l))
 
-                // Added fields for new attributes
-                MetricField(titleKey: "starch", text: numericBinding($starch), isGuess: $starchIsGuess, manager: l)
-                MetricField(titleKey: "sugars", text: numericBinding($sugars), isGuess: $sugarsIsGuess, manager: l)
-                MetricField(titleKey: "fibre", text: numericBinding($fibre), isGuess: $fibreIsGuess, manager: l)
+                // Carbs group (total + optional breakdown)
+                CarbsGroupView(
+                    manager: l,
+                    totalText: numericBinding($carbohydrates),
+                    totalIsGuess: $carbohydratesIsGuess,
+                    sugarsText: numericBinding($sugars),
+                    sugarsIsGuess: $sugarsIsGuess,
+                    starchText: numericBinding($starch),
+                    starchIsGuess: $starchIsGuess,
+                    fibreText: numericBinding($fibre),
+                    fibreIsGuess: $fibreIsGuess
+                )
 
-                // Fat breakdown
-                MetricField(titleKey: "monounsaturated_fat", text: numericBinding($monounsaturatedFat), isGuess: $monounsaturatedFatIsGuess, manager: l)
-                MetricField(titleKey: "polyunsaturated_fat", text: numericBinding($polyunsaturatedFat), isGuess: $polyunsaturatedFatIsGuess, manager: l)
-                MetricField(titleKey: "saturated_fat", text: numericBinding($saturatedFat), isGuess: $saturatedFatIsGuess, manager: l)
-                MetricField(titleKey: "trans_fat", text: numericBinding($transFat), isGuess: $transFatIsGuess, manager: l)
+                // Protein and salt remain as simple fields
+                MetricField(titleKey: "protein",
+                            text: numericBinding($protein),
+                            isGuess: $proteinIsGuess,
+                            manager: l)
+
+                MetricField(titleKey: "salt",
+                            text: numericBinding($salt),
+                            isGuess: $saltIsGuess,
+                            manager: l)
+
+                // Fat group (total + optional breakdown)
+                FatGroupView(
+                    manager: l,
+                    totalText: numericBinding($fat),
+                    totalIsGuess: $fatIsGuess,
+                    monoText: numericBinding($monounsaturatedFat),
+                    monoIsGuess: $monounsaturatedFatIsGuess,
+                    polyText: numericBinding($polyunsaturatedFat),
+                    polyIsGuess: $polyunsaturatedFatIsGuess,
+                    satText: numericBinding($saturatedFat),
+                    satIsGuess: $saturatedFatIsGuess,
+                    transText: numericBinding($transFat),
+                    transIsGuess: $transFatIsGuess
+                )
             }
         }
         // No navigationTitle to keep the first page clean
@@ -281,29 +312,50 @@ struct MealFormView: View {
     }
 
     private func sanitizeNumericInput(_ input: String) -> String {
-        let decimalSeparator = Locale.current.decimalSeparator ?? "."
-        var result = ""
-        var hasDecimal = false
+        // Allow digits and one decimal separator (either "." or ",") while typing.
+        // Normalize the kept separator to the current locale’s separator.
+        let localeSep = Locale.current.decimalSeparator ?? "."
+        var digits = ""
+        var hasSeparator = false
+        var firstSeparator: Character?
 
         for ch in input {
             if ch.isNumber {
-                result.append(ch)
-            } else if String(ch) == decimalSeparator {
-                if !hasDecimal {
-                    if result.isEmpty { result = "0" }
-                    result.append(decimalSeparator)
-                    hasDecimal = true
+                digits.append(ch)
+            } else if ch == "." || ch == "," {
+                if !hasSeparator {
+                    hasSeparator = true
+                    firstSeparator = ch
                 }
+                // ignore additional separators
             } else {
-                continue
+                // ignore other characters
             }
         }
 
-        if !hasDecimal {
-            if result.count > 1, result.allSatisfy({ $0 == "0" }) {
-                result = "0"
-            }
+        // Build result with normalized separator
+        var result = digits
+        if let _ = firstSeparator {
+            // Insert separator before the last typed fractional digits if user typed any after sep.
+            // We can’t infer cursor position here, so we assume the user typed in order.
+            // Reconstruct by splitting the original input at the first separator.
+            let parts = input.replacingOccurrences(of: " ", with: "")
+                .split(maxSplits: 1, whereSeparator: { $0 == "." || $0 == "," })
+            let integerPart = parts.first.map { String($0.filter(\.isNumber)) } ?? ""
+            let fractionalPart = parts.count > 1 ? String(parts[1].filter(\.isNumber)) : ""
+
+            var normalized = integerPart
+            if normalized.isEmpty { normalized = "0" }
+            normalized.append(localeSep)
+            normalized.append(fractionalPart)
+            result = normalized
         }
+
+        // Collapse leading zeros like "000" to "0"
+        if !result.contains(localeSep), result.count > 1, result.allSatisfy({ $0 == "0" }) {
+            result = "0"
+        }
+
         return result
     }
 }
@@ -338,26 +390,37 @@ private struct MetricField: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                LocalizedText(titleKey, manager: manager)
-                Spacer()
-                TextField("", text: $text)
-                    .keyboardType(keyboard)
-                    .multilineTextAlignment(.trailing)
-                    .submitLabel(.done)
-                    .frame(maxWidth: 140)
-                if let suffix = unitSuffix {
-                    Text(suffix).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 6) {
+            // Title above the line
+            LocalizedText(titleKey, manager: manager)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            // Input row: accuracy control on the left, entry on the right
+            HStack(alignment: .center, spacing: 8) {
+                Picker("", selection: $isGuess) {
+                    Text(manager.localized("accurate")).tag(false)
+                    Text(manager.localized("guess")).tag(true)
+                }
+                .pickerStyle(.segmented)
+                .tint(tintColor)
+                .frame(width: 160)
+                .accessibilityLabel(manager.localized(titleKey) + " " + manager.localized("accuracy"))
+
+                Spacer(minLength: 8)
+
+                HStack(spacing: 6) {
+                    TextField("", text: $text)
+                        .keyboardType(keyboard)
+                        .multilineTextAlignment(.trailing)
+                        .submitLabel(.done)
+                        .frame(maxWidth: 140)
+
+                    if let suffix = unitSuffix {
+                        Text(suffix).foregroundStyle(.secondary)
+                    }
                 }
             }
-
-            Picker("", selection: $isGuess) {
-                Text(manager.localized("accurate")).tag(false)
-                Text(manager.localized("guess")).tag(true)
-            }
-            .pickerStyle(.segmented)
-            .tint(tintColor)
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
@@ -365,9 +428,281 @@ private struct MetricField: View {
     }
 }
 
+// MARK: - Grouped Macros
+
+private struct CarbsGroupView: View {
+    let manager: LocalizationManager
+
+    @Binding var totalText: String
+    @Binding var totalIsGuess: Bool
+
+    @Binding var sugarsText: String
+    @Binding var sugarsIsGuess: Bool
+
+    @Binding var starchText: String
+    @Binding var starchIsGuess: Bool
+
+    @Binding var fibreText: String
+    @Binding var fibreIsGuess: Bool
+
+    @State private var expanded: Bool = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            MetricField(titleKey: "carbohydrates",
+                        text: $totalText,
+                        isGuess: $totalIsGuess,
+                        manager: manager)
+                .onChange(of: totalText) { newValue in
+                    applyEstimatedCarbSplit(from: newValue)
+                }
+
+            DisclosureGroup(isExpanded: $expanded) {
+                VStack(spacing: 0) {
+                    MetricField(titleKey: "sugars",
+                                text: $sugarsText,
+                                isGuess: $sugarsIsGuess,
+                                manager: manager)
+                    MetricField(titleKey: "starch",
+                                text: $starchText,
+                                isGuess: $starchIsGuess,
+                                manager: manager)
+                    MetricField(titleKey: "fibre",
+                                text: $fibreText,
+                                isGuess: $fibreIsGuess,
+                                manager: manager)
+                }
+                .padding(.top, 6)
+            } label: {
+                // Empty label: only the chevron remains tappable
+                EmptyView()
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
+    private mutating func applyEstimatedCarbSplit(from totalString: String) {
+        guard let total = Double(totalString), total > 0 else { return }
+
+        // Default target ratios
+        let defaultRatios: (sugars: Double, starch: Double, fibre: Double) = (0.40, 0.55, 0.05)
+
+        // Current accurate values (preserve if isGuess == false)
+        let currentSugars = Double(sugarsText) ?? 0
+        let currentStarch = Double(starchText) ?? 0
+        let currentFibre = Double(fibreText) ?? 0
+
+        let accurateTotal =
+            (sugarsIsGuess ? 0 : currentSugars) +
+            (starchIsGuess ? 0 : currentStarch) +
+            (fibreIsGuess ? 0 : currentFibre)
+
+        // Remaining to distribute among guess fields
+        let remaining = max(0, total - accurateTotal)
+
+        // Build accessors to mutate bindings without key paths to self
+        struct Field {
+            let get: () -> Double
+            let set: (Double) -> Void
+            let setGuess: (Bool) -> Void
+            let ratio: Double
+        }
+
+        var fields: [Field] = []
+        if sugarsIsGuess {
+            fields.append(Field(
+                get: { Double(sugarsText) ?? 0 },
+                set: { sugarsText = $0.rounded(toPlaces: 2).cleanString },
+                setGuess: { sugarsIsGuess = $0 },
+                ratio: defaultRatios.sugars
+            ))
+        }
+        if starchIsGuess {
+            fields.append(Field(
+                get: { Double(starchText) ?? 0 },
+                set: { starchText = $0.rounded(toPlaces: 2).cleanString },
+                setGuess: { starchIsGuess = $0 },
+                ratio: defaultRatios.starch
+            ))
+        }
+        if fibreIsGuess {
+            fields.append(Field(
+                get: { Double(fibreText) ?? 0 },
+                set: { fibreText = $0.rounded(toPlaces: 2).cleanString },
+                setGuess: { fibreIsGuess = $0 },
+                ratio: defaultRatios.fibre
+            ))
+        }
+
+        guard !fields.isEmpty else { return }
+
+        let ratioSum = fields.map { $0.ratio }.reduce(0, +)
+        let normalized = fields.map { ratioSum > 0 ? $0.ratio / ratioSum : (1.0 / Double(fields.count)) }
+
+        // Assign values
+        for (i, field) in fields.enumerated() {
+            let value = remaining * normalized[i]
+            field.set(value)
+            field.setGuess(true)
+        }
+
+        // If rounding caused drift, adjust the last guess field to exactly match remaining
+        let assigned = fields.reduce(0.0) { $0 + $1.get() }
+        let drift = remaining - assigned
+        if let last = fields.last {
+            last.set(max(0, last.get() + drift))
+        }
+    }
+}
+
+private struct FatGroupView: View {
+    let manager: LocalizationManager
+
+    @Binding var totalText: String
+    @Binding var totalIsGuess: Bool
+
+    @Binding var monoText: String
+    @Binding var monoIsGuess: Bool
+
+    @Binding var polyText: String
+    @Binding var polyIsGuess: Bool
+
+    @Binding var satText: String
+    @Binding var satIsGuess: Bool
+
+    @Binding var transText: String
+    @Binding var transIsGuess: Bool
+
+    @State private var expanded: Bool = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            MetricField(titleKey: "fat",
+                        text: $totalText,
+                        isGuess: $totalIsGuess,
+                        manager: manager)
+                .onChange(of: totalText) { newValue in
+                    applyEstimatedFatSplit(from: newValue)
+                }
+
+            DisclosureGroup(isExpanded: $expanded) {
+                VStack(spacing: 0) {
+                    MetricField(titleKey: "monounsaturated_fat",
+                                text: $monoText,
+                                isGuess: $monoIsGuess,
+                                manager: manager)
+                    MetricField(titleKey: "polyunsaturated_fat",
+                                text: $polyText,
+                                isGuess: $polyIsGuess,
+                                manager: manager)
+                    MetricField(titleKey: "saturated_fat",
+                                text: $satText,
+                                isGuess: $satIsGuess,
+                                manager: manager)
+                    MetricField(titleKey: "trans_fat",
+                                text: $transText,
+                                isGuess: $transIsGuess,
+                                manager: manager)
+                }
+                .padding(.top, 6)
+            } label: {
+                // Empty label: only the chevron remains tappable
+                EmptyView()
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
+    private mutating func applyEstimatedFatSplit(from totalString: String) {
+        guard let total = Double(totalString), total > 0 else { return }
+
+        // Default target ratios: 40% mono, 35% sat, 23% poly, 2% trans
+        let defaultRatios: (mono: Double, sat: Double, poly: Double, trans: Double) = (0.40, 0.35, 0.23, 0.02)
+
+        // Current accurate values
+        let currentMono = Double(monoText) ?? 0
+        let currentPoly = Double(polyText) ?? 0
+        let currentSat = Double(satText) ?? 0
+        let currentTrans = Double(transText) ?? 0
+
+        let accurateTotal =
+            (monoIsGuess ? 0 : currentMono) +
+            (polyIsGuess ? 0 : currentPoly) +
+            (satIsGuess ? 0 : currentSat) +
+            (transIsGuess ? 0 : currentTrans)
+
+        let remaining = max(0, total - accurateTotal)
+
+        struct Field {
+            let get: () -> Double
+            let set: (Double) -> Void
+            let setGuess: (Bool) -> Void
+            let ratio: Double
+        }
+
+        var fields: [Field] = []
+        if monoIsGuess {
+            fields.append(Field(
+                get: { Double(monoText) ?? 0 },
+                set: { monoText = $0.cleanString },
+                setGuess: { monoIsGuess = $0 },
+                ratio: defaultRatios.mono
+            ))
+        }
+        if polyIsGuess {
+            fields.append(Field(
+                get: { Double(polyText) ?? 0 },
+                set: { polyText = $0.cleanString },
+                setGuess: { polyIsGuess = $0 },
+                ratio: defaultRatios.poly
+            ))
+        }
+        if satIsGuess {
+            fields.append(Field(
+                get: { Double(satText) ?? 0 },
+                set: { satText = $0.cleanString },
+                setGuess: { satIsGuess = $0 },
+                ratio: defaultRatios.sat
+            ))
+        }
+        if transIsGuess {
+            fields.append(Field(
+                get: { Double(transText) ?? 0 },
+                set: { transText = $0.cleanString },
+                setGuess: { transIsGuess = $0 },
+                ratio: defaultRatios.trans
+            ))
+        }
+
+        guard !fields.isEmpty else { return }
+
+        let ratioSum = fields.map { $0.ratio }.reduce(0, +)
+        let normalized = fields.map { ratioSum > 0 ? $0.ratio / ratioSum : (1.0 / Double(fields.count)) }
+
+        for (i, field) in fields.enumerated() {
+            let value = remaining * normalized[i]
+            field.set(value)
+            field.setGuess(true)
+        }
+
+        // Adjust last to fix drift due to formatting
+        let assigned = fields.reduce(0.0) { $0 + $1.get() }
+        let drift = remaining - assigned
+        if let last = fields.last {
+            last.set(max(0, last.get() + drift))
+        }
+    }
+}
+
 private extension Double {
     var cleanString: String {
         truncatingRemainder(dividingBy: 1) == 0 ? String(Int(self)) : String(self)
+    }
+
+    func rounded(toPlaces places: Int) -> Double {
+        guard places >= 0 else { return self }
+        let factor = pow(10.0, Double(places))
+        return (self * factor).rounded() / factor
     }
 }
 
