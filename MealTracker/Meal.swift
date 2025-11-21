@@ -30,6 +30,11 @@ public class Meal: NSManagedObject, Identifiable {
     @NSManaged public var saturatedFat: Double
     @NSManaged public var transFat: Double
 
+    // New protein breakdown attributes
+    @NSManaged public var animalProtein: Double
+    @NSManaged public var plantProtein: Double
+    @NSManaged public var proteinSupplements: Double
+
     // Accuracy flags
     @NSManaged public var caloriesIsGuess: Bool
     @NSManaged public var carbohydratesIsGuess: Bool
@@ -43,6 +48,11 @@ public class Meal: NSManagedObject, Identifiable {
     @NSManaged public var polyunsaturatedFatIsGuess: Bool
     @NSManaged public var saturatedFatIsGuess: Bool
     @NSManaged public var transFatIsGuess: Bool
+
+    // New protein breakdown accuracy flags
+    @NSManaged public var animalProteinIsGuess: Bool
+    @NSManaged public var plantProteinIsGuess: Bool
+    @NSManaged public var proteinSupplementsIsGuess: Bool
 }
 
 extension Meal {

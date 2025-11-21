@@ -24,7 +24,7 @@ struct MealFormView: View {
     @State private var calories: String = ""
     @State private var carbohydrates: String = ""
     @State private var protein: String = ""
-    @State private var salt: String = ""
+    @State private var sodium: String = ""          // renamed from salt for UI
     @State private var fat: String = ""
     // Added missing nutrient fields
     @State private var starch: String = ""
@@ -35,12 +35,16 @@ struct MealFormView: View {
     @State private var polyunsaturatedFat: String = ""
     @State private var saturatedFat: String = ""
     @State private var transFat: String = ""
+    // New protein breakdown fields
+    @State private var animalProtein: String = ""
+    @State private var plantProtein: String = ""
+    @State private var proteinSupplements: String = ""
 
     // Accuracy flags (default Accurate = false for "isGuess")
     @State private var caloriesIsGuess = false
     @State private var carbohydratesIsGuess = false
     @State private var proteinIsGuess = false
-    @State private var saltIsGuess = false
+    @State private var sodiumIsGuess = false       // renamed from saltIsGuess for UI
     @State private var fatIsGuess = false
     @State private var starchIsGuess = false
     @State private var sugarsIsGuess = false
@@ -49,6 +53,10 @@ struct MealFormView: View {
     @State private var polyunsaturatedFatIsGuess = false
     @State private var saturatedFatIsGuess = false
     @State private var transFatIsGuess = false
+    // Protein breakdown flags
+    @State private var animalProteinIsGuess = false
+    @State private var plantProteinIsGuess = false
+    @State private var proteinSupplementsIsGuess = false
 
     // We won’t show date picker; date will be set on save
     @State private var date: Date = Date()
@@ -73,13 +81,16 @@ struct MealFormView: View {
         Form {
             // Plain section (no "nutrition" header)
             Section {
-                // Energy
-                MetricField(titleKey: "calories",
-                            text: numericBinding($calories),
-                            isGuess: $caloriesIsGuess,
-                            keyboard: .decimalPad,
-                            manager: l,
-                            unitSuffix: energyUnit.displaySuffix(manager: l))
+                // Energy - show user preference in the label with standard unit symbols
+                MetricField(
+                    titleKey: caloriesTitleWithUnit(manager: l),
+                    text: numericBinding($calories),
+                    isGuess: $caloriesIsGuess,
+                    keyboard: .decimalPad,
+                    manager: l,
+                    unitSuffix: energyUnit.displaySuffix(manager: l),
+                    isPrelocalizedTitle: true
+                )
 
                 // Carbs group (total + optional breakdown)
                 CarbsGroupView(
@@ -94,15 +105,24 @@ struct MealFormView: View {
                     fibreIsGuess: $fibreIsGuess
                 )
 
-                // Protein and salt remain as simple fields
-                MetricField(titleKey: "protein",
-                            text: numericBinding($protein),
-                            isGuess: $proteinIsGuess,
-                            manager: l)
+                // Protein group (total + optional breakdown)
+                ProteinGroupView(
+                    manager: l,
+                    descriptionText: $mealDescription,
+                    totalText: numericBinding($protein),
+                    totalIsGuess: $proteinIsGuess,
+                    animalText: numericBinding($animalProtein),
+                    animalIsGuess: $animalProteinIsGuess,
+                    plantText: numericBinding($plantProtein),
+                    plantIsGuess: $plantProteinIsGuess,
+                    supplementsText: numericBinding($proteinSupplements),
+                    supplementsIsGuess: $proteinSupplementsIsGuess
+                )
 
-                MetricField(titleKey: "salt",
-                            text: numericBinding($salt),
-                            isGuess: $saltIsGuess,
+                // Sodium (UI) — persists to Meal.salt under the hood
+                MetricField(titleKey: "sodium",
+                            text: numericBinding($sodium),
+                            isGuess: $sodiumIsGuess,
                             manager: l)
 
                 // Fat group (total + optional breakdown)
@@ -123,9 +143,8 @@ struct MealFormView: View {
         }
         // No navigationTitle to keep the first page clean
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button(l.localized("cancel")) { dismiss() }
-            }
+            // Removed the cancel button as requested
+
             ToolbarItem(placement: .confirmationAction) {
                 Button(l.localized("save")) {
                     save()
@@ -152,7 +171,7 @@ struct MealFormView: View {
                 calories = meal.calories.cleanString
                 carbohydrates = meal.carbohydrates.cleanString
                 protein = meal.protein.cleanString
-                salt = meal.salt.cleanString
+                sodium = meal.salt.cleanString          // map from model salt
                 fat = meal.fat.cleanString
                 starch = meal.starch.cleanString
                 sugars = meal.sugars.cleanString
@@ -161,13 +180,18 @@ struct MealFormView: View {
                 polyunsaturatedFat = meal.polyunsaturatedFat.cleanString
                 saturatedFat = meal.saturatedFat.cleanString
                 transFat = meal.transFat.cleanString
+                // Protein breakdown
+                animalProtein = meal.animalProtein.cleanString
+                plantProtein = meal.plantProtein.cleanString
+                proteinSupplements = meal.proteinSupplements.cleanString
+
                 date = meal.date
 
                 // Load guess flags
                 caloriesIsGuess = meal.caloriesIsGuess
                 carbohydratesIsGuess = meal.carbohydratesIsGuess
                 proteinIsGuess = meal.proteinIsGuess
-                saltIsGuess = meal.saltIsGuess
+                sodiumIsGuess = meal.saltIsGuess        // map from model saltIsGuess
                 fatIsGuess = meal.fatIsGuess
                 starchIsGuess = meal.starchIsGuess
                 sugarsIsGuess = meal.sugarsIsGuess
@@ -176,6 +200,11 @@ struct MealFormView: View {
                 polyunsaturatedFatIsGuess = meal.polyunsaturatedFatIsGuess
                 saturatedFatIsGuess = meal.saturatedFatIsGuess
                 transFatIsGuess = meal.transFatIsGuess
+
+                // Protein breakdown flags
+                animalProteinIsGuess = meal.animalProteinIsGuess
+                plantProteinIsGuess = meal.plantProteinIsGuess
+                proteinSupplementsIsGuess = meal.proteinSupplementsIsGuess
             }
 
             // Start location so we have a fix at save time (no UI shown)
@@ -210,7 +239,7 @@ struct MealFormView: View {
 
         let carbs = doubleOrZero(carbohydrates)
         let prot = doubleOrZero(protein)
-        let s = doubleOrZero(salt)
+        let sod = doubleOrZero(sodium)        // from UI sodium
         let f = doubleOrZero(fat)
         let sta = doubleOrZero(starch)
         let sug = doubleOrZero(sugars)
@@ -219,6 +248,10 @@ struct MealFormView: View {
         let poly = doubleOrZero(polyunsaturatedFat)
         let sat = doubleOrZero(saturatedFat)
         let trans = doubleOrZero(transFat)
+        // Protein breakdown
+        let animal = doubleOrZero(animalProtein)
+        let plant = doubleOrZero(plantProtein)
+        let supps = doubleOrZero(proteinSupplements)
 
         // Capture now for default title and date
         let now = Date()
@@ -228,7 +261,7 @@ struct MealFormView: View {
             meal.calories = cal
             meal.carbohydrates = carbs
             meal.protein = prot
-            meal.salt = s
+            meal.salt = sod                 // persist to existing model attribute
             meal.fat = f
             meal.starch = sta
             meal.sugars = sug
@@ -238,11 +271,16 @@ struct MealFormView: View {
             meal.saturatedFat = sat
             meal.transFat = trans
 
+            // Protein breakdown
+            meal.animalProtein = animal
+            meal.plantProtein = plant
+            meal.proteinSupplements = supps
+
             // Persist guess flags
             meal.caloriesIsGuess = caloriesIsGuess
             meal.carbohydratesIsGuess = carbohydratesIsGuess
             meal.proteinIsGuess = proteinIsGuess
-            meal.saltIsGuess = saltIsGuess
+            meal.saltIsGuess = sodiumIsGuess        // map UI flag to model
             meal.fatIsGuess = fatIsGuess
             meal.starchIsGuess = starchIsGuess
             meal.sugarsIsGuess = sugarsIsGuess
@@ -251,6 +289,11 @@ struct MealFormView: View {
             meal.polyunsaturatedFatIsGuess = polyunsaturatedFatIsGuess
             meal.saturatedFatIsGuess = saturatedFatIsGuess
             meal.transFatIsGuess = transFatIsGuess
+
+            // Protein breakdown flags
+            meal.animalProteinIsGuess = animalProteinIsGuess
+            meal.plantProteinIsGuess = plantProteinIsGuess
+            meal.proteinSupplementsIsGuess = proteinSupplementsIsGuess
 
             if let loc = locationManager.lastLocation {
                 meal.setValue(loc.coordinate.latitude, forKey: "latitude")
@@ -265,7 +308,7 @@ struct MealFormView: View {
             newMeal.calories = cal
             newMeal.carbohydrates = carbs
             newMeal.protein = prot
-            newMeal.salt = s
+            newMeal.salt = sod                // persist to existing model attribute
             newMeal.fat = f
             newMeal.starch = sta
             newMeal.sugars = sug
@@ -275,10 +318,15 @@ struct MealFormView: View {
             newMeal.saturatedFat = sat
             newMeal.transFat = trans
 
+            // Protein breakdown
+            newMeal.animalProtein = animal
+            newMeal.plantProtein = plant
+            newMeal.proteinSupplements = supps
+
             newMeal.caloriesIsGuess = caloriesIsGuess
             newMeal.carbohydratesIsGuess = carbohydratesIsGuess
             newMeal.proteinIsGuess = proteinIsGuess
-            newMeal.saltIsGuess = saltIsGuess
+            newMeal.saltIsGuess = sodiumIsGuess     // map UI flag to model
             newMeal.fatIsGuess = fatIsGuess
             newMeal.starchIsGuess = starchIsGuess
             newMeal.sugarsIsGuess = sugarsIsGuess
@@ -287,6 +335,11 @@ struct MealFormView: View {
             newMeal.polyunsaturatedFatIsGuess = polyunsaturatedFatIsGuess
             newMeal.saturatedFatIsGuess = saturatedFatIsGuess
             newMeal.transFatIsGuess = transFatIsGuess
+
+            // Protein breakdown flags
+            newMeal.animalProteinIsGuess = animalProteinIsGuess
+            newMeal.plantProteinIsGuess = plantProteinIsGuess
+            newMeal.proteinSupplementsIsGuess = proteinSupplementsIsGuess
 
             if let loc = locationManager.lastLocation {
                 newMeal.setValue(loc.coordinate.latitude, forKey: "latitude")
@@ -358,6 +411,13 @@ struct MealFormView: View {
 
         return result
     }
+
+    // Builds a label like "Calories (kcal)" or "Calories (kJ)" using standard unit symbols
+    private func caloriesTitleWithUnit(manager: LocalizationManager) -> String {
+        let base = manager.localized("calories")
+        let unit = energyUnit.displaySuffix(manager: manager)
+        return "\(base) (\(unit))"
+    }
 }
 
 enum EnergyUnit: String, CaseIterable, Codable {
@@ -366,8 +426,12 @@ enum EnergyUnit: String, CaseIterable, Codable {
 
     func displaySuffix(manager: LocalizationManager) -> String {
         switch self {
-        case .calories: return manager.localized("kcal_suffix") // e.g., "kcal"
-        case .kilojoules: return manager.localized("kj_suffix") // e.g., "kJ"
+        case .calories:
+            // Standard symbol for kilocalories
+            return manager.localized("kcal_suffix")
+        case .kilojoules:
+            // Standard symbol for kilojoules
+            return manager.localized("kj_suffix")
         }
     }
 }
@@ -384,47 +448,71 @@ private struct MetricField: View {
     var keyboard: UIKeyboardType = .decimalPad
     let manager: LocalizationManager
     var unitSuffix: String? = nil
+    // If true, titleKey is already localized and ready for display; otherwise we localize and prettify.
+    var isPrelocalizedTitle: Bool = false
 
     private var tintColor: Color {
         isGuess ? .orange : .green
     }
 
+    private var displayTitle: String {
+        if isPrelocalizedTitle {
+            return titleKey
+        } else {
+            // Localize the key and replace underscores for nicer display.
+            let localized = manager.localized(titleKey)
+            return localized.replacingOccurrences(of: "_", with: " ")
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            // Title above the line
-            LocalizedText(titleKey, manager: manager)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            // Row 1: Title on left, accuracy control on right
+            HStack(alignment: .firstTextBaseline) {
+                Text(displayTitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
-            // Input row: accuracy control on the left, entry on the right
-            HStack(alignment: .center, spacing: 8) {
+                Spacer(minLength: 8)
+
                 Picker("", selection: $isGuess) {
                     Text(manager.localized("accurate")).tag(false)
                     Text(manager.localized("guess")).tag(true)
                 }
+                .font(.caption)
                 .pickerStyle(.segmented)
                 .tint(tintColor)
-                .frame(width: 160)
-                .accessibilityLabel(manager.localized(titleKey) + " " + manager.localized("accuracy"))
+                .frame(maxWidth: 180)
+                .accessibilityLabel(displayTitle + " " + manager.localized("accuracy"))
+            }
 
-                Spacer(minLength: 8)
+            // Row 2: Input with subtle background, rounded corners, and thin stroke
+            HStack(spacing: 8) {
+                TextField("", text: $text)
+                    .keyboardType(keyboard)
+                    .multilineTextAlignment(.leading)
+                    .submitLabel(.done)
 
-                HStack(spacing: 6) {
-                    TextField("", text: $text)
-                        .keyboardType(keyboard)
-                        .multilineTextAlignment(.trailing)
-                        .submitLabel(.done)
-                        .frame(maxWidth: 140)
-
-                    if let suffix = unitSuffix {
-                        Text(suffix).foregroundStyle(.secondary)
-                    }
+                if let suffix = unitSuffix {
+                    Text(suffix)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.secondary.opacity(0.12))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.secondary.opacity(0.15), lineWidth: 1)
+            )
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(manager.localized(titleKey))
+        .accessibilityLabel(displayTitle)
     }
 }
 
@@ -481,7 +569,7 @@ private struct CarbsGroupView: View {
         }
     }
 
-    private mutating func applyEstimatedCarbSplit(from totalString: String) {
+    private func applyEstimatedCarbSplit(from totalString: String) {
         guard let total = Double(totalString), total > 0 else { return }
 
         // Default target ratios
@@ -555,6 +643,161 @@ private struct CarbsGroupView: View {
     }
 }
 
+private struct ProteinGroupView: View {
+    let manager: LocalizationManager
+
+    // Heuristic input to decide default split
+    @Binding var descriptionText: String
+
+    @Binding var totalText: String
+    @Binding var totalIsGuess: Bool
+
+    @Binding var animalText: String
+    @Binding var animalIsGuess: Bool
+
+    @Binding var plantText: String
+    @Binding var plantIsGuess: Bool
+
+    @Binding var supplementsText: String
+    @Binding var supplementsIsGuess: Bool
+
+    @State private var expanded: Bool = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            MetricField(titleKey: "protein",
+                        text: $totalText,
+                        isGuess: $totalIsGuess,
+                        manager: manager)
+                .onChange(of: totalText) { newValue in
+                    applyEstimatedProteinSplit(from: newValue, description: descriptionText)
+                }
+                .onChange(of: descriptionText) { _ in
+                    // Re-evaluate split when description changes
+                    applyEstimatedProteinSplit(from: totalText, description: descriptionText)
+                }
+
+            DisclosureGroup(isExpanded: $expanded) {
+                VStack(spacing: 0) {
+                    MetricField(titleKey: "animal_protein",
+                                text: $animalText,
+                                isGuess: $animalIsGuess,
+                                manager: manager)
+                    MetricField(titleKey: "plant_protein",
+                                text: $plantText,
+                                isGuess: $plantIsGuess,
+                                manager: manager)
+                    MetricField(titleKey: "protein_supplements",
+                                text: $supplementsText,
+                                isGuess: $supplementsIsGuess,
+                                manager: manager)
+                }
+                .padding(.top, 6)
+            } label: {
+                EmptyView()
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
+    private func applyEstimatedProteinSplit(from totalString: String, description: String) {
+        guard let total = Double(totalString), total > 0 else { return }
+
+        // Determine if this looks like a shake; if so, bias heavily to supplements.
+        let isShake = Self.isLikelyShake(description: description)
+        let isPlantShake = Self.isLikelyPlantBased(description: description)
+
+        // Default target ratios:
+        // - General meal: 60% animal, 35% plant, 5% supplements
+        // - Shake: 90% supplements, 10% animal (or 10% plant for plant-based)
+        let defaultRatios: (animal: Double, plant: Double, supps: Double) = {
+            if isShake {
+                return isPlantShake ? (0.0, 0.10, 0.90) : (0.10, 0.0, 0.90)
+            } else {
+                return (0.60, 0.35, 0.05)
+            }
+        }()
+
+        // Current accurate values
+        let currentAnimal = Double(animalText) ?? 0
+        let currentPlant = Double(plantText) ?? 0
+        let currentSupps = Double(supplementsText) ?? 0
+
+        let accurateTotal =
+            (animalIsGuess ? 0 : currentAnimal) +
+            (plantIsGuess ? 0 : currentPlant) +
+            (supplementsIsGuess ? 0 : currentSupps)
+
+        let remaining = max(0, total - accurateTotal)
+
+        struct Field {
+            let get: () -> Double
+            let set: (Double) -> Void
+            let setGuess: (Bool) -> Void
+            let ratio: Double
+        }
+
+        var fields: [Field] = []
+        if animalIsGuess {
+            fields.append(Field(
+                get: { Double(animalText) ?? 0 },
+                set: { animalText = $0.rounded(toPlaces: 2).cleanString },
+                setGuess: { animalIsGuess = $0 },
+                ratio: defaultRatios.animal
+            ))
+        }
+        if plantIsGuess {
+            fields.append(Field(
+                get: { Double(plantText) ?? 0 },
+                set: { plantText = $0.rounded(toPlaces: 2).cleanString },
+                setGuess: { plantIsGuess = $0 },
+                ratio: defaultRatios.plant
+            ))
+        }
+        if supplementsIsGuess {
+            fields.append(Field(
+                get: { Double(supplementsText) ?? 0 },
+                set: { supplementsText = $0.rounded(toPlaces: 2).cleanString },
+                setGuess: { supplementsIsGuess = $0 },
+                ratio: defaultRatios.supps
+            ))
+        }
+
+        guard !fields.isEmpty else { return }
+
+        let ratioSum = fields.map { $0.ratio }.reduce(0, +)
+        let normalized = fields.map { ratioSum > 0 ? $0.ratio / ratioSum : (1.0 / Double(fields.count)) }
+
+        for (i, field) in fields.enumerated() {
+            let value = remaining * normalized[i]
+            field.set(value)
+            field.setGuess(true)
+        }
+
+        // Adjust last to fix drift due to formatting
+        let assigned = fields.reduce(0.0) { $0 + $1.get() }
+        let drift = remaining - assigned
+        if let last = fields.last {
+            last.set(max(0, last.get() + drift))
+        }
+    }
+
+    private static func isLikelyShake(description: String) -> Bool {
+        let text = description.lowercased()
+        let keywords = [
+            "protein shake", "shake", "whey", "isolate", "concentrate",
+            "casein", "mass gainer", "gainer", "pre-workout", "post-workout"
+        ]
+        return keywords.contains(where: { text.contains($0) })
+    }
+
+    private static func isLikelyPlantBased(description: String) -> Bool {
+        let text = description.lowercased()
+        let plantKeywords = ["vegan", "plant", "pea", "soy", "rice", "hemp", "plant-based"]
+        return plantKeywords.contains(where: { text.contains($0) })
+    }
+}
+
 private struct FatGroupView: View {
     let manager: LocalizationManager
 
@@ -613,7 +856,7 @@ private struct FatGroupView: View {
         }
     }
 
-    private mutating func applyEstimatedFatSplit(from totalString: String) {
+    private func applyEstimatedFatSplit(from totalString: String) {
         guard let total = Double(totalString), total > 0 else { return }
 
         // Default target ratios: 40% mono, 35% sat, 23% poly, 2% trans
