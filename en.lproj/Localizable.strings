@@ -56,6 +56,11 @@
 "nutrition" = "Nutrition";
 "salt" = "Salt";
 "show_details" = "Show Details";
+"show_vitamins" = "Show Vitamins";
+"show_minerals" = "Show Minerals";
+
+"hide_minerals" = "Hide Minerals";
+"hide_vitamins" = "Hide Vitamins";
 
 "show_minerals_entry" = "Show Minerals Entry";
 "calcium" = "Calcium";
