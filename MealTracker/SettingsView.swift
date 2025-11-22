@@ -6,11 +6,13 @@ struct SettingsView: View {
     @AppStorage("energyUnit") private var energyUnit: EnergyUnit = .calories
     @AppStorage("measurementSystem") private var measurementSystem: MeasurementSystem = .metric
     @AppStorage("appLanguageCode") private var appLanguageCode: String = LocalizationManager.defaultLanguageCode
+    @AppStorage("sodiumUnit") private var sodiumUnit: SodiumUnit = .milligrams
+    @AppStorage("showVitamins") private var showVitamins: Bool = false
+    @AppStorage("vitaminsUnit") private var vitaminsUnit: VitaminsUnit = .milligrams
+    @AppStorage("showMinerals") private var showMinerals: Bool = false
 
     private var availableLanguages: [String] {
-        // Prefer explicit localizations, filter out "Base"
         let codes = Bundle.main.localizations.filter { $0.lowercased() != "base" }
-        // If nothing besides Base, fall back to preferredLocalizations so at least current language shows
         let list = codes.isEmpty ? Bundle.main.preferredLocalizations : codes
         return Array(Set(list)).sorted()
     }
@@ -36,6 +38,20 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                 }
 
+                Section {
+                    Toggle(l.localized("show_vitamins_entry"), isOn: $showVitamins)
+                    Picker(l.localized("vitamins_unit"), selection: $vitaminsUnit) {
+                        Text("mg").tag(VitaminsUnit.milligrams)
+                        Text("µg").tag(VitaminsUnit.micrograms)
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                Section {
+                    Toggle(l.localized("show_minerals_entry"), isOn: $showMinerals)
+                    // Using same unit as vitamins; if you want a separate unit later, add a new AppStorage and picker.
+                }
+
                 Section(header: LocalizedText("language", manager: l)) {
                     Picker(l.localized("choose_language"), selection: $appLanguageCode) {
                         ForEach(availableLanguages, id: \.self) { code in
@@ -44,7 +60,6 @@ struct SettingsView: View {
                     }
                 }
             }
-            .navigationTitle(l.localized("settings"))
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(l.localized("done")) { dismiss() }
@@ -53,3 +68,4 @@ struct SettingsView: View {
         }
     }
 }
+

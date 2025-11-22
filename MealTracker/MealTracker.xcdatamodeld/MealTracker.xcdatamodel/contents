@@ -3,6 +3,8 @@
     <entity name="Meal" representedClassName="Meal" syncable="YES">
         <attribute name="animalProtein" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="animalProteinIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="calcium" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="calciumisGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="calories" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="caloriesIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="carbohydrates" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
@@ -13,6 +15,10 @@
         <attribute name="fibre" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="fibreIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="iron" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="ironIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="magnesium" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="magnesiumIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="mealDescription" optional="YES" attributeType="String"/>
         <attribute name="monounsaturatedfatIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="monunsaturatedFat" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
@@ -20,6 +26,8 @@
         <attribute name="plantProteinIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="polyunsaturatedFat" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="polyunsaturatedfatIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="potassium" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="potassiumIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="protein" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="proteinIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="proteinSupplmentIsGuess" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
@@ -33,5 +41,19 @@
         <attribute name="sugarsIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="transFat" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="transFatIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="vitaminA" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="vitaminAIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="vitaminB" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="vitaminBIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="vitaminC" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="vitaminCIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="vitaminD" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="vitaminDIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="vitaminE" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="vitaminEIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="vitaminK" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="vitaminKIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="zinc" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="zincIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
     </entity>
 </model>

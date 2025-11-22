@@ -1,21 +1,64 @@
-/* 
-  Localizable.strings
-  MealTracker
+/* Nutrients */
+"calories" = "Calories";
+"carbohydrates" = "Carbohydrates";
+"sugars" = "Sugars";
+"starch" = "Starch";
+"fibre" = "Fibre";
+"protein" = "Protein";
+"animal_protein" = "Animal protein";
+"plant_protein" = "Plant protein";
+"protein_supplements" = "Protein supplements";
+"fat" = "Fat";
+"monounsaturated_fat" = "Monounsaturated fat";
+"polyunsaturated_fat" = "Polyunsaturated fat";
+"saturated_fat" = "Saturated fat";
+"trans_fat" = "Trans fat";
 
-  Created by Simon Lee on 18/11/2025.
-  
-*/
+/* Accuracy */
+"accurate" = "Accurate";
+"guess" = "Guess";
+"accuracy" = "Accuracy";
 
+/* Common actions */
+"save" = "Save";
+"settings" = "Settings";
+"done" = "Done";
+
+/* Settings */
+"language" = "Language";
+"measurement_system" = "Measurement system";
+"metric" = "Metric";
+"imperial" = "Imperial";
+"energy_unit" = "Energy unit";
+"choose_language" = "Choose language";
+
+/* Units */
+"kcal_suffix" = "kcal";
+"kj_suffix" = "kJ";
+
+/* Vitamins */
+"show_vitamins_entry" = "Show Vitamins Entry";
+"vitamins_unit" = "Vitamins unit";
+"vitamin_a" = "Vitamin A";
+"vitamin_b" = "Vitamin B";
+"vitamin_c" = "Vitamin C";
+"vitamin_d" = "Vitamin D";
+"vitamin_e" = "Vitamin E";
+"vitamin_k" = "Vitamin K";
+
+/* Optional UI Strings */
 "add_meal" = "Add Meal";
 "edit_meal" = "Edit Meal";
 "cancel" = "Cancel";
-"save" = "Save";
 "meal_details" = "Meal details";
 "meal_description" = "Meal Description";
 "meal_date" = "Meal Date";
 "nutrition" = "Nutrition";
-"calories" = "Calories";
-"carbohydrates" = "Carbohydrates";
-"protein" = "Protein";
-"fat" = "Fat";
 "salt" = "Salt";
+
+"show_minerals_entry" = "Show Minerals Entry";
+"calcium" = "Calcium";
+"iron" = "Iron";
+"potassium" = "Potassium";
+"zinc" = "Zinc";
+"magnesium" = "Magnesium";

@@ -35,6 +35,21 @@ public class Meal: NSManagedObject, Identifiable {
     @NSManaged public var plantProtein: Double
     @NSManaged public var proteinSupplements: Double
 
+    // Vitamins (stored in milligrams as base unit)
+    @NSManaged public var vitaminA: Double
+    @NSManaged public var vitaminB: Double
+    @NSManaged public var vitaminC: Double
+    @NSManaged public var vitaminD: Double
+    @NSManaged public var vitaminE: Double
+    @NSManaged public var vitaminK: Double
+
+    // Minerals (stored in milligrams as base unit)
+    @NSManaged public var calcium: Double
+    @NSManaged public var iron: Double
+    @NSManaged public var potassium: Double
+    @NSManaged public var zinc: Double
+    @NSManaged public var magnesium: Double
+
     // Accuracy flags
     @NSManaged public var caloriesIsGuess: Bool
     @NSManaged public var carbohydratesIsGuess: Bool
@@ -53,6 +68,21 @@ public class Meal: NSManagedObject, Identifiable {
     @NSManaged public var animalProteinIsGuess: Bool
     @NSManaged public var plantProteinIsGuess: Bool
     @NSManaged public var proteinSupplementsIsGuess: Bool
+
+    // Vitamins accuracy flags
+    @NSManaged public var vitaminAIsGuess: Bool
+    @NSManaged public var vitaminBIsGuess: Bool
+    @NSManaged public var vitaminCIsGuess: Bool
+    @NSManaged public var vitaminDIsGuess: Bool
+    @NSManaged public var vitaminEIsGuess: Bool
+    @NSManaged public var vitaminKIsGuess: Bool
+
+    // Minerals accuracy flags
+    @NSManaged public var calciumIsGuess: Bool
+    @NSManaged public var ironIsGuess: Bool
+    @NSManaged public var potassiumIsGuess: Bool
+    @NSManaged public var zincIsGuess: Bool
+    @NSManaged public var magnesiumIsGuess: Bool
 }
 
 extension Meal {
@@ -62,3 +92,4 @@ extension Meal {
         return request
     }
 }
+

@@ -92,7 +92,7 @@ struct MealRow: View {
                     NutrientBadge(title: "Carbs", value: meal.carbohydrates)
                     NutrientBadge(title: "Protein", value: meal.protein)
                     NutrientBadge(title: "Fat", value: meal.fat)
-                    NutrientBadge(title: "Salt", value: meal.salt)
+                    NutrientBadge(title: "Sodium", value: meal.salt)
                     NutrientBadge(title: "Starch", value: meal.starch)
                     NutrientBadge(title: "Sugars", value: meal.sugars)
                     NutrientBadge(title: "Fibre", value: meal.fibre)
@@ -135,4 +135,3 @@ private extension Double {
         truncatingRemainder(dividingBy: 1) == 0 ? String(Int(self)) : String(self)
     }
 }
-
