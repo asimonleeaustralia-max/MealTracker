@@ -24,7 +24,7 @@ struct MealFormView: View {
 
     // Hidden title/date inputs removed from UI; we still keep local state for default title logic
     @State private var mealDescription: String = "" // not shown in UI
-    // Numeric inputs
+    // Numeric inputs (now integers only)
     @State private var calories: String = ""
     @State private var carbohydrates: String = ""
     @State private var protein: String = ""
@@ -88,6 +88,20 @@ struct MealFormView: View {
     @State private var zincIsGuess = true
     @State private var magnesiumIsGuess = true
 
+    // Touched flags to avoid overwriting manual edits
+    @State private var sugarsTouched = false
+    @State private var starchTouched = false
+    @State private var fibreTouched = false
+
+    @State private var monoTouched = false
+    @State private var polyTouched = false
+    @State private var satTouched = false
+    @State private var transTouched = false
+
+    @State private var animalTouched = false
+    @State private var plantTouched = false
+    @State private var supplementsTouched = false
+
     // We won’t show date picker; date will be set on save
     @State private var date: Date = Date()
 
@@ -116,109 +130,178 @@ struct MealFormView: View {
         let l = LocalizationManager(languageCode: appLanguageCode)
 
         Form {
-            // Energy
-            Section(header: LocalizedText("energy", manager: l)) {
+            // Energy (no header)
+            Section {
                 MetricField(
                     titleKey: caloriesTitleWithUnit(manager: l),
-                    text: numericBinding($calories),
+                    text: numericBindingInt($calories),
                     isGuess: $caloriesIsGuess,
-                    keyboard: .decimalPad,
+                    keyboard: .numberPad,
                     manager: l,
                     unitSuffix: energyUnit.displaySuffix(manager: l),
                     isPrelocalizedTitle: true,
-                    isError: { value in
-                        let kcal = (energyUnit == .calories) ? value : value / 4.184
-                        return kcal > 3000.0
+                    validator: { value in
+                        // value is UI integer (kcal or kJ). Normalize to kcal for validation
+                        let kcal = (energyUnit == .calories) ? value : Int(Double(value) / 4.184)
+                        return ValidationThresholds.calories.severity(for: kcal)
                     }
                 )
             }
 
-            // Carbohydrates
-            Section(header: LocalizedText("carbohydrates", manager: l)) {
-                MetricField(titleKey: "carbohydrates", text: numericBinding($carbohydrates), isGuess: $carbohydratesIsGuess, manager: l, unitSuffix: "g")
-
-                ToggleDetailsButton(isExpanded: $expandedCarbs, titleCollapsed: l.localized("show_details"), titleExpanded: l.localized("hide_details"))
+            // Carbohydrates (no header)
+            Section {
+                MetricField(
+                    titleKey: "carbohydrates",
+                    text: numericBindingInt($carbohydrates),
+                    isGuess: $carbohydratesIsGuess,
+                    keyboard: .numberPad,
+                    manager: l,
+                    unitSuffix: "g",
+                    validator: { ValidationThresholds.grams.severity(for: $0) },
+                    leadingAccessory: {
+                        AnyView(
+                            CompactChevronToggle(isExpanded: $expandedCarbs,
+                                                 labelCollapsed: l.localized("show_details"),
+                                                 labelExpanded: l.localized("hide_details"))
+                        )
+                    }
+                )
+                .onChange(of: carbohydrates) { _ in
+                    autofillCarbSubfieldsIfNeeded()
+                }
 
                 if expandedCarbs {
                     CarbsSubFields(manager: l,
-                                   sugarsText: numericBinding($sugars), sugarsIsGuess: $sugarsIsGuess,
-                                   starchText: numericBinding($starch), starchIsGuess: $starchIsGuess,
-                                   fibreText: numericBinding($fibre), fibreIsGuess: $fibreIsGuess)
+                                   sugarsText: numericBindingInt($sugars), sugarsIsGuess: $sugarsIsGuess,
+                                   starchText: numericBindingInt($starch), starchIsGuess: $starchIsGuess,
+                                   fibreText: numericBindingInt($fibre), fibreIsGuess: $fibreIsGuess)
+                        .onChange(of: sugars) { _ in sugarsTouched = true }
+                        .onChange(of: starch) { _ in starchTouched = true }
+                        .onChange(of: fibre) { _ in fibreTouched = true }
                 }
             }
 
-            // Protein
-            Section(header: LocalizedText("protein", manager: l)) {
-                MetricField(titleKey: "protein", text: numericBinding($protein), isGuess: $proteinIsGuess, manager: l, unitSuffix: "g")
-
-                ToggleDetailsButton(isExpanded: $expandedProtein, titleCollapsed: l.localized("show_details"), titleExpanded: l.localized("hide_details"))
+            // Protein (no header)
+            Section {
+                MetricField(
+                    titleKey: "protein",
+                    text: numericBindingInt($protein),
+                    isGuess: $proteinIsGuess,
+                    keyboard: .numberPad,
+                    manager: l,
+                    unitSuffix: "g",
+                    validator: { ValidationThresholds.grams.severity(for: $0) },
+                    leadingAccessory: {
+                        AnyView(
+                            CompactChevronToggle(isExpanded: $expandedProtein,
+                                                 labelCollapsed: l.localized("show_details"),
+                                                 labelExpanded: l.localized("hide_details"))
+                        )
+                    }
+                )
+                .onChange(of: protein) { _ in
+                    autofillProteinSubfieldsIfNeeded()
+                }
 
                 if expandedProtein {
                     ProteinSubFields(manager: l,
-                                     animalText: numericBinding($animalProtein), animalIsGuess: $animalProteinIsGuess,
-                                     plantText: numericBinding($plantProtein), plantIsGuess: $plantProteinIsGuess,
-                                     supplementsText: numericBinding($proteinSupplements), supplementsIsGuess: $proteinSupplementsIsGuess)
+                                     animalText: numericBindingInt($animalProtein), animalIsGuess: $animalProteinIsGuess,
+                                     plantText: numericBindingInt($plantProtein), plantIsGuess: $plantProteinIsGuess,
+                                     supplementsText: numericBindingInt($proteinSupplements), supplementsIsGuess: $proteinSupplementsIsGuess)
+                        .onChange(of: animalProtein) { _ in animalTouched = true }
+                        .onChange(of: plantProtein) { _ in plantTouched = true }
+                        .onChange(of: proteinSupplements) { _ in supplementsTouched = true }
                 }
             }
 
-            // Sodium
-            Section(header: LocalizedText("sodium", manager: l)) {
+            // Sodium (no header)
+            Section {
                 MetricField(titleKey: "Sodium",
-                            text: numericBinding($sodium),
+                            text: numericBindingInt($sodium),
                             isGuess: $sodiumIsGuess,
+                            keyboard: .numberPad,
                             manager: l,
                             unitSuffix: sodiumUnit.displaySuffix,
-                            isPrelocalizedTitle: true)
+                            isPrelocalizedTitle: true,
+                            validator: {
+                                switch sodiumUnit {
+                                case .milligrams:
+                                    return ValidationThresholds.sodiumMg.severity(for: $0)
+                                case .grams:
+                                    return ValidationThresholds.sodiumG.severity(for: $0)
+                                }
+                            })
             }
 
-            // Fat
-            Section(header: LocalizedText("fat", manager: l)) {
-                MetricField(titleKey: "fat", text: numericBinding($fat), isGuess: $fatIsGuess, manager: l, unitSuffix: "g")
-
-                ToggleDetailsButton(isExpanded: $expandedFat, titleCollapsed: l.localized("show_details"), titleExpanded: l.localized("hide_details"))
+            // Fat (no header)
+            Section {
+                MetricField(
+                    titleKey: "fat",
+                    text: numericBindingInt($fat),
+                    isGuess: $fatIsGuess,
+                    keyboard: .numberPad,
+                    manager: l,
+                    unitSuffix: "g",
+                    validator: { ValidationThresholds.grams.severity(for: $0) },
+                    leadingAccessory: {
+                        AnyView(
+                            CompactChevronToggle(isExpanded: $expandedFat,
+                                                 labelCollapsed: l.localized("show_details"),
+                                                 labelExpanded: l.localized("hide_details"))
+                        )
+                    }
+                )
+                .onChange(of: fat) { _ in
+                    autofillFatSubfieldsIfNeeded()
+                }
 
                 if expandedFat {
                     FatSubFields(manager: l,
-                                 monoText: numericBinding($monounsaturatedFat), monoIsGuess: $monounsaturatedFatIsGuess,
-                                 polyText: numericBinding($polyunsaturatedFat), polyIsGuess: $polyunsaturatedFatIsGuess,
-                                 satText: numericBinding($saturatedFat), satIsGuess: $saturatedFatIsGuess,
-                                 transText: numericBinding($transFat), transIsGuess: $transFatIsGuess)
+                                 monoText: numericBindingInt($monounsaturatedFat), monoIsGuess: $monounsaturatedFatIsGuess,
+                                 polyText: numericBindingInt($polyunsaturatedFat), polyIsGuess: $polyunsaturatedFatIsGuess,
+                                 satText: numericBindingInt($saturatedFat), satIsGuess: $saturatedFatIsGuess,
+                                 transText: numericBindingInt($transFat), transIsGuess: $transFatIsGuess)
+                        .onChange(of: monounsaturatedFat) { _ in monoTouched = true }
+                        .onChange(of: polyunsaturatedFat) { _ in polyTouched = true }
+                        .onChange(of: saturatedFat) { _ in satTouched = true }
+                        .onChange(of: transFat) { _ in transTouched = true }
                 }
             }
 
             if showVitamins {
-                Section(header: LocalizedText("vitamins", manager: l)) {
-                    // No "total" for vitamins, just collapse the whole block
+                // Vitamins (no header)
+                Section {
                     ToggleDetailsButton(isExpanded: $expandedVitamins, titleCollapsed: l.localized("show_vitamins"), titleExpanded: l.localized("hide_vitamins"))
 
                     if expandedVitamins {
                         VitaminsGroupView(
                             manager: l,
                             unitSuffix: vitaminsUnit.displaySuffix,
-                            aText: numericBinding($vitaminA), aIsGuess: $vitaminAIsGuess,
-                            bText: numericBinding($vitaminB), bIsGuess: $vitaminBIsGuess,
-                            cText: numericBinding($vitaminC), cIsGuess: $vitaminCIsGuess,
-                            dText: numericBinding($vitaminD), dIsGuess: $vitaminDIsGuess,
-                            eText: numericBinding($vitaminE), eIsGuess: $vitaminEIsGuess,
-                            kText: numericBinding($vitaminK), kIsGuess: $vitaminKIsGuess
+                            aText: numericBindingInt($vitaminA), aIsGuess: $vitaminAIsGuess,
+                            bText: numericBindingInt($vitaminB), bIsGuess: $vitaminBIsGuess,
+                            cText: numericBindingInt($vitaminC), cIsGuess: $vitaminCIsGuess,
+                            dText: numericBindingInt($vitaminD), dIsGuess: $vitaminDIsGuess,
+                            eText: numericBindingInt($vitaminE), eIsGuess: $vitaminEIsGuess,
+                            kText: numericBindingInt($vitaminK), kIsGuess: $vitaminKIsGuess
                         )
                     }
                 }
             }
 
             if showMinerals {
-                Section(header: LocalizedText("minerals", manager: l)) {
+                // Minerals (no header)
+                Section {
                     ToggleDetailsButton(isExpanded: $expandedMinerals, titleCollapsed: l.localized("show_minerals"), titleExpanded: l.localized("hide_minerals"))
 
                     if expandedMinerals {
                         MineralsGroupView(
                             manager: l,
                             unitSuffix: vitaminsUnit.displaySuffix, // reuse vitamins unit toggle (mg/µg)
-                            calciumText: numericBinding($calcium), calciumIsGuess: $calciumIsGuess,
-                            ironText: numericBinding($iron), ironIsGuess: $ironIsGuess,
-                            potassiumText: numericBinding($potassium), potassiumIsGuess: $potassiumIsGuess,
-                            zincText: numericBinding($zinc), zincIsGuess: $zincIsGuess,
-                            magnesiumText: numericBinding($magnesium), magnesiumIsGuess: $magnesiumIsGuess
+                            calciumText: numericBindingInt($calcium), calciumIsGuess: $calciumIsGuess,
+                            ironText: numericBindingInt($iron), ironIsGuess: $ironIsGuess,
+                            potassiumText: numericBindingInt($potassium), potassiumIsGuess: $potassiumIsGuess,
+                            zincText: numericBindingInt($zinc), zincIsGuess: $zincIsGuess,
+                            magnesiumText: numericBindingInt($magnesium), magnesiumIsGuess: $magnesiumIsGuess
                         )
                     }
                 }
@@ -247,36 +330,36 @@ struct MealFormView: View {
         .onAppear {
             if let meal = meal {
                 mealDescription = meal.mealDescription
-                calories = meal.calories.cleanString
-                carbohydrates = meal.carbohydrates.cleanString
-                protein = meal.protein.cleanString
-                sodium = meal.salt.cleanString
-                fat = meal.fat.cleanString
-                starch = meal.starch.cleanString
-                sugars = meal.sugars.cleanString
-                fibre = meal.fibre.cleanString
-                monounsaturatedFat = meal.monounsaturatedFat.cleanString
-                polyunsaturatedFat = meal.polyunsaturatedFat.cleanString
-                saturatedFat = meal.saturatedFat.cleanString
-                transFat = meal.transFat.cleanString
-                animalProtein = meal.animalProtein.cleanString
-                plantProtein = meal.plantProtein.cleanString
-                proteinSupplements = meal.proteinSupplements.cleanString
+                calories = Int(meal.calories).description
+                carbohydrates = Int(meal.carbohydrates).description
+                protein = Int(meal.protein).description
+                sodium = Int(meal.salt).description
+                fat = Int(meal.fat).description
+                starch = Int(meal.starch).description
+                sugars = Int(meal.sugars).description
+                fibre = Int(meal.fibre).description
+                monounsaturatedFat = Int(meal.monounsaturatedFat).description
+                polyunsaturatedFat = Int(meal.polyunsaturatedFat).description
+                saturatedFat = Int(meal.saturatedFat).description
+                transFat = Int(meal.transFat).description
+                animalProtein = Int(meal.animalProtein).description
+                plantProtein = Int(meal.plantProtein).description
+                proteinSupplements = Int(meal.proteinSupplements).description
 
-                // Vitamins
-                vitaminA = vitaminsUnit.fromStorageMG(meal.vitaminA).cleanString
-                vitaminB = vitaminsUnit.fromStorageMG(meal.vitaminB).cleanString
-                vitaminC = vitaminsUnit.fromStorageMG(meal.vitaminC).cleanString
-                vitaminD = vitaminsUnit.fromStorageMG(meal.vitaminD).cleanString
-                vitaminE = vitaminsUnit.fromStorageMG(meal.vitaminE).cleanString
-                vitaminK = vitaminsUnit.fromStorageMG(meal.vitaminK).cleanString
+                // Vitamins: convert storage mg -> UI unit (mg or µg), then to Int string
+                vitaminA = Int(vitaminsUnit.fromStorageMG(meal.vitaminA)).description
+                vitaminB = Int(vitaminsUnit.fromStorageMG(meal.vitaminB)).description
+                vitaminC = Int(vitaminsUnit.fromStorageMG(meal.vitaminC)).description
+                vitaminD = Int(vitaminsUnit.fromStorageMG(meal.vitaminD)).description
+                vitaminE = Int(vitaminsUnit.fromStorageMG(meal.vitaminE)).description
+                vitaminK = Int(vitaminsUnit.fromStorageMG(meal.vitaminK)).description
 
                 // Minerals
-                calcium = vitaminsUnit.fromStorageMG(meal.calcium).cleanString
-                iron = vitaminsUnit.fromStorageMG(meal.iron).cleanString
-                potassium = vitaminsUnit.fromStorageMG(meal.potassium).cleanString
-                zinc = vitaminsUnit.fromStorageMG(meal.zinc).cleanString
-                magnesium = vitaminsUnit.fromStorageMG(meal.magnesium).cleanString
+                calcium = Int(vitaminsUnit.fromStorageMG(meal.calcium)).description
+                iron = Int(vitaminsUnit.fromStorageMG(meal.iron)).description
+                potassium = Int(vitaminsUnit.fromStorageMG(meal.potassium)).description
+                zinc = Int(vitaminsUnit.fromStorageMG(meal.zinc)).description
+                magnesium = Int(vitaminsUnit.fromStorageMG(meal.magnesium)).description
 
                 date = meal.date
 
@@ -309,6 +392,18 @@ struct MealFormView: View {
                 potassiumIsGuess = meal.potassiumIsGuess
                 zincIsGuess = meal.zincIsGuess
                 magnesiumIsGuess = meal.magnesiumIsGuess
+
+                // Initialize touched flags based on whether subfields have values
+                sugarsTouched = !sugars.isEmpty
+                starchTouched = !starch.isEmpty
+                fibreTouched = !fibre.isEmpty
+                monoTouched = !monounsaturatedFat.isEmpty
+                polyTouched = !polyunsaturatedFat.isEmpty
+                satTouched = !saturatedFat.isEmpty
+                transTouched = !transFat.isEmpty
+                animalTouched = !animalProtein.isEmpty
+                plantTouched = !plantProtein.isEmpty
+                supplementsTouched = !proteinSupplements.isEmpty
             }
 
             locationManager.requestAuthorization()
@@ -317,7 +412,8 @@ struct MealFormView: View {
     }
 
     private var isValid: Bool {
-        guard Double(calories) != nil else { return false }
+        // Calories must be an integer
+        guard Int(calories) != nil else { return false }
         let allNumericStrings = [
             calories, carbohydrates, protein, sodium, fat,
             starch, sugars, fibre, monounsaturatedFat, polyunsaturatedFat, saturatedFat, transFat,
@@ -325,10 +421,15 @@ struct MealFormView: View {
             vitaminA, vitaminB, vitaminC, vitaminD, vitaminE, vitaminK,
             calcium, iron, potassium, zinc, magnesium
         ]
+        // Empty is allowed for optional fields; if present, must be integer >= 0
         return allNumericStrings.allSatisfy { s in
-            guard let v = Double(s) else { return s.isEmpty }
-            return v >= 0
+            guard !s.isEmpty else { return true }
+            return Int(s).map { $0 >= 0 } ?? false
         }
+    }
+
+    private func intOrZero(_ text: String) -> Int {
+        max(0, Int(text) ?? 0)
     }
 
     private func doubleOrZero(_ text: String) -> Double {
@@ -346,35 +447,37 @@ struct MealFormView: View {
     }
 
     private func save() {
-        guard let cal = Double(calories) else { return }
+        guard let calInt = Int(calories) else { return }
+        // Convert to Double for storage
+        let cal = Double(calInt)
 
-        let carbs = doubleOrZero(carbohydrates)
-        let prot = doubleOrZero(protein)
-        let sod = doubleOrZero(sodium)
-        let f = doubleOrZero(fat)
-        let sta = doubleOrZero(starch)
-        let sug = doubleOrZero(sugars)
-        let fib = doubleOrZero(fibre)
-        let mono = doubleOrZero(monounsaturatedFat)
-        let poly = doubleOrZero(polyunsaturatedFat)
-        let sat = doubleOrZero(saturatedFat)
-        let trans = doubleOrZero(transFat)
-        let animal = doubleOrZero(animalProtein)
-        let plant = doubleOrZero(plantProtein)
-        let supps = doubleOrZero(proteinSupplements)
-        // Vitamins: convert UI -> storage (mg)
-        let vA = vitaminsUnit.toStorageMG(doubleOrZero(vitaminA))
-        let vB = vitaminsUnit.toStorageMG(doubleOrZero(vitaminB))
-        let vC = vitaminsUnit.toStorageMG(doubleOrZero(vitaminC))
-        let vD = vitaminsUnit.toStorageMG(doubleOrZero(vitaminD))
-        let vE = vitaminsUnit.toStorageMG(doubleOrZero(vitaminE))
-        let vK = vitaminsUnit.toStorageMG(doubleOrZero(vitaminK))
-        // Minerals: convert UI -> storage (mg) using same unit toggle
-        let mCa = vitaminsUnit.toStorageMG(doubleOrZero(calcium))
-        let mFe = vitaminsUnit.toStorageMG(doubleOrZero(iron))
-        let mK = vitaminsUnit.toStorageMG(doubleOrZero(potassium))
-        let mZn = vitaminsUnit.toStorageMG(doubleOrZero(zinc))
-        let mMg = vitaminsUnit.toStorageMG(doubleOrZero(magnesium))
+        let carbs = Double(intOrZero(carbohydrates))
+        let prot = Double(intOrZero(protein))
+        let sod = Double(intOrZero(sodium))
+        let f = Double(intOrZero(fat))
+        let sta = Double(intOrZero(starch))
+        let sug = Double(intOrZero(sugars))
+        let fib = Double(intOrZero(fibre))
+        let mono = Double(intOrZero(monounsaturatedFat))
+        let poly = Double(intOrZero(polyunsaturatedFat))
+        let sat = Double(intOrZero(saturatedFat))
+        let trans = Double(intOrZero(transFat))
+        let animal = Double(intOrZero(animalProtein))
+        let plant = Double(intOrZero(plantProtein))
+        let supps = Double(intOrZero(proteinSupplements))
+        // Vitamins: convert UI integer -> storage (mg)
+        let vA = vitaminsUnit.toStorageMG(Double(intOrZero(vitaminA)))
+        let vB = vitaminsUnit.toStorageMG(Double(intOrZero(vitaminB)))
+        let vC = vitaminsUnit.toStorageMG(Double(intOrZero(vitaminC)))
+        let vD = vitaminsUnit.toStorageMG(Double(intOrZero(vitaminD)))
+        let vE = vitaminsUnit.toStorageMG(Double(intOrZero(vitaminE)))
+        let vK = vitaminsUnit.toStorageMG(Double(intOrZero(vitaminK)))
+        // Minerals: convert UI integer -> storage (mg) using same unit toggle
+        let mCa = vitaminsUnit.toStorageMG(Double(intOrZero(calcium)))
+        let mFe = vitaminsUnit.toStorageMG(Double(intOrZero(iron)))
+        let mK = vitaminsUnit.toStorageMG(Double(intOrZero(potassium)))
+        let mZn = vitaminsUnit.toStorageMG(Double(intOrZero(zinc)))
+        let mMg = vitaminsUnit.toStorageMG(Double(intOrZero(magnesium)))
 
         let now = Date()
 
@@ -530,44 +633,25 @@ struct MealFormView: View {
         }
     }
 
-    private func numericBinding(_ source: Binding<String>) -> Binding<String> {
+    // Integer-only binding wrapper
+    private func numericBindingInt(_ source: Binding<String>) -> Binding<String> {
         Binding(
             get: { source.wrappedValue },
             set: { newValue in
-                source.wrappedValue = sanitizeNumericInput(newValue)
+                source.wrappedValue = sanitizeIntegerInput(newValue)
             }
         )
     }
 
-    private func sanitizeNumericInput(_ input: String) -> String {
-        let localeSep = Locale.current.decimalSeparator ?? "."
-        var digits = ""
-        var sawSeparator = false
-
-        for ch in input {
-            if ch.isNumber {
-                digits.append(ch)
-            } else if ch == "." || ch == "," {
-                if !sawSeparator {
-                    sawSeparator = true
-                    digits.append("|")
-                }
-            } else {
-                // ignore everything else (including '-')
-            }
-        }
-
-        if let sepIndex = digits.firstIndex(of: "|") {
-            var integer = String(digits[..<sepIndex]).filter(\.isNumber)
-            let fractional = String(digits[digits.index(after: sepIndex)...]).filter(\.isNumber)
-            if integer.isEmpty { integer = "0" }
-            return integer + localeSep + fractional
-        } else {
-            if digits.count > 1, digits.allSatisfy({ $0 == "0" }) {
-                return "0"
-            }
-            return digits
-        }
+    // Disallow decimals and negatives: keep only digits 0-9, collapse leading zeros to a single zero
+    private func sanitizeIntegerInput(_ input: String) -> String {
+        let digitsOnly = input.compactMap { $0.isNumber ? $0 : nil }
+        let s = String(digitsOnly)
+        if s.isEmpty { return "" }
+        // Remove leading zeros but keep a single zero if all zeros
+        let trimmed = s.drop(while: { $0 == "0" })
+        if trimmed.isEmpty { return "0" }
+        return String(trimmed)
     }
 
     private func caloriesTitleWithUnit(manager: LocalizationManager) -> String {
@@ -575,9 +659,150 @@ struct MealFormView: View {
         let unit = energyUnit.displaySuffix(manager: manager)
         return "\(base) (\(unit))"
     }
+
+    // MARK: - Autofill helpers
+
+    private func autofillCarbSubfieldsIfNeeded() {
+        guard let total = Int(carbohydrates), total >= 0 else { return }
+        // Skip if all subfields were manually touched
+        if sugarsTouched && starchTouched && fibreTouched { return }
+
+        // Ratios: sugars 30%, starch 60%, fibre 10%
+        let ratios: [Double] = [0.30, 0.60, 0.10]
+        let parts = distributeInt(total, ratios: ratios)
+
+        if !sugarsTouched {
+            sugars = parts[0].description
+            sugarsIsGuess = true
+        }
+        if !starchTouched {
+            starch = parts[1].description
+            starchIsGuess = true
+        }
+        if !fibreTouched {
+            fibre = parts[2].description
+            fibreIsGuess = true
+        }
+    }
+
+    private func autofillFatSubfieldsIfNeeded() {
+        guard let total = Int(fat), total >= 0 else { return }
+        if monoTouched && polyTouched && satTouched && transTouched { return }
+
+        // Ratios: mono 40%, poly 30%, sat 25%, trans 5%
+        let ratios: [Double] = [0.40, 0.30, 0.25, 0.05]
+        let parts = distributeInt(total, ratios: ratios)
+
+        if !monoTouched {
+            monounsaturatedFat = parts[0].description
+            monounsaturatedFatIsGuess = true
+        }
+        if !polyTouched {
+            polyunsaturatedFat = parts[1].description
+            polyunsaturatedFatIsGuess = true
+        }
+        if !satTouched {
+            saturatedFat = parts[2].description
+            saturatedFatIsGuess = true
+        }
+        if !transTouched {
+            transFat = parts[3].description
+            transFatIsGuess = true
+        }
+    }
+
+    private func autofillProteinSubfieldsIfNeeded() {
+        guard let total = Int(protein), total >= 0 else { return }
+        if animalTouched && plantTouched && supplementsTouched { return }
+
+        // Ratios: animal 50%, plant 40%, supplements 10%
+        let ratios: [Double] = [0.50, 0.40, 0.10]
+        let parts = distributeInt(total, ratios: ratios)
+
+        if !animalTouched {
+            animalProtein = parts[0].description
+            animalProteinIsGuess = true
+        }
+        if !plantTouched {
+            plantProtein = parts[1].description
+            plantProteinIsGuess = true
+        }
+        if !supplementsTouched {
+            proteinSupplements = parts[2].description
+            proteinSupplementsIsGuess = true
+        }
+    }
+
+    // Distribute an integer total into N integer parts according to ratios, ensuring sum equals total.
+    private func distributeInt(_ total: Int, ratios: [Double]) -> [Int] {
+        guard total >= 0, !ratios.isEmpty else { return Array(repeating: 0, count: max(1, ratios.count)) }
+        let normalized = ratios.map { max(0.0, $0) }
+        let sum = normalized.reduce(0, +)
+        if sum == 0 { return Array(repeating: 0, count: ratios.count) }
+
+        // Floor for first N-1 parts, remainder to last
+        var parts = [Int]()
+        var accumulated = 0
+        for i in 0..<(ratios.count - 1) {
+            let value = Int(floor(Double(total) * (normalized[i] / sum)))
+            parts.append(value)
+            accumulated += value
+        }
+        parts.append(max(0, total - accumulated))
+        return parts
+    }
 }
 
-// Simple toggle button to expand/collapse details (compatible with older iOS)
+// Small chevron toggle for inline placement (older iOS compatible)
+private struct CompactChevronToggle: View {
+    @Binding var isExpanded: Bool
+    let labelCollapsed: String
+    let labelExpanded: String
+
+    var body: some View {
+        Button(action: { isExpanded.toggle() }) {
+            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                .font(.caption)
+                .imageScale(.small)
+                .foregroundColor(.accentColor)
+                .frame(width: 20, height: 20, alignment: .center)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(isExpanded ? labelExpanded : labelCollapsed)
+    }
+}
+
+// Severity for validation visuals
+private enum ValidationSeverity {
+    case none
+    case unusual
+    case stupid
+}
+
+// Centralized thresholds
+private struct ValidationThresholds {
+    // Calories in kcal
+    static let calories = ValidationThresholds(unusual: 3000, stupid: 10000)
+    // Generic grams thresholds for macronutrients and subtypes
+    static let grams = ValidationThresholds(unusual: 300, stupid: 2000)
+    // Sodium thresholds
+    static let sodiumMg = ValidationThresholds(unusual: 5000, stupid: 20000) // mg
+    static let sodiumG = ValidationThresholds(unusual: 5, stupid: 20) // g
+    // Vitamins/minerals after converting UI -> mg
+    static let vitaminMineralMg = ValidationThresholds(unusual: 500, stupid: 2000) // very conservative
+    static let mineralMg = ValidationThresholds(unusual: 1000, stupid: 5000)
+
+    let unusual: Int
+    let stupid: Int
+
+    func severity(for value: Int) -> ValidationSeverity {
+        if value >= stupid { return .stupid }
+        if value >= unusual { return .unusual }
+        return .none
+    }
+}
+
+// Simple toggle button used for vitamins/minerals sections (unchanged)
 private struct ToggleDetailsButton: View {
     @Binding var isExpanded: Bool
     let titleCollapsed: String
@@ -615,9 +840,9 @@ private struct CarbsSubFields: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            MetricField(titleKey: "sugars", text: $sugarsText, isGuess: $sugarsIsGuess, manager: manager, unitSuffix: "g")
-            MetricField(titleKey: "starch", text: $starchText, isGuess: $starchIsGuess, manager: manager, unitSuffix: "g")
-            MetricField(titleKey: "fibre", text: $fibreText, isGuess: $fibreIsGuess, manager: manager, unitSuffix: "g")
+            MetricField(titleKey: "sugars", text: $sugarsText, isGuess: $sugarsIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
+            MetricField(titleKey: "starch", text: $starchText, isGuess: $starchIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
+            MetricField(titleKey: "fibre", text: $fibreText, isGuess: $fibreIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
         }
     }
 }
@@ -633,9 +858,9 @@ private struct ProteinSubFields: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            MetricField(titleKey: "animal_protein", text: $animalText, isGuess: $animalIsGuess, manager: manager, unitSuffix: "g")
-            MetricField(titleKey: "plant_protein", text: $plantText, isGuess: $plantIsGuess, manager: manager, unitSuffix: "g")
-            MetricField(titleKey: "protein_supplements", text: $supplementsText, isGuess: $supplementsIsGuess, manager: manager, unitSuffix: "g")
+            MetricField(titleKey: "animal_protein", text: $animalText, isGuess: $animalIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
+            MetricField(titleKey: "plant_protein", text: $plantText, isGuess: $plantIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
+            MetricField(titleKey: "protein_supplements", text: $supplementsText, isGuess: $supplementsIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
         }
     }
 }
@@ -653,10 +878,10 @@ private struct FatSubFields: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            MetricField(titleKey: "monounsaturated_fat", text: $monoText, isGuess: $monoIsGuess, manager: manager, unitSuffix: "g")
-            MetricField(titleKey: "polyunsaturated_fat", text: $polyText, isGuess: $polyIsGuess, manager: manager, unitSuffix: "g")
-            MetricField(titleKey: "saturated_fat", text: $satText, isGuess: $satIsGuess, manager: manager, unitSuffix: "g")
-            MetricField(titleKey: "trans_fat", text: $transText, isGuess: $transIsGuess, manager: manager, unitSuffix: "g")
+            MetricField(titleKey: "monounsaturated_fat", text: $monoText, isGuess: $monoIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
+            MetricField(titleKey: "polyunsaturated_fat", text: $polyText, isGuess: $polyIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
+            MetricField(titleKey: "saturated_fat", text: $satText, isGuess: $satIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
+            MetricField(titleKey: "trans_fat", text: $transText, isGuess: $transIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
         }
     }
 }
@@ -679,11 +904,11 @@ private struct MineralsGroupView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            MetricField(titleKey: "calcium", text: $calciumText, isGuess: $calciumIsGuess, manager: manager, unitSuffix: unitSuffix)
-            MetricField(titleKey: "iron", text: $ironText, isGuess: $ironIsGuess, manager: manager, unitSuffix: unitSuffix)
-            MetricField(titleKey: "potassium", text: $potassiumText, isGuess: $potassiumIsGuess, manager: manager, unitSuffix: unitSuffix)
-            MetricField(titleKey: "zinc", text: $zincText, isGuess: $zincIsGuess, manager: manager, unitSuffix: unitSuffix)
-            MetricField(titleKey: "magnesium", text: $magnesiumText, isGuess: $magnesiumIsGuess, manager: manager, unitSuffix: unitSuffix)
+            MetricField(titleKey: "calcium", text: $calciumText, isGuess: $calciumIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.mineralMg.severityForVitaminsUI($0, unit: .milligrams) })
+            MetricField(titleKey: "iron", text: $ironText, isGuess: $ironIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.mineralMg.severityForVitaminsUI($0, unit: .milligrams) })
+            MetricField(titleKey: "potassium", text: $potassiumText, isGuess: $potassiumIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.mineralMg.severityForVitaminsUI($0, unit: .milligrams) })
+            MetricField(titleKey: "zinc", text: $zincText, isGuess: $zincIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.mineralMg.severityForVitaminsUI($0, unit: .milligrams) })
+            MetricField(titleKey: "magnesium", text: $magnesiumText, isGuess: $magnesiumIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.mineralMg.severityForVitaminsUI($0, unit: .milligrams) })
         }
     }
 }
@@ -749,11 +974,13 @@ private struct MetricField: View {
     let titleKey: String
     @Binding var text: String
     @Binding var isGuess: Bool
-    var keyboard: UIKeyboardType = .decimalPad
+    var keyboard: UIKeyboardType = .numberPad
     let manager: LocalizationManager
     var unitSuffix: String? = nil
     var isPrelocalizedTitle: Bool = false
-    var isError: ((Double) -> Bool)? = nil
+    var validator: ((Int) -> ValidationSeverity)? = nil
+    // New: optional leading accessory shown inside the input row
+    var leadingAccessory: (() -> AnyView)? = nil
 
     private var tintColor: Color {
         isGuess ? .orange : .green
@@ -778,17 +1005,30 @@ private struct MetricField: View {
         }
     }
 
-    private var parsedValue: Double? {
-        Double(text)
+    private var parsedValue: Int? {
+        Int(text)
     }
 
-    private var hasError: Bool {
-        guard let v = parsedValue else { return false }
-        if v < 0 { return true }
-        if let validator = isError {
-            return validator(v)
+    private var severity: ValidationSeverity {
+        guard let v = parsedValue, let validator else { return .none }
+        if v < 0 { return .stupid }
+        return validator(v)
+    }
+
+    private var borderColor: Color {
+        switch severity {
+        case .none: return Color.secondary.opacity(0.15)
+        case .unusual: return .orange
+        case .stupid: return .red
         }
-        return false
+    }
+
+    private var borderWidth: CGFloat {
+        switch severity {
+        case .none: return 1
+        case .unusual: return 2
+        case .stupid: return 2
+        }
     }
 
     var body: some View {
@@ -812,11 +1052,14 @@ private struct MetricField: View {
             }
 
             HStack(spacing: 8) {
+                if let accessory = leadingAccessory {
+                    accessory()
+                }
+
                 TextField("", text: $text)
                     .keyboardType(keyboard)
                     .multilineTextAlignment(.leading)
                     .submitLabel(.done)
-                    .foregroundColor(hasError ? .red : .primary)
 
                 if let suffix = unitSuffix {
                     Text(suffix)
@@ -832,7 +1075,7 @@ private struct MetricField: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(hasError ? Color.red : Color.secondary.opacity(0.15), lineWidth: hasError ? 2 : 1)
+                    .stroke(borderColor, lineWidth: borderWidth)
             )
         }
         .padding(.vertical, 6)
@@ -860,17 +1103,32 @@ private struct VitaminsGroupView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            MetricField(titleKey: "vitamin_a", text: $aText, isGuess: $aIsGuess, manager: manager, unitSuffix: unitSuffix)
-            MetricField(titleKey: "vitamin_b", text: $bText, isGuess: $bIsGuess, manager: manager, unitSuffix: unitSuffix)
-            MetricField(titleKey: "vitamin_c", text: $cText, isGuess: $cIsGuess, manager: manager, unitSuffix: unitSuffix)
-            MetricField(titleKey: "vitamin_d", text: $dText, isGuess: $dIsGuess, manager: manager, unitSuffix: unitSuffix)
-            MetricField(titleKey: "vitamin_e", text: $eText, isGuess: $eIsGuess, manager: manager, unitSuffix: unitSuffix)
-            MetricField(titleKey: "vitamin_k", text: $kText, isGuess: $kIsGuess, manager: manager, unitSuffix: unitSuffix)
+            MetricField(titleKey: "vitamin_a", text: $aText, isGuess: $aIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .milligrams) })
+            MetricField(titleKey: "vitamin_b", text: $bText, isGuess: $bIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .milligrams) })
+            MetricField(titleKey: "vitamin_c", text: $cText, isGuess: $cIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .milligrams) })
+            MetricField(titleKey: "vitamin_d", text: $dText, isGuess: $dIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .milligrams) })
+            MetricField(titleKey: "vitamin_e", text: $eText, isGuess: $eIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .milligrams) })
+            MetricField(titleKey: "vitamin_k", text: $kText, isGuess: $kIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .milligrams) })
         }
     }
 }
 
-// Split out subfields views used when expanded
+// Helper to apply validators to vitamins/minerals groups based on unit setting if needed
+private extension ValidationThresholds {
+    // Interpret UI integer in mg or µg, convert to mg, then evaluate with thresholds
+    func severityForVitaminsUI(_ uiValue: Int, unit: VitaminsUnit) -> ValidationSeverity {
+        let mg: Int
+        switch unit {
+        case .milligrams:
+            mg = uiValue
+        case .micrograms:
+            mg = Int(Double(uiValue) / 1000.0)
+        }
+        return severity(for: mg)
+    }
+}
+
+// Split out subfields views used when expanded (kept for completeness)
 private struct CarbsGroupView: View {
     let manager: LocalizationManager
 
@@ -885,10 +1143,10 @@ private struct CarbsGroupView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            MetricField(titleKey: "carbohydrates", text: $totalText, isGuess: $totalIsGuess, manager: manager, unitSuffix: "g")
-            MetricField(titleKey: "sugars", text: $sugarsText, isGuess: $sugarsIsGuess, manager: manager, unitSuffix: "g")
-            MetricField(titleKey: "starch", text: $starchText, isGuess: $starchIsGuess, manager: manager, unitSuffix: "g")
-            MetricField(titleKey: "fibre", text: $fibreText, isGuess: $fibreIsGuess, manager: manager, unitSuffix: "g")
+            MetricField(titleKey: "carbohydrates", text: $totalText, isGuess: $totalIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
+            MetricField(titleKey: "sugars", text: $sugarsText, isGuess: $sugarsIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
+            MetricField(titleKey: "starch", text: $starchText, isGuess: $starchIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
+            MetricField(titleKey: "fibre", text: $fibreText, isGuess: $fibreIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
         }
     }
 }
@@ -908,10 +1166,10 @@ private struct ProteinGroupView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            MetricField(titleKey: "protein", text: $totalText, isGuess: $totalIsGuess, manager: manager, unitSuffix: "g")
-            MetricField(titleKey: "animal_protein", text: $animalText, isGuess: $animalIsGuess, manager: manager, unitSuffix: "g")
-            MetricField(titleKey: "plant_protein", text: $plantText, isGuess: $plantIsGuess, manager: manager, unitSuffix: "g")
-            MetricField(titleKey: "protein_supplements", text: $supplementsText, isGuess: $supplementsIsGuess, manager: manager, unitSuffix: "g")
+            MetricField(titleKey: "protein", text: $totalText, isGuess: $totalIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
+            MetricField(titleKey: "animal_protein", text: $animalText, isGuess: $animalIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
+            MetricField(titleKey: "plant_protein", text: $plantText, isGuess: $plantIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
+            MetricField(titleKey: "protein_supplements", text: $supplementsText, isGuess: $supplementsIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
         }
     }
 }
@@ -932,11 +1190,11 @@ private struct FatGroupView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            MetricField(titleKey: "fat", text: $totalText, isGuess: $totalIsGuess, manager: manager, unitSuffix: "g")
-            MetricField(titleKey: "monounsaturated_fat", text: $monoText, isGuess: $monoIsGuess, manager: manager, unitSuffix: "g")
-            MetricField(titleKey: "polyunsaturated_fat", text: $polyText, isGuess: $polyIsGuess, manager: manager, unitSuffix: "g")
-            MetricField(titleKey: "saturated_fat", text: $satText, isGuess: $satIsGuess, manager: manager, unitSuffix: "g")
-            MetricField(titleKey: "trans_fat", text: $transText, isGuess: $transIsGuess, manager: manager, unitSuffix: "g")
+            MetricField(titleKey: "fat", text: $totalText, isGuess: $totalIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
+            MetricField(titleKey: "monounsaturated_fat", text: $monoText, isGuess: $monoIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
+            MetricField(titleKey: "polyunsaturated_fat", text: $polyText, isGuess: $polyIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
+            MetricField(titleKey: "saturated_fat", text: $satText, isGuess: $satIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
+            MetricField(titleKey: "trans_fat", text: $transText, isGuess: $transIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
         }
     }
 }

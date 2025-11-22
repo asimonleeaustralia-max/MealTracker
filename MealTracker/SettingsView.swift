@@ -22,7 +22,8 @@ struct SettingsView: View {
 
         NavigationView {
             Form {
-                Section(header: LocalizedText("energy_unit", manager: l)) {
+                // Energy unit (no header)
+                Section {
                     Picker("", selection: $energyUnit) {
                         Text(l.localized("calories")).tag(EnergyUnit.calories)
                         Text(l.localized("kilojoules")).tag(EnergyUnit.kilojoules)
@@ -30,7 +31,8 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                 }
 
-                Section(header: LocalizedText("measurement_system", manager: l)) {
+                // Measurement system (no header)
+                Section {
                     Picker("", selection: $measurementSystem) {
                         Text(l.localized("metric")).tag(MeasurementSystem.metric)
                         Text(l.localized("imperial")).tag(MeasurementSystem.imperial)
@@ -52,7 +54,8 @@ struct SettingsView: View {
                     // Using same unit as vitamins; if you want a separate unit later, add a new AppStorage and picker.
                 }
 
-                Section(header: LocalizedText("language", manager: l)) {
+                // Language (no header)
+                Section {
                     Picker(l.localized("choose_language"), selection: $appLanguageCode) {
                         ForEach(availableLanguages, id: \.self) { code in
                             Text(LocalizationManager.displayName(for: code)).tag(code)
@@ -68,4 +71,3 @@ struct SettingsView: View {
         }
     }
 }
-
