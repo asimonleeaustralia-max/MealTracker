@@ -55,5 +55,18 @@
         <attribute name="vitaminKIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="zinc" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="zincIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <relationship name="photos" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="MealPhoto" inverseName="meal" inverseEntity="MealPhoto"/>
+    </entity>
+    <entity name="MealPhoto" representedClassName="MealPhoto" syncable="YES">
+        <attribute name="byteSizeOriginal" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="byteSizeUpload" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="fileNameOriginal" optional="YES" attributeType="String"/>
+        <attribute name="fileNameUpload" optional="YES" attributeType="String"/>
+        <attribute name="height" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="sha256" optional="YES" attributeType="String"/>
+        <attribute name="width" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="meal" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Meal" inverseName="photos" inverseEntity="Meal"/>
     </entity>
 </model>

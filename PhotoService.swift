@@ -1,0 +1,134 @@
+//
+//  PhotoService.swift
+//  MealTracker
+//
+//  High-level API to attach photos to meals, save originals at camera quality,
+//  and produce 1080p medium-compression JPEGs for upload.
+//
+
+import UIKit
+import CoreData
+
+enum PhotoServiceError: Error {
+    case invalidImage
+    case writeFailed
+    case coreDataSaveFailed(Error)
+}
+
+struct PhotoService {
+
+    // Add a photo to a meal.
+    // - Stores the original JPEG/HEIC bytes as-is (camera quality) without recompression.
+    // - Creates an upload-sized JPEG (max long edge 1080 px, quality ~0.72).
+    // - Persists a MealPhoto object and writes both files to disk.
+    static func addPhoto(from originalImageData: Data,
+                         suggestedUTTypeExtension: String? = nil, // e.g., "heic" or "jpg"
+                         to meal: Meal,
+                         in context: NSManagedObjectContext) throws -> MealPhoto {
+
+        // Load original image to read dimensions (don’t recompress)
+        guard let image = UIImage(data: originalImageData) else {
+            throw PhotoServiceError.invalidImage
+        }
+
+        let id = UUID()
+        let createdAt = Date()
+
+        // File extensions
+        let originalExt: String = {
+            if let ext = suggestedUTTypeExtension?.lowercased(), ["jpg", "jpeg", "heic", "png"].contains(ext) {
+                return ext == "jpeg" ? "jpg" : ext
+            }
+            // Try to infer from data signature
+            if originalImageData.isJPEG { return "jpg" }
+            if originalImageData.isHEIC { return "heic" }
+            if originalImageData.isPNG { return "png" }
+            return "jpg"
+        }()
+
+        let uploadExt = "jpg"
+
+        // File names
+        let originalName = PhotoStore.makeFileName(id: id, kind: .original, ext: originalExt)
+        let uploadName = PhotoStore.makeFileName(id: id, kind: .upload, ext: uploadExt)
+
+        let originalURL = try PhotoStore.fileURL(fileName: originalName)
+        let uploadURL = try PhotoStore.fileURL(fileName: uploadName)
+
+        // Write original as-is
+        try originalImageData.write(to: originalURL, options: .atomic)
+
+        // Prepare upload image (1080p long-edge, medium compression)
+        guard let resized = ImageResizer.resizeToLongEdge(1080, image: image, jpegQuality: 0.72) else {
+            // If resize fails, clean up original
+            try? FileManager.default.removeItem(at: originalURL)
+            throw PhotoServiceError.invalidImage
+        }
+        try resized.jpegData.write(to: uploadURL, options: .atomic)
+
+        // Compute metadata
+        let sha256 = ImageResizer.sha256Hex(of: originalImageData)
+        let byteSizeOriginal = PhotoStore.fileSizeBytes(at: originalURL)
+        let byteSizeUpload = PhotoStore.fileSizeBytes(at: uploadURL)
+
+        // Persist MealPhoto
+        let photo = MealPhoto(context: context)
+        photo.id = id
+        photo.createdAt = createdAt
+        photo.width = Int32(image.sizeInPixels.width)
+        photo.height = Int32(image.sizeInPixels.height)
+        photo.fileNameOriginal = originalName
+        photo.fileNameUpload = uploadName
+        photo.byteSizeOriginal = byteSizeOriginal
+        photo.byteSizeUpload = byteSizeUpload
+        photo.sha256 = sha256
+        photo.meal = meal
+
+        do {
+            try context.save()
+        } catch {
+            // cleanup files if Core Data save fails
+            PhotoStore.removeFilesIfExist(original: originalName, upload: uploadName)
+            throw PhotoServiceError.coreDataSaveFailed(error)
+        }
+
+        return photo
+    }
+
+    // Remove a photo: delete files and Core Data object
+    static func removePhoto(_ photo: MealPhoto, in context: NSManagedObjectContext) {
+        PhotoStore.removeFilesIfExist(original: photo.fileNameOriginal, upload: photo.fileNameUpload)
+        context.delete(photo)
+        try? context.save()
+    }
+
+    // Access files for upload or display
+    static func urlForOriginal(_ photo: MealPhoto) -> URL? {
+        guard let name = photo.fileNameOriginal else { return nil }
+        return try? PhotoStore.fileURL(fileName: name)
+    }
+
+    static func urlForUpload(_ photo: MealPhoto) -> URL? {
+        guard let name = photo.fileNameUpload else { return nil }
+        return try? PhotoStore.fileURL(fileName: name)
+    }
+}
+
+private extension Data {
+    var isJPEG: Bool { starts(with: [0xFF, 0xD8]) }
+    var isPNG: Bool { starts(with: [0x89, 0x50, 0x4E, 0x47]) }
+    // HEIC magic isn’t as straightforward; this checks for 'ftyp' + 'heic'/'heif' brands.
+    var isHEIC: Bool {
+        guard count >= 12 else { return false }
+        let header = self.prefix(12)
+        return header.dropFirst(4).prefix(4) == Data("ftyp".utf8) &&
+               (header.suffix(4) == Data("heic".utf8) || header.suffix(4) == Data("heif".utf8))
+    }
+}
+
+private extension UIImage {
+    var sizeInPixels: CGSize {
+        let scale = max(1.0, self.scale)
+        return CGSize(width: size.width * scale, height: size.height * scale)
+    }
+}
