@@ -15,7 +15,7 @@ struct MealTrackerApp: App {
     var body: some Scene {
         WindowGroup {
             NavigationView {
-                ContentView()
+                MealFormView()
             }
             .environment(\.managedObjectContext, persistenceController.container.viewContext)
         }
