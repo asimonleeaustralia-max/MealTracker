@@ -168,6 +168,9 @@ struct MealFormView: View {
     @State private var headerImageData: Data? = nil
     private let providedImageURL = URL(fileURLWithPath: "/Users/simonlee/Desktop/IMG_0204.jpg.webp")
 
+    // New: expand/collapse state for header image size
+    @State private var isImageExpanded: Bool = false
+
     // MARK: - Analyze button state
     @State private var isAnalyzing: Bool = false
     @State private var analyzeError: String?
@@ -183,12 +186,22 @@ struct MealFormView: View {
     var body: some View {
         let l = LocalizationManager(languageCode: appLanguageCode)
 
+        // Heights for header image
+        let fullHeight = UIScreen.main.bounds.height * 0.45
+        let collapsedHeight = fullHeight * 0.5
+
         VStack(spacing: 0) {
             ZStack(alignment: .bottomTrailing) {
                 HeaderImageView(image: headerImage)
                     .frame(maxWidth: .infinity)
-                    .frame(height: UIScreen.main.bounds.height * 0.45)
+                    .frame(height: isImageExpanded ? fullHeight : collapsedHeight)
                     .clipped()
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+                            isImageExpanded.toggle()
+                        }
+                    }
 
                 if headerImage != nil {
                     AnalyzeButton(isBusy: isAnalyzing) {
