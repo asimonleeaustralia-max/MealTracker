@@ -26,8 +26,10 @@ struct SettingsView: View {
                 // Handedness (no header)
                 Section {
                     Picker(l.localized("handedness"), selection: $handedness) {
-                        Text(l.localized("right_handed")).tag(Handedness.right)
+                        // Show Left on the left side, Right on the right side,
+                        // but keep the default selection as .right via @AppStorage default.
                         Text(l.localized("left_handed")).tag(Handedness.left)
+                        Text(l.localized("right_handed")).tag(Handedness.right)
                     }
                     .pickerStyle(.segmented)
                 }
@@ -81,4 +83,3 @@ struct SettingsView: View {
         }
     }
 }
-

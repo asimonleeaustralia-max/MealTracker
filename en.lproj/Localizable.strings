@@ -68,3 +68,8 @@
 "potassium" = "Potassium";
 "zinc" = "Zinc";
 "magnesium" = "Magnesium";
+
+
+"handedness" = "Handedness";
+"left_handed" = "Left-handed";
+"right_handed" = "Right-handed";
