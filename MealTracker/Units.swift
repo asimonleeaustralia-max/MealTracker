@@ -78,3 +78,9 @@ enum VitaminsUnit: String, CaseIterable, Codable, Equatable, Hashable {
         }
     }
 }
+
+enum Handedness: String, CaseIterable, Codable, Equatable, Hashable {
+    case right
+    case left
+}
+

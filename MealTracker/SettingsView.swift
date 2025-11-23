@@ -10,6 +10,7 @@ struct SettingsView: View {
     @AppStorage("showVitamins") private var showVitamins: Bool = false
     @AppStorage("vitaminsUnit") private var vitaminsUnit: VitaminsUnit = .milligrams
     @AppStorage("showMinerals") private var showMinerals: Bool = false
+    @AppStorage("handedness") private var handedness: Handedness = .right
 
     private var availableLanguages: [String] {
         let codes = Bundle.main.localizations.filter { $0.lowercased() != "base" }
@@ -22,6 +23,15 @@ struct SettingsView: View {
 
         NavigationView {
             Form {
+                // Handedness (no header)
+                Section {
+                    Picker(l.localized("handedness"), selection: $handedness) {
+                        Text(l.localized("right_handed")).tag(Handedness.right)
+                        Text(l.localized("left_handed")).tag(Handedness.left)
+                    }
+                    .pickerStyle(.segmented)
+                }
+
                 // Energy unit (no header)
                 Section {
                     Picker("", selection: $energyUnit) {
@@ -71,3 +81,4 @@ struct SettingsView: View {
         }
     }
 }
+
