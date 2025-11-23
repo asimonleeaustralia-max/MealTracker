@@ -163,12 +163,15 @@ struct MealFormView: View {
     @FocusState private var focused: FocusedField?
     @State private var lastFocused: FocusedField?
 
-    // MARK: - Header image state
-    @State private var headerImage: UIImage? = nil
-    @State private var headerImageData: Data? = nil
+    // MARK: - Gallery state
+    private let maxPhotos = 20
+    @State private var galleryItems: [GalleryItem] = [] // ordered, display-ready
+    @State private var selectedIndex: Int = 0
+
+    // Dev image for placeholder population
     private let providedImageURL = URL(fileURLWithPath: "/Users/simonlee/Desktop/IMG_0204.jpg.webp")
 
-    // New: expand/collapse state for header image size
+    // Expanded header height toggle (kept from previous UI)
     @State private var isImageExpanded: Bool = false
 
     // MARK: - Analyze button state
@@ -191,27 +194,17 @@ struct MealFormView: View {
         let collapsedHeight = fullHeight * 0.5
 
         VStack(spacing: 0) {
-            ZStack(alignment: .bottomTrailing) {
-                HeaderImageView(image: headerImage)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: isImageExpanded ? fullHeight : collapsedHeight)
-                    .clipped()
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
-                            isImageExpanded.toggle()
-                        }
-                    }
-
-                if headerImage != nil {
-                    AnalyzeButton(isBusy: isAnalyzing) {
-                        Task {
-                            await analyzePhoto()
-                        }
-                    }
-                    .padding(12)
+            // Main gallery + thumbnails
+            GalleryHeader(
+                items: galleryItems,
+                selectedIndex: $selectedIndex,
+                isExpanded: $isImageExpanded,
+                fullHeight: fullHeight,
+                collapsedHeight: collapsedHeight,
+                onAnalyzeTap: {
+                    Task { await analyzePhoto() }
                 }
-            }
+            )
 
             Form {
                 // Energy (no header)
@@ -568,12 +561,8 @@ struct MealFormView: View {
             lastFocused = newFocus
         })
         .onAppear {
-            // Load provided image once for preview
-            if headerImage == nil, let data = try? Data(contentsOf: providedImageURL),
-               let ui = UIImage(data: data) {
-                headerImage = ui
-                headerImageData = data
-            }
+            // Build gallery items from Core Data or dev fallback
+            reloadGalleryItems()
 
             if let meal = meal {
                 mealDescription = meal.mealDescription
@@ -628,8 +617,8 @@ struct MealFormView: View {
                 vitaminAIsGuess = meal.vitaminAIsGuess
                 vitaminBIsGuess = meal.vitaminBIsGuess
                 vitaminCIsGuess = meal.vitaminCIsGuess
-                vitaminDIsGuess = meal.vitaminDIsGuess
-                vitaminEIsGuess = meal.vitaminEIsGuess
+                vitaminDIsGuess = vitaminDIsGuess
+                vitaminEIsGuess = vitaminEIsGuess
                 vitaminKIsGuess = meal.vitaminKIsGuess
 
                 calciumIsGuess = meal.calciumIsGuess
@@ -657,37 +646,38 @@ struct MealFormView: View {
         }
     }
 
-    private var isValid: Bool {
-        guard let cal = Int(calories), cal > 0 else { return false }
-        let allNumericStrings = [
-            calories, carbohydrates, protein, sodium, fat,
-            starch, sugars, fibre, monounsaturatedFat, polyunsaturatedFat, saturatedFat, transFat,
-            animalProtein, plantProtein, proteinSupplements,
-            vitaminA, vitaminB, vitaminC, vitaminD, vitaminE, vitaminK,
-            calcium, iron, potassium, zinc, magnesium
-        ]
-        return allNumericStrings.dropFirst().allSatisfy { s in
-            guard !s.isEmpty else { return true }
-            return Int(s).map { $0 > 0 } ?? false
+    // MARK: - Gallery composition
+
+    private func reloadGalleryItems() {
+        var items: [GalleryItem] = []
+
+        if let meal = meal {
+            // Fetch MealPhoto objects linked to this meal, sorted by createdAt ascending
+            let request = NSFetchRequest<MealPhoto>(entityName: "MealPhoto")
+            request.predicate = NSPredicate(format: "meal == %@", meal)
+            request.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: true)]
+            if let photos = try? context.fetch(request), !photos.isEmpty {
+                for p in photos.prefix(maxPhotos) {
+                    if let url = PhotoService.urlForUpload(p) ?? PhotoService.urlForOriginal(p) {
+                        items.append(.persistent(photo: p, url: url))
+                    }
+                }
+            }
         }
-    }
 
-    private func intOrZero(_ text: String) -> Int {
-        max(0, Int(text) ?? 0)
-    }
-
-    private func doubleOrZero(_ text: String) -> Double {
-        max(0, Double(text) ?? 0)
-    }
-
-    private func defaultTitle(using date: Date) -> String {
-        if !mealDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return mealDescription
+        if items.isEmpty {
+            // Dev fallback: duplicate the provided image up to 20 times in-memory
+            if let data = try? Data(contentsOf: providedImageURL),
+               let ui = UIImage(data: data) {
+                let count = maxPhotos
+                for i in 0..<count {
+                    items.append(.inMemory(id: UUID(), image: ui, data: data, devIndex: i))
+                }
+            }
         }
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return "Meal on \(formatter.string(from: date))"
+
+        self.galleryItems = items
+        self.selectedIndex = min(self.selectedIndex, max(0, items.count - 1))
     }
 
     // MARK: - Analyze button logic
@@ -700,7 +690,18 @@ struct MealFormView: View {
 
     private func analyzePhoto() async {
         guard !isAnalyzing else { return }
-        guard let data = headerImageData else { return }
+        // Use the currently selected gallery image data if available; otherwise bail.
+        let imageData: Data? = {
+            guard selectedIndex < galleryItems.count else { return nil }
+            switch galleryItems[selectedIndex] {
+            case .persistent(_, let url):
+                return try? Data(contentsOf: url)
+            case .inMemory(_, _, let data, _):
+                return data
+            }
+        }()
+
+        guard let data = imageData else { return }
         isAnalyzing = true
         defer { isAnalyzing = false }
 
@@ -787,6 +788,39 @@ struct MealFormView: View {
         } catch {
             analyzeError = "Analysis failed: \(error)"
         }
+    }
+
+    private var isValid: Bool {
+        guard let cal = Int(calories), cal > 0 else { return false }
+        let allNumericStrings = [
+            calories, carbohydrates, protein, sodium, fat,
+            starch, sugars, fibre, monounsaturatedFat, polyunsaturatedFat, saturatedFat, transFat,
+            animalProtein, plantProtein, proteinSupplements,
+            vitaminA, vitaminB, vitaminC, vitaminD, vitaminE, vitaminK,
+            calcium, iron, potassium, zinc, magnesium
+        ]
+        return allNumericStrings.dropFirst().allSatisfy { s in
+            guard !s.isEmpty else { return true }
+            return Int(s).map { $0 > 0 } ?? false
+        }
+    }
+
+    private func intOrZero(_ text: String) -> Int {
+        max(0, Int(text) ?? 0)
+    }
+
+    private func doubleOrZero(_ text: String) -> Double {
+        max(0, Double(text) ?? 0)
+    }
+
+    private func defaultTitle(using date: Date) -> String {
+        if !mealDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return mealDescription
+        }
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return "Meal on \(formatter.string(from: date))"
     }
 
     private func save() {
@@ -967,15 +1001,26 @@ struct MealFormView: View {
         do {
             try context.save()
 
-            if let data = headerImageData {
-                let suggestedExt = providedImageURL.pathExtension.lowercased()
-                _ = try? PhotoService.addPhoto(from: data,
-                                               suggestedUTTypeExtension: suggestedExt,
-                                               to: targetMeal,
-                                               in: context)
+            // Persist provided image only if we have fewer than maxPhotos stored
+            if let data = try? Data(contentsOf: providedImageURL),
+               let mealObj = (meal ?? targetMeal) as Meal? {
+                // Count current photos via fetch since Meal has no 'photos' relationship
+                let request = NSFetchRequest<MealPhoto>(entityName: "MealPhoto")
+                request.predicate = NSPredicate(format: "meal == %@", mealObj)
+                let count = (try? context.count(for: request)) ?? 0
+                if count < maxPhotos {
+                    let suggestedExt = providedImageURL.pathExtension.lowercased()
+                    _ = try? PhotoService.addPhoto(from: data,
+                                                   suggestedUTTypeExtension: suggestedExt,
+                                                   to: targetMeal,
+                                                   in: context)
+                }
             }
 
             try context.save()
+            // Refresh gallery after save
+            reloadGalleryItems()
+
             dismiss()
         } catch {
             print("Failed to save meal: \(error)")
@@ -1315,6 +1360,133 @@ struct MealFormView: View {
     }
 }
 
+// MARK: - Gallery models and views
+
+private enum GalleryItem: Identifiable, Equatable {
+    case persistent(photo: MealPhoto, url: URL)
+    case inMemory(id: UUID, image: UIImage, data: Data, devIndex: Int)
+
+    var id: String {
+        switch self {
+        case .persistent(let p, _):
+            return p.objectID.uriRepresentation().absoluteString
+        case .inMemory(let id, _, _, let idx):
+            return id.uuidString + "_\(idx)"
+        }
+    }
+
+    var thumbnailImage: UIImage? {
+        switch self {
+        case .persistent(_, let url):
+            if let data = try? Data(contentsOf: url) {
+                return UIImage(data: data)
+            }
+            return nil
+        case .inMemory(_, let img, _, _):
+            return img
+        }
+    }
+}
+
+private struct GalleryHeader: View {
+    let items: [GalleryItem]
+    @Binding var selectedIndex: Int
+    @Binding var isExpanded: Bool
+    let fullHeight: CGFloat
+    let collapsedHeight: CGFloat
+    let onAnalyzeTap: () -> Void
+
+    // Thumbnail sizing and spacing (10% smaller than 64; tighter spacing)
+    private let thumbSize: CGFloat = 58
+    private let thumbSpacing: CGFloat = 6
+    private let horizontalPadding: CGFloat = 8
+    private let bottomPadding: CGFloat = 2
+
+    var body: some View {
+        VStack(spacing: 8) {
+            ZStack(alignment: .bottomTrailing) {
+                if items.isEmpty {
+                    HeaderImageView(image: nil)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: isExpanded ? fullHeight : collapsedHeight)
+                        .clipped()
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+                                isExpanded.toggle()
+                            }
+                        }
+                } else {
+                    // Main swipeable pager
+                    TabView(selection: $selectedIndex) {
+                        ForEach(items.indices, id: \.self) { idx in
+                            let image = items[idx].thumbnailImage
+                            HeaderImageView(image: image)
+                                .tag(idx)
+                        }
+                    }
+                    .tabViewStyle(.page(indexDisplayMode: .automatic))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: isExpanded ? fullHeight : collapsedHeight)
+                    .clipped()
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+                            isExpanded.toggle()
+                        }
+                    }
+                }
+
+                if !items.isEmpty {
+                    AnalyzeButton(isBusy: false) { onAnalyzeTap() }
+                        .padding(12)
+                }
+            }
+
+            // Thumbnail strip
+            if !items.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: thumbSpacing) {
+                        ForEach(items.indices, id: \.self) { idx in
+                            let img = items[idx].thumbnailImage
+                            ZStack {
+                                if let ui = img {
+                                    Image(uiImage: ui)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: thumbSize, height: thumbSize)
+                                        .clipped()
+                                        .cornerRadius(6)
+                                } else {
+                                    Rectangle()
+                                        .fill(Color.secondary.opacity(0.1))
+                                        .frame(width: thumbSize, height: thumbSize)
+                                        .cornerRadius(6)
+                                        .overlay(
+                                            Image(systemName: "photo")
+                                                .foregroundStyle(.secondary)
+                                        )
+                                }
+                                // Selection ring
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(selectedIndex == idx ? Color.accentColor : Color.clear, lineWidth: 2)
+                            }
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    selectedIndex = idx
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, horizontalPadding)
+                    .padding(.bottom, bottomPadding)
+                }
+            }
+        }
+    }
+}
+
 private struct HeaderImageView: View {
     let image: UIImage?
 
@@ -1365,6 +1537,8 @@ private struct AnalyzeButton: View {
         .accessibilityLabel("Analyze Photo")
     }
 }
+
+// MARK: - Existing supporting views and helpers (unchanged below)
 
 private struct CompactChevronToggle: View {
     @Binding var isExpanded: Bool
@@ -1790,4 +1964,3 @@ private struct CompactSectionSpacing: ViewModifier {
         }
     }
 }
-
