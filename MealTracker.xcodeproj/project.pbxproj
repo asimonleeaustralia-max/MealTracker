@@ -13,6 +13,9 @@
 		C34176E02ED2794C00C73645 /* PhotoAssetDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34176DF2ED2794C00C73645 /* PhotoAssetDTO.swift */; };
 		C34176E22ED2795200C73645 /* PhotoService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34176E12ED2795200C73645 /* PhotoService.swift */; };
 		C34176E42ED288BC00C73645 /* MealPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34176E32ED288BC00C73645 /* MealPhoto.swift */; };
+		C381065E2ED29E5500C796E0 /* LocalBarcodeDB.swift in Sources */ = {isa = PBXBuildFile; fileRef = C381065D2ED29E5500C796E0 /* LocalBarcodeDB.swift */; };
+		C38106602ED29E5A00C796E0 /* PhotoNutritionGuesser.swift in Sources */ = {isa = PBXBuildFile; fileRef = C381065F2ED29E5A00C796E0 /* PhotoNutritionGuesser.swift */; };
+		C38106622ED29E6100C796E0 /* LocalBarcodeDB.json in Resources */ = {isa = PBXBuildFile; fileRef = C38106612ED29E6100C796E0 /* LocalBarcodeDB.json */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -23,6 +26,9 @@
 		C34176E12ED2795200C73645 /* PhotoService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoService.swift; sourceTree = "<group>"; };
 		C34176E32ED288BC00C73645 /* MealPhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MealPhoto.swift; sourceTree = "<group>"; };
 		C3798F872ECA75BE00945BBF /* MealTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MealTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C381065D2ED29E5500C796E0 /* LocalBarcodeDB.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalBarcodeDB.swift; sourceTree = "<group>"; };
+		C381065F2ED29E5A00C796E0 /* PhotoNutritionGuesser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoNutritionGuesser.swift; sourceTree = "<group>"; };
+		C38106612ED29E6100C796E0 /* LocalBarcodeDB.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = LocalBarcodeDB.json; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -55,6 +61,9 @@
 				C34176DF2ED2794C00C73645 /* PhotoAssetDTO.swift */,
 				C34176E12ED2795200C73645 /* PhotoService.swift */,
 				C34176E32ED288BC00C73645 /* MealPhoto.swift */,
+				C381065D2ED29E5500C796E0 /* LocalBarcodeDB.swift */,
+				C381065F2ED29E5A00C796E0 /* PhotoNutritionGuesser.swift */,
+				C38106612ED29E6100C796E0 /* LocalBarcodeDB.json */,
 			);
 			sourceTree = "<group>";
 		};
@@ -130,6 +139,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C38106622ED29E6100C796E0 /* LocalBarcodeDB.json in Resources */,
 				C32A3DC32ECC7397009C2DFD /* Localizable.strings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -141,6 +151,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C381065E2ED29E5500C796E0 /* LocalBarcodeDB.swift in Sources */,
+				C38106602ED29E5A00C796E0 /* PhotoNutritionGuesser.swift in Sources */,
 				C34176E22ED2795200C73645 /* PhotoService.swift in Sources */,
 				C34176E02ED2794C00C73645 /* PhotoAssetDTO.swift in Sources */,
 				C34176E42ED288BC00C73645 /* MealPhoto.swift in Sources */,

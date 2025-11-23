@@ -168,6 +168,10 @@ struct MealFormView: View {
     @State private var headerImageData: Data? = nil
     private let providedImageURL = URL(fileURLWithPath: "/Users/simonlee/Desktop/IMG_0204.jpg.webp")
 
+    // MARK: - Analyze button state
+    @State private var isAnalyzing: Bool = false
+    @State private var analyzeError: String?
+
     var meal: Meal?
 
     init(meal: Meal? = nil) {
@@ -180,10 +184,21 @@ struct MealFormView: View {
         let l = LocalizationManager(languageCode: appLanguageCode)
 
         VStack(spacing: 0) {
-            HeaderImageView(image: headerImage)
-                .frame(maxWidth: .infinity)
-                .frame(height: UIScreen.main.bounds.height * 0.45)
-                .clipped()
+            ZStack(alignment: .bottomTrailing) {
+                HeaderImageView(image: headerImage)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: UIScreen.main.bounds.height * 0.45)
+                    .clipped()
+
+                if headerImage != nil {
+                    AnalyzeButton(isBusy: isAnalyzing) {
+                        Task {
+                            await analyzePhoto()
+                        }
+                    }
+                    .padding(12)
+                }
+            }
 
             Form {
                 // Energy (no header)
@@ -662,6 +677,105 @@ struct MealFormView: View {
         return "Meal on \(formatter.string(from: date))"
     }
 
+    // MARK: - Analyze button logic
+
+    private func applyIfEmpty(_ source: inout String, with value: Int?, markGuess: inout Bool) {
+        guard let v = value, source.isEmpty else { return }
+        source = String(max(0, v))
+        markGuess = true
+    }
+
+    private func analyzePhoto() async {
+        guard !isAnalyzing else { return }
+        guard let data = headerImageData else { return }
+        isAnalyzing = true
+        defer { isAnalyzing = false }
+
+        do {
+            if let result = try await PhotoNutritionGuesser.guess(from: data, languageCode: appLanguageCode) {
+                // Apply only to empty fields; set guess flags
+                applyIfEmpty(&calories, with: result.calories, markGuess: &caloriesIsGuess)
+                applyIfEmpty(&carbohydrates, with: result.carbohydrates, markGuess: &carbohydratesIsGuess)
+                applyIfEmpty(&protein, with: result.protein, markGuess: &proteinIsGuess)
+                // Sodium stored as mg in UI; convert to UI unit if needed
+                if sodium.isEmpty, let mg = result.sodiumMg {
+                    let uiVal: Int
+                    switch sodiumUnit {
+                    case .milligrams:
+                        uiVal = mg
+                    case .grams:
+                        uiVal = Int(Double(mg) / 1000.0)
+                    }
+                    sodium = String(max(0, uiVal))
+                    sodiumIsGuess = true
+                }
+                applyIfEmpty(&fat, with: result.fat, markGuess: &fatIsGuess)
+
+                applyIfEmpty(&sugars, with: result.sugars, markGuess: &sugarsIsGuess)
+                sugarsTouched = sugarsTouched || !sugars.isEmpty
+                applyIfEmpty(&starch, with: result.starch, markGuess: &starchIsGuess)
+                starchTouched = starchTouched || !starch.isEmpty
+                applyIfEmpty(&fibre, with: result.fibre, markGuess: &fibreIsGuess)
+                fibreTouched = fibreTouched || !fibre.isEmpty
+
+                applyIfEmpty(&monounsaturatedFat, with: result.monounsaturatedFat, markGuess: &monounsaturatedFatIsGuess)
+                monoTouched = monoTouched || !monounsaturatedFat.isEmpty
+                applyIfEmpty(&polyunsaturatedFat, with: result.polyunsaturatedFat, markGuess: &polyunsaturatedFatIsGuess)
+                polyTouched = polyTouched || !polyunsaturatedFat.isEmpty
+                applyIfEmpty(&saturatedFat, with: result.saturatedFat, markGuess: &saturatedFatIsGuess)
+                satTouched = satTouched || !saturatedFat.isEmpty
+                applyIfEmpty(&transFat, with: result.transFat, markGuess: &transFatIsGuess)
+                transTouched = transTouched || !transFat.isEmpty
+
+                applyIfEmpty(&animalProtein, with: result.animalProtein, markGuess: &animalProteinIsGuess)
+                animalTouched = animalTouched || !animalProtein.isEmpty
+                applyIfEmpty(&plantProtein, with: result.plantProtein, markGuess: &plantProteinIsGuess)
+                plantTouched = plantTouched || !plantProtein.isEmpty
+                applyIfEmpty(&proteinSupplements, with: result.proteinSupplements, markGuess: &proteinSupplementsIsGuess)
+                supplementsTouched = supplementsTouched || !proteinSupplements.isEmpty
+
+                // Vitamins/minerals (UI uses vitaminsUnit; storage is mg)
+                func applyVitaminMineral(_ field: inout String, _ guessFlag: inout Bool, mg: Int?) {
+                    guard field.isEmpty, let mg else { return }
+                    let uiVal: Int
+                    switch vitaminsUnit {
+                    case .milligrams: uiVal = mg
+                    case .micrograms: uiVal = Int(Double(mg) * 1000.0)
+                    }
+                    field = String(max(0, uiVal))
+                    guessFlag = true
+                }
+                applyVitaminMineral(&vitaminA, &vitaminAIsGuess, mg: result.vitaminA)
+                applyVitaminMineral(&vitaminB, &vitaminBIsGuess, mg: result.vitaminB)
+                applyVitaminMineral(&vitaminC, &vitaminCIsGuess, mg: result.vitaminC)
+                applyVitaminMineral(&vitaminD, &vitaminDIsGuess, mg: result.vitaminD)
+                applyVitaminMineral(&vitaminE, &vitaminEIsGuess, mg: result.vitaminE)
+                applyVitaminMineral(&vitaminK, &vitaminKIsGuess, mg: result.vitaminK)
+
+                applyVitaminMineral(&calcium, &calciumIsGuess, mg: result.calcium)
+                applyVitaminMineral(&iron, &ironIsGuess, mg: result.iron)
+                applyVitaminMineral(&potassium, &potassiumIsGuess, mg: result.potassium)
+                applyVitaminMineral(&zinc, &zincIsGuess, mg: result.zinc)
+                applyVitaminMineral(&magnesium, &magnesiumIsGuess, mg: result.magnesium)
+
+                // If totals present but subfields empty, use your existing autofill helpers
+                if !(carbohydrates.isEmpty), sugars.isEmpty || starch.isEmpty || fibre.isEmpty {
+                    autofillCarbSubfieldsIfNeeded()
+                }
+                if !(protein.isEmpty), animalProtein.isEmpty || plantProtein.isEmpty || proteinSupplements.isEmpty {
+                    autofillProteinSubfieldsIfNeeded()
+                }
+                if !(fat.isEmpty), monounsaturatedFat.isEmpty || polyunsaturatedFat.isEmpty || saturatedFat.isEmpty || transFat.isEmpty {
+                    autofillFatSubfieldsIfNeeded()
+                }
+
+                recomputeConsistencyAndBlinkIfFixed()
+            }
+        } catch {
+            analyzeError = "Analysis failed: \(error)"
+        }
+    }
+
     private func save() {
         guard let calInt = Int(calories), calInt > 0 else { return }
         let cal = Double(calInt)
@@ -896,7 +1010,7 @@ struct MealFormView: View {
         let monoVal: Int = Int(monounsaturatedFat) ?? 0
         let polyVal: Int = Int(polyunsaturatedFat) ?? 0
         let satVal: Int = Int(saturatedFat) ?? 0
-        let transVal: Int = Int(transFat) ?? 0
+        let transVal: Int = Int(Int(transFat) ?? 0)
         let fatSubSum: Int = monoVal + polyVal + satVal + transVal
         let fatHasAnySub: Bool = !(monounsaturatedFat.isEmpty && polyunsaturatedFat.isEmpty && saturatedFat.isEmpty && transFat.isEmpty)
         let fatHasTotal: Bool = !fat.isEmpty
@@ -1214,6 +1328,31 @@ private struct HeaderImageView: View {
     }
 }
 
+private struct AnalyzeButton: View {
+    let isBusy: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(Color.black.opacity(0.6))
+                    .frame(width: 44, height: 44)
+                if isBusy {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                } else {
+                    Image(systemName: "wand.and.stars")
+                        .foregroundColor(.white)
+                        .imageScale(.medium)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Analyze Photo")
+    }
+}
+
 private struct CompactChevronToggle: View {
     @Binding var isExpanded: Bool
     let labelCollapsed: String
@@ -1516,76 +1655,6 @@ private extension ValidationThresholds {
     }
 }
 
-private struct CarbsGroupView: View {
-    let manager: LocalizationManager
-
-    @Binding var totalText: String
-    @Binding var totalIsGuess: Bool
-    @Binding var sugarsText: String
-    @Binding var sugarsIsGuess: Bool
-    @Binding var starchText: String
-    @Binding var starchIsGuess: Bool
-    @Binding var fibreText: String
-    @Binding var fibreIsGuess: Bool
-
-    var body: some View {
-        VStack(spacing: 0) {
-            MetricField(titleKey: "carbohydrates", text: $totalText, isGuess: $totalIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
-            MetricField(titleKey: "sugars", text: $sugarsText, isGuess: $sugarsIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
-            MetricField(titleKey: "starch", text: $starchText, isGuess: $starchIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
-            MetricField(titleKey: "fibre", text: $fibreText, isGuess: $fibreIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
-        }
-    }
-}
-
-private struct ProteinGroupView: View {
-    let manager: LocalizationManager
-
-    @Binding var descriptionText: String
-    @Binding var totalText: String
-    @Binding var totalIsGuess: Bool
-    @Binding var animalText: String
-    @Binding var animalIsGuess: Bool
-    @Binding var plantText: String
-    @Binding var plantIsGuess: Bool
-    @Binding var supplementsText: String
-    @Binding var supplementsIsGuess: Bool
-
-    var body: some View {
-        VStack(spacing: 0) {
-            MetricField(titleKey: "protein", text: $totalText, isGuess: $totalIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
-            MetricField(titleKey: "animal_protein", text: $animalText, isGuess: $animalIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
-            MetricField(titleKey: "plant_protein", text: $plantText, isGuess: $plantIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
-            MetricField(titleKey: "protein_supplements", text: $supplementsText, isGuess: $supplementsIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
-        }
-    }
-}
-
-private struct FatGroupView: View {
-    let manager: LocalizationManager
-
-    @Binding var totalText: String
-    @Binding var totalIsGuess: Bool
-    @Binding var monoText: String
-    @Binding var monoIsGuess: Bool
-    @Binding var polyText: String
-    @Binding var polyIsGuess: Bool
-    @Binding var satText: String
-    @Binding var satIsGuess: Bool
-    @Binding var transText: String
-    @Binding var transIsGuess: Bool
-
-    var body: some View {
-        VStack(spacing: 0) {
-            MetricField(titleKey: "fat", text: $totalText, isGuess: $totalIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
-            MetricField(titleKey: "monounsaturated_fat", text: $monoText, isGuess: $monoIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
-            MetricField(titleKey: "polyunsaturated_fat", text: $polyText, isGuess: $polyIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
-            MetricField(titleKey: "saturated_fat", text: $satText, isGuess: $satIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
-            MetricField(titleKey: "trans_fat", text: $transText, isGuess: $transIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
-        }
-    }
-}
-
 private struct CarbsSubFields: View {
     let manager: LocalizationManager
     @Binding var sugarsText: String
@@ -1708,3 +1777,4 @@ private struct CompactSectionSpacing: ViewModifier {
         }
     }
 }
+
