@@ -16,6 +16,8 @@
 		C381065E2ED29E5500C796E0 /* LocalBarcodeDB.swift in Sources */ = {isa = PBXBuildFile; fileRef = C381065D2ED29E5500C796E0 /* LocalBarcodeDB.swift */; };
 		C38106602ED29E5A00C796E0 /* PhotoNutritionGuesser.swift in Sources */ = {isa = PBXBuildFile; fileRef = C381065F2ED29E5A00C796E0 /* PhotoNutritionGuesser.swift */; };
 		C38106622ED29E6100C796E0 /* LocalBarcodeDB.json in Resources */ = {isa = PBXBuildFile; fileRef = C38106612ED29E6100C796E0 /* LocalBarcodeDB.json */; };
+		C3C2B9712ED44E7000E9D4F4 /* FeaturePrintClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3C2B9702ED44E7000E9D4F4 /* FeaturePrintClassifier.swift */; };
+		C3C2B9732ED44E8500E9D4F4 /* FoodClassPriors.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3C2B9722ED44E8500E9D4F4 /* FoodClassPriors.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -29,6 +31,8 @@
 		C381065D2ED29E5500C796E0 /* LocalBarcodeDB.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalBarcodeDB.swift; sourceTree = "<group>"; };
 		C381065F2ED29E5A00C796E0 /* PhotoNutritionGuesser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoNutritionGuesser.swift; sourceTree = "<group>"; };
 		C38106612ED29E6100C796E0 /* LocalBarcodeDB.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = LocalBarcodeDB.json; sourceTree = "<group>"; };
+		C3C2B9702ED44E7000E9D4F4 /* FeaturePrintClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeaturePrintClassifier.swift; sourceTree = "<group>"; };
+		C3C2B9722ED44E8500E9D4F4 /* FoodClassPriors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodClassPriors.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -70,6 +74,8 @@
 				C381065D2ED29E5500C796E0 /* LocalBarcodeDB.swift */,
 				C381065F2ED29E5A00C796E0 /* PhotoNutritionGuesser.swift */,
 				C38106612ED29E6100C796E0 /* LocalBarcodeDB.json */,
+				C3C2B9702ED44E7000E9D4F4 /* FeaturePrintClassifier.swift */,
+				C3C2B9722ED44E8500E9D4F4 /* FoodClassPriors.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -164,7 +170,9 @@
 				C34176E02ED2794C00C73645 /* PhotoAssetDTO.swift in Sources */,
 				C34176E42ED288BC00C73645 /* MealPhoto.swift in Sources */,
 				C34176DC2ED2794700C73645 /* PhotoStore.swift in Sources */,
+				C3C2B9732ED44E8500E9D4F4 /* FoodClassPriors.swift in Sources */,
 				C34176DE2ED2794A00C73645 /* ImageResizer.swift in Sources */,
+				C3C2B9712ED44E7000E9D4F4 /* FeaturePrintClassifier.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
