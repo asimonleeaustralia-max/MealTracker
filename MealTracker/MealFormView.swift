@@ -206,6 +206,7 @@ struct MealFormView: View {
                 isExpanded: $isImageExpanded,
                 fullHeight: fullHeight,
                 collapsedHeight: collapsedHeight,
+                isBusy: isAnalyzing,
                 onAnalyzeTap: {
                     Task { await analyzePhoto() }
                 }
@@ -704,7 +705,9 @@ struct MealFormView: View {
     }
 
     private func analyzePhoto() async {
-        guard !isAnalyzing else { return }
+        // If already analyzing, ignore further taps
+        if await MainActor.run(resultType: Bool.self, body: { isAnalyzing }) { return }
+
         // Use the currently selected gallery image data if available; otherwise bail.
         let imageData: Data? = {
             guard selectedIndex < galleryItems.count else { return nil }
@@ -717,91 +720,94 @@ struct MealFormView: View {
         }()
 
         guard let data = imageData else { return }
-        isAnalyzing = true
-        defer { isAnalyzing = false }
+
+        await MainActor.run { isAnalyzing = true }
+        defer { Task { await MainActor.run { isAnalyzing = false } } }
 
         do {
             if let result = try await PhotoNutritionGuesser.guess(from: data, languageCode: appLanguageCode) {
                 // Apply only to empty fields; set guess flags
-                applyIfEmpty(&calories, with: result.calories, markGuess: &caloriesIsGuess)
-                applyIfEmpty(&carbohydrates, with: result.carbohydrates, markGuess: &carbohydratesIsGuess)
-                applyIfEmpty(&protein, with: result.protein, markGuess: &proteinIsGuess)
-                // Sodium stored as mg in UI; convert to UI unit if needed
-                if sodium.isEmpty, let mg = result.sodiumMg {
-                    let uiVal: Int
-                    switch sodiumUnit {
-                    case .milligrams:
-                        uiVal = mg
-                    case .grams:
-                        uiVal = Int(Double(mg) / 1000.0)
+                await MainActor.run {
+                    applyIfEmpty(&calories, with: result.calories, markGuess: &caloriesIsGuess)
+                    applyIfEmpty(&carbohydrates, with: result.carbohydrates, markGuess: &carbohydratesIsGuess)
+                    applyIfEmpty(&protein, with: result.protein, markGuess: &proteinIsGuess)
+                    // Sodium stored as mg in UI; convert to UI unit if needed
+                    if sodium.isEmpty, let mg = result.sodiumMg {
+                        let uiVal: Int
+                        switch sodiumUnit {
+                        case .milligrams:
+                            uiVal = mg
+                        case .grams:
+                            uiVal = Int(Double(mg) / 1000.0)
+                        }
+                        sodium = String(max(0, uiVal))
+                        sodiumIsGuess = true
                     }
-                    sodium = String(max(0, uiVal))
-                    sodiumIsGuess = true
-                }
-                applyIfEmpty(&fat, with: result.fat, markGuess: &fatIsGuess)
+                    applyIfEmpty(&fat, with: result.fat, markGuess: &fatIsGuess)
 
-                applyIfEmpty(&sugars, with: result.sugars, markGuess: &sugarsIsGuess)
-                sugarsTouched = sugarsTouched || !sugars.isEmpty
-                applyIfEmpty(&starch, with: result.starch, markGuess: &starchIsGuess)
-                starchTouched = starchTouched || !starch.isEmpty
-                applyIfEmpty(&fibre, with: result.fibre, markGuess: &fibreIsGuess)
-                fibreTouched = fibreTouched || !fibre.isEmpty
+                    applyIfEmpty(&sugars, with: result.sugars, markGuess: &sugarsIsGuess)
+                    sugarsTouched = sugarsTouched || !sugars.isEmpty
+                    applyIfEmpty(&starch, with: result.starch, markGuess: &starchIsGuess)
+                    starchTouched = starchTouched || !starch.isEmpty
+                    applyIfEmpty(&fibre, with: result.fibre, markGuess: &fibreIsGuess)
+                    fibreTouched = fibreTouched || !fibre.isEmpty
 
-                applyIfEmpty(&monounsaturatedFat, with: result.monounsaturatedFat, markGuess: &monounsaturatedFatIsGuess)
-                monoTouched = monoTouched || !monounsaturatedFat.isEmpty
-                applyIfEmpty(&polyunsaturatedFat, with: result.polyunsaturatedFat, markGuess: &polyunsaturatedFatIsGuess)
-                polyTouched = polyTouched || !polyunsaturatedFat.isEmpty
-                applyIfEmpty(&saturatedFat, with: result.saturatedFat, markGuess: &saturatedFatIsGuess)
-                satTouched = satTouched || !saturatedFat.isEmpty
-                applyIfEmpty(&transFat, with: result.transFat, markGuess: &transFatIsGuess)
-                transTouched = transTouched || !transFat.isEmpty
+                    applyIfEmpty(&monounsaturatedFat, with: result.monounsaturatedFat, markGuess: &monounsaturatedFatIsGuess)
+                    monoTouched = monoTouched || !monounsaturatedFat.isEmpty
+                    applyIfEmpty(&polyunsaturatedFat, with: result.polyunsaturatedFat, markGuess: &polyunsaturatedFatIsGuess)
+                    polyTouched = polyTouched || !polyunsaturatedFat.isEmpty
+                    applyIfEmpty(&saturatedFat, with: result.saturatedFat, markGuess: &saturatedFatIsGuess)
+                    satTouched = satTouched || !saturatedFat.isEmpty
+                    applyIfEmpty(&transFat, with: result.transFat, markGuess: &transFatIsGuess)
+                    transTouched = transTouched || !transFat.isEmpty
 
-                applyIfEmpty(&animalProtein, with: result.animalProtein, markGuess: &animalProteinIsGuess)
-                animalTouched = animalTouched || !animalProtein.isEmpty
-                applyIfEmpty(&plantProtein, with: result.plantProtein, markGuess: &plantProteinIsGuess)
-                plantTouched = plantTouched || !plantProtein.isEmpty
-                applyIfEmpty(&proteinSupplements, with: result.proteinSupplements, markGuess: &proteinSupplementsIsGuess)
-                supplementsTouched = supplementsTouched || !proteinSupplements.isEmpty
+                    applyIfEmpty(&animalProtein, with: result.animalProtein, markGuess: &animalProteinIsGuess)
+                    animalTouched = animalTouched || !animalProtein.isEmpty
+                    applyIfEmpty(&plantProtein, with: result.plantProtein, markGuess: &plantProteinIsGuess)
+                    plantTouched = plantTouched || !plantProtein.isEmpty
+                    applyIfEmpty(&proteinSupplements, with: result.proteinSupplements, markGuess: &proteinSupplementsIsGuess)
+                    supplementsTouched = supplementsTouched || !proteinSupplements.isEmpty
 
-                // Vitamins/minerals (UI uses vitaminsUnit; storage is mg)
-                func applyVitaminMineral(_ field: inout String, _ guessFlag: inout Bool, mg: Int?) {
-                    guard field.isEmpty, let mg else { return }
-                    let uiVal: Int
-                    switch vitaminsUnit {
-                    case .milligrams: uiVal = mg
-                    case .micrograms: uiVal = Int(Double(mg) * 1000.0)
+                    // Vitamins/minerals (UI uses vitaminsUnit; storage is mg)
+                    func applyVitaminMineral(_ field: inout String, _ guessFlag: inout Bool, mg: Int?) {
+                        guard field.isEmpty, let mg else { return }
+                        let uiVal: Int
+                        switch vitaminsUnit {
+                        case .milligrams: uiVal = mg
+                        case .micrograms: uiVal = Int(Double(mg) * 1000.0)
+                        }
+                        field = String(max(0, uiVal))
+                        guessFlag = true
                     }
-                    field = String(max(0, uiVal))
-                    guessFlag = true
-                }
-                applyVitaminMineral(&vitaminA, &vitaminAIsGuess, mg: result.vitaminA)
-                applyVitaminMineral(&vitaminB, &vitaminBIsGuess, mg: result.vitaminB)
-                applyVitaminMineral(&vitaminC, &vitaminCIsGuess, mg: result.vitaminC)
-                applyVitaminMineral(&vitaminD, &vitaminDIsGuess, mg: result.vitaminD)
-                applyVitaminMineral(&vitaminE, &vitaminEIsGuess, mg: result.vitaminE)
-                applyVitaminMineral(&vitaminK, &vitaminKIsGuess, mg: result.vitaminK)
+                    applyVitaminMineral(&vitaminA, &vitaminAIsGuess, mg: result.vitaminA)
+                    applyVitaminMineral(&vitaminB, &vitaminBIsGuess, mg: result.vitaminB)
+                    applyVitaminMineral(&vitaminC, &vitaminCIsGuess, mg: result.vitaminC)
+                    applyVitaminMineral(&vitaminD, &vitaminDIsGuess, mg: result.vitaminD)
+                    applyVitaminMineral(&vitaminE, &vitaminEIsGuess, mg: result.vitaminE)
+                    applyVitaminMineral(&vitaminK, &vitaminKIsGuess, mg: result.vitaminK)
 
-                applyVitaminMineral(&calcium, &calciumIsGuess, mg: result.calcium)
-                applyVitaminMineral(&iron, &ironIsGuess, mg: result.iron)
-                applyVitaminMineral(&potassium, &potassiumIsGuess, mg: result.potassium)
-                applyVitaminMineral(&zinc, &zincIsGuess, mg: result.zinc)
-                applyVitaminMineral(&magnesium, &magnesiumIsGuess, mg: result.magnesium)
+                    applyVitaminMineral(&calcium, &calciumIsGuess, mg: result.calcium)
+                    applyVitaminMineral(&iron, &ironIsGuess, mg: result.iron)
+                    applyVitaminMineral(&potassium, &potassiumIsGuess, mg: result.potassium)
+                    applyVitaminMineral(&zinc, &zincIsGuess, mg: result.zinc)
+                    applyVitaminMineral(&magnesium, &magnesiumIsGuess, mg: result.magnesium)
 
-                // If totals present but subfields empty, use your existing autofill helpers
-                if !(carbohydrates.isEmpty), sugars.isEmpty || starch.isEmpty || fibre.isEmpty {
-                    autofillCarbSubfieldsIfNeeded()
-                }
-                if !(protein.isEmpty), animalProtein.isEmpty || plantProtein.isEmpty || proteinSupplements.isEmpty {
-                    autofillProteinSubfieldsIfNeeded()
-                }
-                if !(fat.isEmpty), monounsaturatedFat.isEmpty || polyunsaturatedFat.isEmpty || saturatedFat.isEmpty || transFat.isEmpty {
-                    autofillFatSubfieldsIfNeeded()
-                }
+                    // If totals present but subfields empty, use your existing autofill helpers
+                    if !(carbohydrates.isEmpty), sugars.isEmpty || starch.isEmpty || fibre.isEmpty {
+                        autofillCarbSubfieldsIfNeeded()
+                    }
+                    if !(protein.isEmpty), animalProtein.isEmpty || plantProtein.isEmpty || proteinSupplements.isEmpty {
+                        autofillProteinSubfieldsIfNeeded()
+                    }
+                    if !(fat.isEmpty), monounsaturatedFat.isEmpty || polyunsaturatedFat.isEmpty || saturatedFat.isEmpty || transFat.isEmpty {
+                        autofillFatSubfieldsIfNeeded()
+                    }
 
-                recomputeConsistencyAndBlinkIfFixed()
+                    recomputeConsistencyAndBlinkIfFixed()
+                }
             }
         } catch {
-            analyzeError = "Analysis failed: \(error)"
+            await MainActor.run { analyzeError = "Analysis failed: \(error)" }
         }
     }
 
@@ -915,8 +921,8 @@ struct MealFormView: View {
             meal.fibreIsGuess = fibreIsGuess
             meal.monounsaturatedFatIsGuess = monounsaturatedFatIsGuess
             meal.polyunsaturatedFatIsGuess = polyunsaturatedFatIsGuess
-            meal.saturatedFatIsGuess = saturatedFatIsGuess
-            meal.transFatIsGuess = transFatIsGuess
+            meal.saturatedFatIsGuess = meal.saturatedFatIsGuess
+            meal.transFatIsGuess = meal.transFatIsGuess
 
             meal.animalProteinIsGuess = animalProteinIsGuess
             meal.plantProteinIsGuess = plantProteinIsGuess
@@ -985,8 +991,8 @@ struct MealFormView: View {
             newMeal.fibreIsGuess = fibreIsGuess
             newMeal.monounsaturatedFatIsGuess = monounsaturatedFatIsGuess
             newMeal.polyunsaturatedFatIsGuess = polyunsaturatedFatIsGuess
-            newMeal.saturatedFatIsGuess = saturatedFatIsGuess
-            newMeal.transFatIsGuess = transFatIsGuess
+            newMeal.saturatedFatIsGuess = newMeal.saturatedFatIsGuess
+            newMeal.transFatIsGuess = newMeal.transFatIsGuess
 
             newMeal.animalProteinIsGuess = animalProteinIsGuess
             newMeal.plantProteinIsGuess = plantProteinIsGuess
@@ -1017,7 +1023,6 @@ struct MealFormView: View {
             try context.save()
 
             // Persist provided image only if we have fewer than maxPhotos stored
-            // (kept behavior; not tied to the dev fallback)
             try context.save()
             // Refresh gallery after save
             reloadGalleryItems()
@@ -1395,6 +1400,7 @@ private struct GalleryHeader: View {
     @Binding var isExpanded: Bool
     let fullHeight: CGFloat
     let collapsedHeight: CGFloat
+    let isBusy: Bool
     let onAnalyzeTap: () -> Void
 
     // Thumbnail sizing and spacing (10% smaller than 64; tighter spacing)
@@ -1439,7 +1445,7 @@ private struct GalleryHeader: View {
                 }
 
                 if !items.isEmpty {
-                    AnalyzeButton(isBusy: false) { onAnalyzeTap() }
+                    AnalyzeButton(isBusy: isBusy) { onAnalyzeTap() }
                         .padding(12)
                 }
             }
@@ -1518,24 +1524,36 @@ private struct AnalyzeButton: View {
     let isBusy: Bool
     let action: () -> Void
 
+    @State private var rotation: Angle = .degrees(0)
+
     var body: some View {
         Button(action: action) {
             ZStack {
                 Circle()
                     .fill(Color.black.opacity(0.6))
                     .frame(width: 44, height: 44)
+
                 if isBusy {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    // Show a spinning SF Symbol wand while busy
+                    Image(systemName: "wand.and.stars")
+                        .foregroundColor(.white)
+                        .imageScale(.medium)
+                        .rotationEffect(rotation)
+                        .animation(isBusy ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: rotation)
+                        .onAppear { rotation = .degrees(360) }
+                        .onChange(of: isBusy) { busy in
+                            if busy { rotation = .degrees(360) } else { rotation = .degrees(0) }
+                        }
                 } else {
                     Image(systemName: "wand.and.stars")
                         .foregroundColor(.white)
                         .imageScale(.medium)
+                        .rotationEffect(.degrees(0))
                 }
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Analyze Photo")
+        .accessibilityLabel(isBusy ? "Analyzing Photo" : "Analyze Photo")
     }
 }
 
