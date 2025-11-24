@@ -164,12 +164,17 @@ struct MealFormView: View {
     @State private var lastFocused: FocusedField?
 
     // MARK: - Gallery state
-    private let maxPhotos = 20
+    private let maxPhotos = 2
     @State private var galleryItems: [GalleryItem] = [] // ordered, display-ready
     @State private var selectedIndex: Int = 0
 
-    // Dev image for placeholder population
-    private let providedImageURL = URL(fileURLWithPath: "/Users/simonlee/Desktop/IMG_0204.jpg.webp")
+    // Bundle resources for dev fallback (cupcake + fish & chips)
+    // IMG_0204.jpg.webp -> resource name "IMG_0204.jpg", ext "webp"
+    private let devImage1Name = "IMG_0204.jpg"
+    private let devImage1Ext = "webp"
+    // Screenshot 2025-11-24 at 6.30.52 pm.png
+    private let devImage2Name = "Screenshot 2025-11-24 at 6.30.52 pm"
+    private let devImage2Ext = "png"
 
     // Expanded header height toggle (kept from previous UI)
     @State private var isImageExpanded: Bool = false
@@ -666,12 +671,22 @@ struct MealFormView: View {
         }
 
         if items.isEmpty {
-            // Dev fallback: duplicate the provided image up to 20 times in-memory
-            if let data = try? Data(contentsOf: providedImageURL),
-               let ui = UIImage(data: data) {
-                let count = maxPhotos
-                for i in 0..<count {
-                    items.append(.inMemory(id: UUID(), image: ui, data: data, devIndex: i))
+            // Dev fallback: load exactly two bundle images (cupcake + fish & chips)
+            var devPairs: [(name: String, ext: String)] = [
+                (devImage1Name, devImage1Ext),
+                (devImage2Name, devImage2Ext)
+            ]
+            // Attempt a second chance for the PNG with regular space instead of narrow space, if needed
+            if Bundle.main.url(forResource: devImage2Name, withExtension: devImage2Ext) == nil {
+                let altName = devImage2Name.replacingOccurrences(of: "\u{202F}", with: " ")
+                devPairs[1].name = altName
+            }
+
+            for (idx, pair) in devPairs.enumerated() {
+                if let url = Bundle.main.url(forResource: pair.name, withExtension: pair.ext),
+                   let data = try? Data(contentsOf: url),
+                   let ui = UIImage(data: data) {
+                    items.append(.inMemory(id: UUID(), image: ui, data: data, devIndex: idx))
                 }
             }
         }
@@ -1002,21 +1017,7 @@ struct MealFormView: View {
             try context.save()
 
             // Persist provided image only if we have fewer than maxPhotos stored
-            if let data = try? Data(contentsOf: providedImageURL),
-               let mealObj = (meal ?? targetMeal) as Meal? {
-                // Count current photos via fetch since Meal has no 'photos' relationship
-                let request = NSFetchRequest<MealPhoto>(entityName: "MealPhoto")
-                request.predicate = NSPredicate(format: "meal == %@", mealObj)
-                let count = (try? context.count(for: request)) ?? 0
-                if count < maxPhotos {
-                    let suggestedExt = providedImageURL.pathExtension.lowercased()
-                    _ = try? PhotoService.addPhoto(from: data,
-                                                   suggestedUTTypeExtension: suggestedExt,
-                                                   to: targetMeal,
-                                                   in: context)
-                }
-            }
-
+            // (kept behavior; not tied to the dev fallback)
             try context.save()
             // Refresh gallery after save
             reloadGalleryItems()
@@ -1964,3 +1965,4 @@ private struct CompactSectionSpacing: ViewModifier {
         }
     }
 }
+

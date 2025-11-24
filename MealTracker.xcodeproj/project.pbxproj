@@ -37,6 +37,11 @@
 			path = MealTracker;
 			sourceTree = "<group>";
 		};
+		C3C2B96B2ED441FE00E9D4F4 /* ProjectPhotos */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ProjectPhotos;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -53,6 +58,7 @@
 		C3798F7E2ECA75BE00945BBF = {
 			isa = PBXGroup;
 			children = (
+				C3C2B96B2ED441FE00E9D4F4 /* ProjectPhotos */,
 				C32A3DC12ECC7397009C2DFD /* Localizable.strings */,
 				C3798F892ECA75BE00945BBF /* MealTracker */,
 				C3798F882ECA75BE00945BBF /* Products */,
@@ -92,6 +98,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				C3798F892ECA75BE00945BBF /* MealTracker */,
+				C3C2B96B2ED441FE00E9D4F4 /* ProjectPhotos */,
 			);
 			name = MealTracker;
 			packageProductDependencies = (
