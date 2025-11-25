@@ -1509,6 +1509,9 @@ private struct MetricField: View {
     var thisField: MealFormView.FocusedField? = nil
     var onSubmit: (() -> Void)? = nil
 
+    // New: handedness preference
+    @AppStorage("handedness") private var handedness: Handedness = .right
+
     init(
         titleKey: String,
         text: Binding<String>,
@@ -1605,8 +1608,29 @@ private struct MetricField: View {
         }
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+    @ViewBuilder
+    private func headerRow() -> some View {
+        if handedness == .left {
+            HStack(alignment: .firstTextBaseline) {
+                // Segmented first for left-handed users
+                Picker("", selection: $isGuess) {
+                    Text(manager.localized("accurate")).tag(false)
+                    Text(manager.localized("guess")).tag(true)
+                }
+                .font(.caption)
+                .pickerStyle(.segmented)
+                .tint(tintColor)
+                .frame(maxWidth: 180)
+                .accessibilityLabel(displayTitle + " " + manager.localized("accuracy"))
+                .simultaneousGesture(TapGesture().onEnded { requestFocus() })
+
+                Spacer(minLength: 8)
+
+                Text(displayTitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } else {
             HStack(alignment: .firstTextBaseline) {
                 Text(displayTitle)
                     .font(.caption)
@@ -1625,32 +1649,69 @@ private struct MetricField: View {
                 .accessibilityLabel(displayTitle + " " + manager.localized("accuracy"))
                 .simultaneousGesture(TapGesture().onEnded { requestFocus() })
             }
+        }
+    }
+
+    @ViewBuilder
+    private func inputRow() -> some View {
+        if handedness == .left {
+            // Mirror: put trailing accessory and unit closer to left, then text field
+            HStack(spacing: 6) {
+                if let trailing = trailingAccessory {
+                    trailing()
+                }
+
+                if let suffix = unitSuffix {
+                    Text(suffix)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                TextField("", text: $text)
+                    .keyboardType(keyboard)
+                    .multilineTextAlignment(.leading)
+                    .submitLabel(.done)
+                    .onSubmit { onSubmit?() }
+                    .applyFocus(focusedField: focusedField, thisField: thisField)
+
+                if let accessory = leadingAccessory {
+                    accessory()
+                }
+            }
+        } else {
+            HStack(spacing: 6) {
+                if let accessory = leadingAccessory {
+                    accessory()
+                }
+
+                TextField("", text: $text)
+                    .keyboardType(keyboard)
+                    .multilineTextAlignment(.leading)
+                    .submitLabel(.done)
+                    .onSubmit { onSubmit?() }
+                    .applyFocus(focusedField: focusedField, thisField: thisField)
+
+                if let suffix = unitSuffix {
+                    Text(suffix)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let trailing = trailingAccessory {
+                    trailing()
+                }
+            }
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            headerRow()
 
             VStack(spacing: 2) {
-                HStack(spacing: 6) {
-                    if let accessory = leadingAccessory {
-                        accessory()
-                    }
-
-                    TextField("", text: $text)
-                        .keyboardType(keyboard)
-                        .multilineTextAlignment(.leading)
-                        .submitLabel(.done)
-                        .onSubmit { onSubmit?() }
-                        .applyFocus(focusedField: focusedField, thisField: thisField)
-
-                    if let suffix = unitSuffix {
-                        Text(suffix)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    if let trailing = trailingAccessory {
-                        trailing()
-                    }
-                }
-                .contentShape(Rectangle())
-                .onTapGesture { requestFocus() }
+                inputRow()
+                    .contentShape(Rectangle())
+                    .onTapGesture { requestFocus() }
 
                 Rectangle()
                     .fill(underlineColor)
