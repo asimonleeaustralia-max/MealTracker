@@ -18,6 +18,8 @@
 		C38106622ED29E6100C796E0 /* LocalBarcodeDB.json in Resources */ = {isa = PBXBuildFile; fileRef = C38106612ED29E6100C796E0 /* LocalBarcodeDB.json */; };
 		C3C2B9712ED44E7000E9D4F4 /* FeaturePrintClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3C2B9702ED44E7000E9D4F4 /* FeaturePrintClassifier.swift */; };
 		C3C2B9732ED44E8500E9D4F4 /* FoodClassPriors.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3C2B9722ED44E8500E9D4F4 /* FoodClassPriors.swift */; };
+		C3F0A6FA2ED59B32003949B8 /* SessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3F0A6F92ED59B32003949B8 /* SessionManager.swift */; };
+		C3F0A6FC2ED59B34003949B8 /* Entitlements.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3F0A6FB2ED59B34003949B8 /* Entitlements.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -33,6 +35,8 @@
 		C38106612ED29E6100C796E0 /* LocalBarcodeDB.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = LocalBarcodeDB.json; sourceTree = "<group>"; };
 		C3C2B9702ED44E7000E9D4F4 /* FeaturePrintClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeaturePrintClassifier.swift; sourceTree = "<group>"; };
 		C3C2B9722ED44E8500E9D4F4 /* FoodClassPriors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodClassPriors.swift; sourceTree = "<group>"; };
+		C3F0A6F92ED59B32003949B8 /* SessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionManager.swift; sourceTree = "<group>"; };
+		C3F0A6FB2ED59B34003949B8 /* Entitlements.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Entitlements.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -76,6 +80,8 @@
 				C38106612ED29E6100C796E0 /* LocalBarcodeDB.json */,
 				C3C2B9702ED44E7000E9D4F4 /* FeaturePrintClassifier.swift */,
 				C3C2B9722ED44E8500E9D4F4 /* FoodClassPriors.swift */,
+				C3F0A6F92ED59B32003949B8 /* SessionManager.swift */,
+				C3F0A6FB2ED59B34003949B8 /* Entitlements.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -168,10 +174,12 @@
 				C38106602ED29E5A00C796E0 /* PhotoNutritionGuesser.swift in Sources */,
 				C34176E22ED2795200C73645 /* PhotoService.swift in Sources */,
 				C34176E02ED2794C00C73645 /* PhotoAssetDTO.swift in Sources */,
+				C3F0A6FC2ED59B34003949B8 /* Entitlements.swift in Sources */,
 				C34176E42ED288BC00C73645 /* MealPhoto.swift in Sources */,
 				C34176DC2ED2794700C73645 /* PhotoStore.swift in Sources */,
 				C3C2B9732ED44E8500E9D4F4 /* FoodClassPriors.swift in Sources */,
 				C34176DE2ED2794A00C73645 /* ImageResizer.swift in Sources */,
+				C3F0A6FA2ED59B32003949B8 /* SessionManager.swift in Sources */,
 				C3C2B9712ED44E7000E9D4F4 /* FeaturePrintClassifier.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

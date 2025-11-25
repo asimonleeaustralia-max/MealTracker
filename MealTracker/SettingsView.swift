@@ -1,7 +1,10 @@
 import SwiftUI
+import CoreData
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.managedObjectContext) private var context
+    @EnvironmentObject var session: SessionManager
 
     @AppStorage("energyUnit") private var energyUnit: EnergyUnit = .calories
     @AppStorage("measurementSystem") private var measurementSystem: MeasurementSystem = .metric
@@ -18,16 +21,53 @@ struct SettingsView: View {
         return Array(Set(list)).sorted()
     }
 
+    private var tier: AccessTier {
+        Entitlements.tier(for: session)
+    }
+
+    private var mealsRemainingText: String {
+        if let remaining = Entitlements.mealsRemainingToday(for: tier, in: context) {
+            return "\(remaining)"
+        } else {
+            return "Unlimited"
+        }
+    }
+
     var body: some View {
         let l = LocalizationManager(languageCode: appLanguageCode)
 
         NavigationView {
             Form {
+                // Tier & limits section
+                Section(header: Text("Account & Plan")) {
+                    HStack {
+                        Text("Access Tier")
+                        Spacer()
+                        Text(tier == .paid ? "Paid (Cloud)" : "Free")
+                            .foregroundStyle(.secondary)
+                    }
+                    HStack {
+                        Text("Meals left today")
+                        Spacer()
+                        Text(mealsRemainingText)
+                            .foregroundStyle(.secondary)
+                    }
+                    HStack {
+                        Text("Photos per meal (limit)")
+                        Spacer()
+                        let maxPhotos = Entitlements.maxPhotosPerMeal(for: tier)
+                        Text(maxPhotos >= 9000 ? "Unlimited" : "\(maxPhotos)")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    // Simple stub controls to toggle login state for now
+                    Toggle("Logged into Cloud (stub)", isOn: $session.isLoggedIn)
+                        .tint(.accentColor)
+                }
+
                 // Handedness (no header)
                 Section {
                     Picker(l.localized("handedness"), selection: $handedness) {
-                        // Show Left on the left side, Right on the right side,
-                        // but keep the default selection as .right via @AppStorage default.
                         Text(l.localized("left_handed")).tag(Handedness.left)
                         Text(l.localized("right_handed")).tag(Handedness.right)
                     }
@@ -63,7 +103,6 @@ struct SettingsView: View {
 
                 Section {
                     Toggle(l.localized("show_minerals_entry"), isOn: $showMinerals)
-                    // Using same unit as vitamins; if you want a separate unit later, add a new AppStorage and picker.
                 }
 
                 // Language (no header)

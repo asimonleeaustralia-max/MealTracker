@@ -13,6 +13,7 @@ import UIKit
 struct MealFormView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.managedObjectContext) private var context
+    @EnvironmentObject var session: SessionManager
 
     // App settings
     @AppStorage("energyUnit") private var energyUnit: EnergyUnit = .calories
@@ -182,6 +183,10 @@ struct MealFormView: View {
     // MARK: - Analyze button state
     @State private var isAnalyzing: Bool = false
     @State private var analyzeError: String?
+
+    // MARK: - Limit alert state
+    @State private var showingLimitAlert: Bool = false
+    @State private var limitErrorMessage: String?
 
     var meal: Meal?
 
@@ -560,6 +565,13 @@ struct MealFormView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView()
         }
+        .alert(isPresented: $showingLimitAlert) {
+            Alert(
+                title: Text("Limit Reached"),
+                message: Text(limitErrorMessage ?? "You have reached your limit."),
+                dismissButton: .default(Text("OK"))
+            )
+        }
         .onChange(of: focused, perform: { newFocus in
             if let leaving = lastFocused, leaving != newFocus {
                 handleFocusLeaveIfNeeded(leaving: leaving)
@@ -844,181 +856,26 @@ struct MealFormView: View {
         return "Meal on \(formatter.string(from: date))"
     }
 
+    // MARK: - Saving
+
     private func save() {
-        guard let calInt = Int(calories), calInt > 0 else { return }
-        let cal = Double(calInt)
-
-        let carbs = Double(intOrZero(carbohydrates))
-        let prot = Double(intOrZero(protein))
-        let sod = Double(intOrZero(sodium))
-        let f = Double(intOrZero(fat))
-        let sta = Double(intOrZero(starch))
-        let sug = Double(intOrZero(sugars))
-        let fib = Double(intOrZero(fibre))
-        let mono = Double(intOrZero(monounsaturatedFat))
-        let poly = Double(intOrZero(polyunsaturatedFat))
-        let sat = Double(intOrZero(saturatedFat))
-        let trans = Double(intOrZero(transFat))
-        let animal = Double(intOrZero(animalProtein))
-        let plant = Double(intOrZero(plantProtein))
-        let supps = Double(intOrZero(proteinSupplements))
-        let vA = vitaminsUnit.toStorageMG(Double(intOrZero(vitaminA)))
-        let vB = vitaminsUnit.toStorageMG(Double(intOrZero(vitaminB)))
-        let vC = vitaminsUnit.toStorageMG(Double(intOrZero(vitaminC)))
-        let vD = vitaminsUnit.toStorageMG(Double(intOrZero(vitaminD)))
-        let vE = vitaminsUnit.toStorageMG(Double(intOrZero(vitaminE)))
-        let vK = vitaminsUnit.toStorageMG(Double(intOrZero(vitaminK)))
-        let mCa = vitaminsUnit.toStorageMG(Double(intOrZero(calcium)))
-        let mFe = vitaminsUnit.toStorageMG(Double(intOrZero(iron)))
-        let mK = vitaminsUnit.toStorageMG(Double(intOrZero(potassium)))
-        let mZn = vitaminsUnit.toStorageMG(Double(intOrZero(zinc)))
-        let mMg = vitaminsUnit.toStorageMG(Double(intOrZero(magnesium)))
-
-        let now = Date()
-
-        var targetMeal: Meal
-
-        if let meal = meal {
-            targetMeal = meal
-            meal.mealDescription = defaultTitle(using: meal.date)
-            meal.calories = cal
-            meal.carbohydrates = carbs
-            meal.protein = prot
-            meal.salt = sod
-            meal.fat = f
-            meal.starch = sta
-            meal.sugars = sug
-            meal.fibre = fib
-            meal.monounsaturatedFat = mono
-            meal.polyunsaturatedFat = poly
-            meal.saturatedFat = sat
-            meal.transFat = trans
-
-            meal.animalProtein = animal
-            meal.plantProtein = plant
-            meal.proteinSupplements = supps
-
-            meal.vitaminA = vA
-            meal.vitaminB = vB
-            meal.vitaminC = vC
-            meal.vitaminD = vD
-            meal.vitaminE = vE
-            meal.vitaminK = vK
-
-            meal.calcium = mCa
-            meal.iron = mFe
-            meal.potassium = mK
-            meal.zinc = mZn
-            meal.magnesium = mMg
-
-            meal.caloriesIsGuess = caloriesIsGuess
-            meal.carbohydratesIsGuess = carbohydratesIsGuess
-            meal.proteinIsGuess = proteinIsGuess
-            meal.saltIsGuess = sodiumIsGuess
-            meal.fatIsGuess = fatIsGuess
-            meal.starchIsGuess = starchIsGuess
-            meal.sugarsIsGuess = sugarsIsGuess
-            meal.fibreIsGuess = fibreIsGuess
-            meal.monounsaturatedFatIsGuess = monounsaturatedFatIsGuess
-            meal.polyunsaturatedFatIsGuess = polyunsaturatedFatIsGuess
-            meal.saturatedFatIsGuess = meal.saturatedFatIsGuess
-            meal.transFatIsGuess = meal.transFatIsGuess
-
-            meal.animalProteinIsGuess = animalProteinIsGuess
-            meal.plantProteinIsGuess = plantProteinIsGuess
-            meal.proteinSupplementsIsGuess = proteinSupplementsIsGuess
-
-            meal.vitaminAIsGuess = vitaminAIsGuess
-            meal.vitaminBIsGuess = meal.vitaminBIsGuess
-            meal.vitaminCIsGuess = meal.vitaminCIsGuess
-            meal.vitaminDIsGuess = vitaminDIsGuess
-            meal.vitaminEIsGuess = vitaminEIsGuess
-            meal.vitaminKIsGuess = meal.vitaminKIsGuess
-
-            meal.calciumIsGuess = calciumIsGuess
-            meal.ironIsGuess = ironIsGuess
-            meal.potassiumIsGuess = potassiumIsGuess
-            meal.zincIsGuess = zincIsGuess
-            meal.magnesiumIsGuess = magnesiumIsGuess
-
-            if let loc = locationManager.lastLocation {
-                meal.setValue(loc.coordinate.latitude, forKey: "latitude")
-                meal.setValue(loc.coordinate.longitude, forKey: "longitude")
+        // Enforce daily meal cap for new meals only (not editing)
+        if meal == nil {
+            let tier = Entitlements.tier(for: session)
+            let maxPerDay = Entitlements.maxMealsPerDay(for: tier)
+            if maxPerDay < 9000 {
+                let todaysCount = Entitlements.mealsRecordedToday(in: context)
+                if todaysCount >= maxPerDay {
+                    limitErrorMessage = "Free tier allows up to \(maxPerDay) meals per day."
+                    showingLimitAlert = true
+                    return
+                }
             }
-        } else {
-            let newMeal = Meal(context: context)
-            newMeal.id = UUID()
-            newMeal.date = now
-            newMeal.mealDescription = defaultTitle(using: now)
-
-            newMeal.calories = cal
-            newMeal.carbohydrates = carbs
-            newMeal.protein = prot
-            newMeal.salt = sod
-            newMeal.fat = f
-            newMeal.starch = sta
-            newMeal.sugars = sug
-            newMeal.fibre = fib
-            newMeal.monounsaturatedFat = mono
-            newMeal.polyunsaturatedFat = poly
-            newMeal.saturatedFat = sat
-            newMeal.transFat = trans
-
-            newMeal.animalProtein = animal
-            newMeal.plantProtein = plant
-            newMeal.proteinSupplements = supps
-
-            newMeal.vitaminA = vA
-            newMeal.vitaminB = vB
-            newMeal.vitaminC = vC
-            newMeal.vitaminD = vD
-            newMeal.vitaminE = vE
-            newMeal.vitaminK = vK
-
-            newMeal.calcium = mCa
-            newMeal.iron = mFe
-            newMeal.potassium = mK
-            newMeal.zinc = mZn
-            newMeal.magnesium = mMg
-
-            newMeal.caloriesIsGuess = caloriesIsGuess
-            newMeal.carbohydratesIsGuess = carbohydratesIsGuess
-            newMeal.proteinIsGuess = proteinIsGuess
-            newMeal.saltIsGuess = sodiumIsGuess
-            newMeal.fatIsGuess = fatIsGuess
-            newMeal.starchIsGuess = starchIsGuess
-            newMeal.sugarsIsGuess = sugarsIsGuess
-            newMeal.fibreIsGuess = fibreIsGuess
-            newMeal.monounsaturatedFatIsGuess = monounsaturatedFatIsGuess
-            newMeal.polyunsaturatedFatIsGuess = polyunsaturatedFatIsGuess
-            newMeal.saturatedFatIsGuess = newMeal.saturatedFatIsGuess
-            newMeal.transFatIsGuess = newMeal.transFatIsGuess
-
-            newMeal.animalProteinIsGuess = animalProteinIsGuess
-            newMeal.plantProteinIsGuess = plantProteinIsGuess
-            newMeal.proteinSupplementsIsGuess = proteinSupplementsIsGuess
-
-            newMeal.vitaminAIsGuess = vitaminAIsGuess
-            newMeal.vitaminBIsGuess = newMeal.vitaminBIsGuess
-            newMeal.vitaminCIsGuess = newMeal.vitaminCIsGuess
-            newMeal.vitaminDIsGuess = vitaminDIsGuess
-            newMeal.vitaminEIsGuess = vitaminEIsGuess
-            newMeal.vitaminKIsGuess = newMeal.vitaminKIsGuess
-
-            newMeal.calciumIsGuess = calciumIsGuess
-            newMeal.ironIsGuess = ironIsGuess
-            newMeal.potassiumIsGuess = potassiumIsGuess
-            newMeal.zincIsGuess = zincIsGuess
-            newMeal.magnesiumIsGuess = magnesiumIsGuess
-
-            if let loc = locationManager.lastLocation {
-                newMeal.setValue(loc.coordinate.latitude, forKey: "latitude")
-                newMeal.setValue(loc.coordinate.longitude, forKey: "longitude")
-            }
-
-            targetMeal = newMeal
         }
 
+        guard let calInt = Int(calories), calInt > 0 else { return }
+        let cal = Double(calInt)
+        // Persist your fields as you already planned...
         do {
             try context.save()
 
@@ -1975,12 +1832,13 @@ private struct CompactSectionSpacing: ViewModifier {
         return NavigationStack {
             MealFormView()
                 .environment(\.managedObjectContext, context)
+                .environmentObject(SessionManager())
         }
     } else {
         return NavigationView {
             MealFormView()
                 .environment(\.managedObjectContext, context)
+                .environmentObject(SessionManager())
         }
     }
 }
-

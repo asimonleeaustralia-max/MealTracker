@@ -9,10 +9,20 @@
 import UIKit
 import CoreData
 
-enum PhotoServiceError: Error {
+enum PhotoServiceError: Error, LocalizedError {
     case invalidImage
     case writeFailed
     case coreDataSaveFailed(Error)
+    case freeTierPhotoLimitReached(max: Int)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidImage: return "Invalid image data."
+        case .writeFailed: return "Failed to write photo to disk."
+        case .coreDataSaveFailed(let err): return "Failed to save photo: \(err.localizedDescription)"
+        case .freeTierPhotoLimitReached(let max): return "Free tier allows up to \(max) photos per meal."
+        }
+    }
 }
 
 struct PhotoService {
@@ -24,7 +34,23 @@ struct PhotoService {
     static func addPhoto(from originalImageData: Data,
                          suggestedUTTypeExtension: String? = nil, // e.g., "heic" or "jpg"
                          to meal: Meal,
-                         in context: NSManagedObjectContext) throws -> MealPhoto {
+                         in context: NSManagedObjectContext,
+                         session: SessionManager? = nil) throws -> MealPhoto {
+
+        // Enforce free-tier photo cap (if session provided; otherwise skip)
+        if let session {
+            let tier = Entitlements.tier(for: session)
+            let maxAllowed = Entitlements.maxPhotosPerMeal(for: tier)
+            if maxAllowed < 9000 {
+                // Count existing photos for this meal
+                let request = NSFetchRequest<MealPhoto>(entityName: "MealPhoto")
+                request.predicate = NSPredicate(format: "meal == %@", meal)
+                let count = (try? context.count(for: request)) ?? 0
+                if count >= maxAllowed {
+                    throw PhotoServiceError.freeTierPhotoLimitReached(max: maxAllowed)
+                }
+            }
+        }
 
         // Load original image to read dimensions (don’t recompress)
         guard let image = UIImage(data: originalImageData) else {
@@ -39,7 +65,6 @@ struct PhotoService {
             if let ext = suggestedUTTypeExtension?.lowercased(), ["jpg", "jpeg", "heic", "png"].contains(ext) {
                 return ext == "jpeg" ? "jpg" : ext
             }
-            // Try to infer from data signature
             if originalImageData.isJPEG { return "jpg" }
             if originalImageData.isHEIC { return "heic" }
             if originalImageData.isPNG { return "png" }
@@ -60,7 +85,6 @@ struct PhotoService {
 
         // Prepare upload image (1080p long-edge, medium compression)
         guard let resized = ImageResizer.resizeToLongEdge(1080, image: image, jpegQuality: 0.72) else {
-            // If resize fails, clean up original
             try? FileManager.default.removeItem(at: originalURL)
             throw PhotoServiceError.invalidImage
         }
@@ -87,7 +111,6 @@ struct PhotoService {
         do {
             try context.save()
         } catch {
-            // cleanup files if Core Data save fails
             PhotoStore.removeFilesIfExist(original: originalName, upload: uploadName)
             throw PhotoServiceError.coreDataSaveFailed(error)
         }
@@ -117,7 +140,6 @@ struct PhotoService {
 private extension Data {
     var isJPEG: Bool { starts(with: [0xFF, 0xD8]) }
     var isPNG: Bool { starts(with: [0x89, 0x50, 0x4E, 0x47]) }
-    // HEIC magic isn’t as straightforward; this checks for 'ftyp' + 'heic'/'heif' brands.
     var isHEIC: Bool {
         guard count >= 12 else { return false }
         let header = self.prefix(12)
