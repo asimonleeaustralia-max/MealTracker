@@ -561,6 +561,15 @@ struct MealFormView: View {
                 }
                 .accessibilityLabel(l.localized("settings"))
             }
+            // New: open gallery of saved meals
+            ToolbarItem(placement: .topBarLeading) {
+                NavigationLink {
+                    MealsGalleryView()
+                } label: {
+                    Image(systemName: "photo.on.rectangle")
+                }
+                .accessibilityLabel("Open Meal Gallery")
+            }
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView()
@@ -1903,3 +1912,4 @@ private struct CompactSectionSpacing: ViewModifier {
         }
     }
 }
+
