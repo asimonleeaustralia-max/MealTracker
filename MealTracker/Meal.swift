@@ -15,7 +15,7 @@ public class Meal: NSManagedObject, Identifiable {
     @NSManaged public var calories: Double
     @NSManaged public var carbohydrates: Double
     @NSManaged public var protein: Double
-    @NSManaged public var salt: Double
+    @NSManaged public var sodium: Double
     @NSManaged public var fat: Double
     @NSManaged public var date: Date
 
@@ -54,7 +54,7 @@ public class Meal: NSManagedObject, Identifiable {
     @NSManaged public var caloriesIsGuess: Bool
     @NSManaged public var carbohydratesIsGuess: Bool
     @NSManaged public var proteinIsGuess: Bool
-    @NSManaged public var saltIsGuess: Bool
+    @NSManaged public var sodiumIsGuess: Bool
     @NSManaged public var fatIsGuess: Bool
     @NSManaged public var starchIsGuess: Bool
     @NSManaged public var sugarsIsGuess: Bool

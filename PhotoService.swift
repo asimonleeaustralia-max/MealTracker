@@ -8,6 +8,7 @@
 
 import UIKit
 import CoreData
+import CoreLocation
 
 enum PhotoServiceError: Error, LocalizedError {
     case invalidImage
@@ -31,11 +32,13 @@ struct PhotoService {
     // - Stores the original JPEG/HEIC bytes as-is (camera quality) without recompression.
     // - Creates an upload-sized JPEG (max long edge 1080 px, quality ~0.72).
     // - Persists a MealPhoto object and writes both files to disk.
+    // - Optionally records the capture location (latitude/longitude).
     static func addPhoto(from originalImageData: Data,
                          suggestedUTTypeExtension: String? = nil, // e.g., "heic" or "jpg"
                          to meal: Meal,
                          in context: NSManagedObjectContext,
-                         session: SessionManager? = nil) throws -> MealPhoto {
+                         session: SessionManager? = nil,
+                         location: CLLocation? = nil) throws -> MealPhoto {
 
         // Enforce free-tier photo cap (if session provided; otherwise skip)
         if let session {
@@ -108,6 +111,15 @@ struct PhotoService {
         photo.sha256 = sha256
         photo.meal = meal
 
+        // Optional coordinates
+        if let loc = location {
+            // If your generated properties are NSNumber? instead of Double, change these two assignments accordingly:
+            // photo.latitude = NSNumber(value: loc.coordinate.latitude)
+            // photo.longitude = NSNumber(value: loc.coordinate.longitude)
+            photo.latitude = loc.coordinate.latitude
+            photo.longitude = loc.coordinate.longitude
+        }
+
         do {
             try context.save()
         } catch {
@@ -154,3 +166,4 @@ private extension UIImage {
         return CGSize(width: size.width * scale, height: size.height * scale)
     }
 }
+

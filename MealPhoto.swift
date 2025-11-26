@@ -20,4 +20,9 @@ public class MealPhoto: NSManagedObject, Identifiable {
     @NSManaged public var byteSizeUpload: Int64
     @NSManaged public var sha256: String?
     @NSManaged public var meal: Meal?
+
+    // New optional coordinates (Double Optional in the model)
+    @NSManaged public var latitude: Double
+    @NSManaged public var longitude: Double
 }
+

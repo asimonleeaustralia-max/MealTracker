@@ -596,7 +596,7 @@ struct MealFormView: View {
                 calories = Int(meal.calories).description
                 carbohydrates = Int(meal.carbohydrates).description
                 protein = Int(meal.protein).description
-                sodium = Int(meal.salt).description
+                sodium = Int(meal.sodium).description
                 fat = Int(meal.fat).description
                 starch = Int(meal.starch).description
                 sugars = Int(meal.sugars).description
@@ -627,7 +627,7 @@ struct MealFormView: View {
                 caloriesIsGuess = meal.caloriesIsGuess
                 carbohydratesIsGuess = meal.carbohydratesIsGuess
                 proteinIsGuess = meal.proteinIsGuess
-                sodiumIsGuess = meal.saltIsGuess
+                sodiumIsGuess = meal.sodiumIsGuess
                 fatIsGuess = meal.fatIsGuess
                 starchIsGuess = meal.starchIsGuess
                 sugarsIsGuess = meal.sugarsIsGuess
@@ -644,8 +644,8 @@ struct MealFormView: View {
                 vitaminAIsGuess = meal.vitaminAIsGuess
                 vitaminBIsGuess = meal.vitaminBIsGuess
                 vitaminCIsGuess = meal.vitaminCIsGuess
-                vitaminDIsGuess = vitaminDIsGuess
-                vitaminEIsGuess = vitaminEIsGuess
+                vitaminDIsGuess = meal.vitaminDIsGuess
+                vitaminEIsGuess = meal.vitaminEIsGuess
                 vitaminKIsGuess = meal.vitaminKIsGuess
 
                 calciumIsGuess = meal.calciumIsGuess
@@ -883,16 +883,118 @@ struct MealFormView: View {
         }
 
         guard let calInt = Int(calories), calInt > 0 else { return }
-        let cal = Double(calInt)
-        // Persist your fields as you already planned...
+
+        // Create or update Meal
+        let object: Meal = meal ?? Meal(context: context)
+        if meal == nil {
+            object.id = UUID()
+            object.date = Date()
+        }
+
+        // Title/description
+        let title = defaultTitle(using: object.date)
+        object.mealDescription = title
+
+        // Energy: store in kcal in model; if UI is kJ, convert to kcal
+        let kcal: Double = {
+            if energyUnit == .calories {
+                return Double(intOrZero(calories))
+            } else {
+                // kJ -> kcal
+                return (Double(intOrZero(calories)) / 4.184).rounded()
+            }
+        }()
+        object.calories = max(0, kcal)
+
+        // Macros (grams)
+        object.carbohydrates = Double(intOrZero(carbohydrates))
+        object.protein = Double(intOrZero(protein))
+        object.fat = Double(intOrZero(fat))
+
+        // Sodium UI -> store as mg in Meal.sodium
+        let sodiumMg: Double = {
+            let val = Double(intOrZero(sodium))
+            switch sodiumUnit {
+            case .milligrams: return val
+            case .grams: return val * 1000.0
+            }
+        }()
+        object.sodium = max(0, sodiumMg)
+
+        // Carbs subs (grams)
+        object.starch = Double(intOrZero(starch))
+        object.sugars = Double(intOrZero(sugars))
+        object.fibre = Double(intOrZero(fibre))
+
+        // Fat subs (grams)
+        object.monounsaturatedFat = Double(intOrZero(monounsaturatedFat))
+        object.polyunsaturatedFat = Double(intOrZero(polyunsaturatedFat))
+        object.saturatedFat = Double(intOrZero(saturatedFat))
+        object.transFat = Double(intOrZero(transFat))
+
+        // Protein subs (grams)
+        object.animalProtein = Double(intOrZero(animalProtein))
+        object.plantProtein = Double(intOrZero(plantProtein))
+        object.proteinSupplements = Double(intOrZero(proteinSupplements))
+
+        // Vitamins & Minerals: UI unit -> mg storage
+        func uiToMG(_ text: String) -> Double {
+            let v = Double(intOrZero(text))
+            switch vitaminsUnit {
+            case .milligrams: return v
+            case .micrograms: return v / 1000.0
+            }
+        }
+        object.vitaminA = uiToMG(vitaminA)
+        object.vitaminB = uiToMG(vitaminB)
+        object.vitaminC = uiToMG(vitaminC)
+        object.vitaminD = uiToMG(vitaminD)
+        object.vitaminE = uiToMG(vitaminE)
+        object.vitaminK = uiToMG(vitaminK)
+
+        object.calcium = uiToMG(calcium)
+        object.iron = uiToMG(iron)
+        object.potassium = uiToMG(potassium)
+        object.zinc = uiToMG(zinc)
+        object.magnesium = uiToMG(magnesium)
+
+        // Accuracy flags
+        object.caloriesIsGuess = caloriesIsGuess
+        object.carbohydratesIsGuess = carbohydratesIsGuess
+        object.proteinIsGuess = proteinIsGuess
+        object.sodiumIsGuess = sodiumIsGuess
+        object.fatIsGuess = fatIsGuess
+        object.starchIsGuess = starchIsGuess
+        object.sugarsIsGuess = sugarsIsGuess
+        object.fibreIsGuess = fibreIsGuess
+        object.monounsaturatedFatIsGuess = monounsaturatedFatIsGuess
+        object.polyunsaturatedFatIsGuess = polyunsaturatedFatIsGuess
+        object.saturatedFatIsGuess = saturatedFatIsGuess
+        object.transFatIsGuess = transFatIsGuess
+
+        object.animalProteinIsGuess = animalProteinIsGuess
+        object.plantProteinIsGuess = plantProteinIsGuess
+        object.proteinSupplementsIsGuess = proteinSupplementsIsGuess
+
+        object.vitaminAIsGuess = vitaminAIsGuess
+        object.vitaminBIsGuess = vitaminBIsGuess
+        object.vitaminCIsGuess = vitaminCIsGuess
+        object.vitaminDIsGuess = vitaminDIsGuess
+        object.vitaminEIsGuess = vitaminEIsGuess
+        object.vitaminKIsGuess = vitaminKIsGuess
+
+        object.calciumIsGuess = calciumIsGuess
+        object.ironIsGuess = ironIsGuess
+        object.potassiumIsGuess = potassiumIsGuess
+        object.zincIsGuess = zincIsGuess
+        object.magnesiumIsGuess = magnesiumIsGuess
+
+        // Persist
         do {
             try context.save()
 
-            // Persist provided image only if we have fewer than maxPhotos stored
-            try context.save()
-            // Refresh gallery after save
+            // Refresh header gallery (if editing) and dismiss
             reloadGalleryItems()
-
             dismiss()
         } catch {
             print("Failed to save meal: \(error)")
@@ -1912,4 +2014,3 @@ private struct CompactSectionSpacing: ViewModifier {
         }
     }
 }
-
