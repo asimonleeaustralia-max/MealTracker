@@ -22,21 +22,70 @@ struct MealsGalleryView: View {
         GridItem(.flexible(), spacing: 12)
     ]
 
+    @State private var showingAdd = false
+
     var body: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 12) {
-                ForEach(meals) { meal in
-                    NavigationLink(destination: MealFormView(meal: meal)) {
-                        MealTile(meal: meal)
+        Group {
+            if meals.isEmpty {
+                EmptyStateView(onAdd: { showingAdd = true })
+                    .padding()
+            } else {
+                ScrollView {
+                    LazyVGrid(columns: columns, spacing: 12) {
+                        ForEach(meals) { meal in
+                            NavigationLink(destination: MealFormView(meal: meal)) {
+                                MealTile(meal: meal)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
-                    .buttonStyle(.plain)
+                    .padding(12)
                 }
             }
-            .padding(12)
         }
         .navigationTitle("Meal Gallery")
         .navigationBarTitleDisplayMode(.inline)
         .background(Color(.systemBackground))
+        .sheet(isPresented: $showingAdd) {
+            NavigationView {
+                MealFormView()
+            }
+        }
+    }
+}
+
+private struct EmptyStateView: View {
+    let onAdd: () -> Void
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "photo.on.rectangle.angled")
+                .font(.system(size: 48, weight: .regular))
+                .foregroundStyle(.secondary)
+
+            Text("No meals yet")
+                .font(.title3)
+                .bold()
+
+            Text("Add a meal to start your gallery. You can attach photos and record calories and nutrients.")
+                .font(.body)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+
+            Button {
+                onAdd()
+            } label: {
+                Label("Add Meal", systemImage: "plus")
+                    .font(.headline)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Color.accentColor)
+                    .foregroundColor(.white)
+                    .clipShape(Capsule())
+            }
+            .accessibilityIdentifier("galleryAddMealButton")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -63,8 +112,21 @@ private struct MealTile: View {
         return nil
     }
 
+    // Convert stored sodium mg to a readable string in g with 1 decimal, if large enough
+    private var sodiumDisplay: String {
+        let mg = max(0, meal.sodium)
+        if mg >= 1000 {
+            let grams = mg / 1000.0
+            let formatted = String(format: "%.1f", grams)
+            return "\(formatted) g Na"
+        } else {
+            let val = Int(mg)
+            return "\(val) mg Na"
+        }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             ZStack {
                 if let ui = thumbnailImage() {
                     Image(uiImage: ui)
@@ -88,13 +150,27 @@ private struct MealTile: View {
                 .font(.headline)
                 .lineLimit(2)
 
-            HStack {
-                Text("\(Int(meal.calories)) kcal")
-                Spacer()
-                Text(meal.date, style: .date)
+            // Compact metrics row
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) {
+                    MetricChip(system: "flame", text: "\(Int(meal.calories)) kcal")
+                    MetricChip(system: "leaf", text: "C \(meal.carbohydrates.cleanString)g")
+                    MetricChip(system: "bolt", text: "P \(meal.protein.cleanString)g")
+                }
+                HStack(spacing: 10) {
+                    MetricChip(system: "drop", text: "F \(meal.fat.cleanString)g")
+                    MetricChip(system: "cloud.drizzle", text: sodiumDisplay)
+                }
             }
             .font(.caption)
             .foregroundStyle(.secondary)
+
+            HStack {
+                Spacer()
+                Text(meal.date, style: .date)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
         }
         .padding(8)
         .background(
@@ -102,6 +178,28 @@ private struct MealTile: View {
                 .fill(Color(.secondarySystemBackground))
         )
         .accessibilityElement(children: .combine)
+    }
+}
+
+private struct MetricChip: View {
+    let system: String
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: system)
+            Text(text)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(Color.secondary.opacity(0.15))
+        .clipShape(Capsule())
+    }
+}
+
+private extension Double {
+    var cleanString: String {
+        truncatingRemainder(dividingBy: 1) == 0 ? String(Int(self)) : String(self)
     }
 }
 
@@ -114,4 +212,3 @@ private struct MealTile: View {
             .environment(\.managedObjectContext, context)
     }
 }
-
