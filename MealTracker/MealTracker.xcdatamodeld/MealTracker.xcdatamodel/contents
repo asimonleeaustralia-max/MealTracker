@@ -21,7 +21,7 @@
         <attribute name="magnesiumIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="mealDescription" optional="YES" attributeType="String"/>
         <attribute name="monounsaturatedFat" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
-        <attribute name="monounsaturatedfatIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="monounsaturatedFatIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="plantProtein" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="plantProteinIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="polyunsaturatedFat" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
