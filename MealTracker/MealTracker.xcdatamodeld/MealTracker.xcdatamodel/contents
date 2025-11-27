@@ -25,7 +25,7 @@
         <attribute name="plantProtein" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="plantProteinIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="polyunsaturatedFat" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
-        <attribute name="polyunsaturatedfatIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="polyunsaturatedFatIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="potassium" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="potassiumIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="protein" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
