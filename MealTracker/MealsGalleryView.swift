@@ -94,7 +94,14 @@ private struct MealTile: View {
     // Load first associated MealPhoto URL (upload preferred, else original) via inverse relationship
     private func firstPhotoURL() -> URL? {
         // Access the to-many inverse relationship without relying on generated property
-        guard let set = meal.value(forKey: "photos") as? Set<MealPhoto>, !set.isEmpty else {
+        let photosSet = meal.value(forKey: "photos") as? Set<MealPhoto>
+        if let count = photosSet?.count {
+            print("Meal photos count: \(count)")
+        } else {
+            print("Meal photos count: nil")
+        }
+
+        guard let set = photosSet, !set.isEmpty else {
             return nil
         }
         // Sort by createdAt ascending; handle nils safely
