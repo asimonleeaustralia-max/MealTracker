@@ -188,6 +188,9 @@ struct MealFormView: View {
     @State private var showingLimitAlert: Bool = false
     @State private var limitErrorMessage: String?
 
+    // MARK: - Delete confirmation state
+    @State private var showingDeleteConfirm: Bool = false
+
     var meal: Meal?
 
     init(meal: Meal? = nil) {
@@ -570,6 +573,19 @@ struct MealFormView: View {
                 }
                 .accessibilityLabel("Open Meal Gallery")
             }
+            // New: Delete button when editing (avoid iOS 16-only buildIf in ToolbarContent)
+            ToolbarItem(placement: .bottomBar) {
+                if isEditing {
+                    Button(role: .destructive) {
+                        showingDeleteConfirm = true
+                    } label: {
+                        Label(l.localized("delete"), systemImage: "trash")
+                    }
+                    .accessibilityIdentifier("deleteMealButton")
+                } else {
+                    EmptyView()
+                }
+            }
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView()
@@ -580,6 +596,21 @@ struct MealFormView: View {
                 message: Text(limitErrorMessage ?? "You have reached your limit."),
                 dismissButton: .default(Text("OK"))
             )
+        }
+        // Delete confirmation
+        .confirmationDialog(
+            LocalizationManager(languageCode: appLanguageCode).localized("confirm_delete_title"),
+            isPresented: $showingDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button(role: .destructive) {
+                deleteMeal()
+            } label: {
+                Text(LocalizationManager(languageCode: appLanguageCode).localized("delete"))
+            }
+            Button(LocalizationManager(languageCode: appLanguageCode).localized("cancel"), role: .cancel) { }
+        } message: {
+            Text(LocalizationManager(languageCode: appLanguageCode).localized("confirm_delete_message"))
         }
         .onChange(of: focused, perform: { newFocus in
             if let leaving = lastFocused, leaving != newFocus {
@@ -670,6 +701,29 @@ struct MealFormView: View {
             locationManager.startUpdating()
 
             recomputeConsistency(resetPrevMismatch: true)
+        }
+    }
+
+    // MARK: - Deletion
+
+    private func deleteMeal() {
+        guard let meal = meal else { return }
+
+        // Remove photos and their files first
+        if let set = meal.value(forKey: "photos") as? Set<MealPhoto>, !set.isEmpty {
+            for photo in set {
+                PhotoService.removePhoto(photo, in: context)
+            }
+        }
+
+        // Delete the meal itself
+        context.delete(meal)
+
+        do {
+            try context.save()
+            dismiss()
+        } catch {
+            print("Failed to delete meal: \(error)")
         }
     }
 
