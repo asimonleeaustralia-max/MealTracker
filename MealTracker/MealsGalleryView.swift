@@ -93,13 +93,19 @@ private struct MealTile: View {
     @Environment(\.managedObjectContext) private var context
     let meal: Meal
 
-    // Load first associated MealPhoto URL (upload preferred, else original)
+    // Load first associated MealPhoto URL (upload preferred, else original) via inverse relationship
     private func firstPhotoURL() -> URL? {
-        // Fetch photos for this meal ordered by createdAt
-        let request = NSFetchRequest<MealPhoto>(entityName: "MealPhoto")
-        request.predicate = NSPredicate(format: "meal == %@", meal)
-        request.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: true)]
-        if let photos = try? context.fetch(request), let first = photos.first {
+        // Access the to-many inverse relationship without relying on generated property
+        guard let set = meal.value(forKey: "photos") as? Set<MealPhoto>, !set.isEmpty else {
+            return nil
+        }
+        // Sort by createdAt ascending; handle nils safely
+        let sorted = set.sorted { (a, b) in
+            let da = a.createdAt ?? .distantFuture
+            let db = b.createdAt ?? .distantFuture
+            return da < db
+        }
+        if let first = sorted.first {
             return PhotoService.urlForUpload(first) ?? PhotoService.urlForOriginal(first)
         }
         return nil
