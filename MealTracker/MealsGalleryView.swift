@@ -43,8 +43,6 @@ struct MealsGalleryView: View {
                 }
             }
         }
-        .navigationTitle("Meal Gallery")
-        .navigationBarTitleDisplayMode(.inline)
         .background(Color(.systemBackground))
         .sheet(isPresented: $showingAdd) {
             NavigationView {
