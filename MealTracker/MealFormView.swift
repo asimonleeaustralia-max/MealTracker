@@ -679,12 +679,14 @@ struct MealFormView: View {
         var items: [GalleryItem] = []
 
         if let meal = meal {
-            // Fetch MealPhoto objects linked to this meal, sorted by createdAt ascending
-            let request = NSFetchRequest<MealPhoto>(entityName: "MealPhoto")
-            request.predicate = NSPredicate(format: "meal == %@", meal)
-            request.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: true)]
-            if let photos = try? context.fetch(request), !photos.isEmpty {
-                for p in photos.prefix(maxPhotos) {
+            // Use inverse relationship instead of a fetch with predicate
+            if let set = meal.value(forKey: "photos") as? Set<MealPhoto>, !set.isEmpty {
+                let sorted = set.sorted { (a, b) in
+                    let da = a.createdAt ?? .distantFuture
+                    let db = b.createdAt ?? .distantFuture
+                    return da < db
+                }
+                for p in sorted.prefix(maxPhotos) {
                     if let url = PhotoService.urlForUpload(p) ?? PhotoService.urlForOriginal(p) {
                         items.append(.persistent(photo: p, url: url))
                     }
@@ -1582,7 +1584,7 @@ private struct ToggleDetailsButton: View {
                     Text(isExpanded ? titleExpanded : titleCollapsed)
                         .font(.footnote)
                         .foregroundColor(.accentColor)
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                    Image(systemName: (isExpanded ? "chevron.up" : "chevron.down"))
                         .font(.footnote)
                         .foregroundColor(.accentColor)
                         .imageScale(.small)
