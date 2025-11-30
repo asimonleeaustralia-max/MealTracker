@@ -224,6 +224,14 @@ struct MealFormView: View {
             )
 
             Form {
+                // Title field at top
+                Section {
+                    TextField("Meal title", text: $mealDescription, prompt: Text("Enter a title"))
+                        .textInputAutocapitalization(.sentences)
+                        .disableAutocorrection(false)
+                }
+                .padding(.vertical, 2)
+
                 // Energy (no header)
                 Section {
                     MetricField(
@@ -627,7 +635,9 @@ struct MealFormView: View {
             reloadGalleryItems()
 
             if let meal = meal {
+                // Initialize editable title from existing meal
                 mealDescription = meal.title
+
                 calories = Int(meal.calories).description
                 carbohydrates = Int(meal.carbohydrates).description
                 protein = Int(meal.protein).description
@@ -699,6 +709,9 @@ struct MealFormView: View {
                 animalTouched = !animalProtein.isEmpty
                 plantTouched = !plantProtein.isEmpty
                 supplementsTouched = !proteinSupplements.isEmpty
+            } else {
+                // For new meals, prefill with an auto title based on current date/time
+                mealDescription = Meal.autoTitle(for: date)
             }
 
             locationManager.requestAuthorization()
@@ -974,9 +987,14 @@ struct MealFormView: View {
             object.date = Date()
         }
 
-        // Title/description
-        let title = defaultTitle(using: object.date)
-        object.title = title
+        // Title/description: use user input if provided; otherwise auto-generate for new or existing
+        let trimmedTitle = mealDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedTitle.isEmpty {
+            // If empty, auto-generate from the object's date
+            object.title = Meal.autoTitle(for: object.date)
+        } else {
+            object.title = trimmedTitle
+        }
 
         // Energy: store in kcal in model; if UI is kJ, convert to kcal
         let kcal: Double = {
