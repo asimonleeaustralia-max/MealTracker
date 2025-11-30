@@ -184,6 +184,9 @@ struct MealFormView: View {
     @State private var isAnalyzing: Bool = false
     @State private var analyzeError: String?
 
+    // Force-enable Save after wand finishes
+    @State private var forceEnableSave: Bool = false
+
     // MARK: - Limit alert state
     @State private var showingLimitAlert: Bool = false
     @State private var limitErrorMessage: String?
@@ -553,7 +556,7 @@ struct MealFormView: View {
                 Button(l.localized("save")) {
                     save()
                 }
-                .disabled(!isValid)
+                .disabled(!isValid && !forceEnableSave)
                 .accessibilityIdentifier("saveMealButton")
             }
             ToolbarItem(placement: .topBarTrailing) {
@@ -806,7 +809,19 @@ struct MealFormView: View {
             if let result = try await PhotoNutritionGuesser.guess(from: data, languageCode: appLanguageCode) {
                 // Apply only to empty fields; set guess flags
                 await MainActor.run {
-                    applyIfEmpty(&calories, with: result.calories, markGuess: &caloriesIsGuess)
+                    // Calories (convert guessed kcal to current UI unit)
+                    if calories.isEmpty, let kcal = result.calories {
+                        let uiVal: Int
+                        switch energyUnit {
+                        case .calories:
+                            uiVal = kcal
+                        case .kilojoules:
+                            uiVal = Int((Double(kcal) * 4.184).rounded())
+                        }
+                        calories = String(max(0, uiVal))
+                        caloriesIsGuess = true
+                    }
+
                     applyIfEmpty(&carbohydrates, with: result.carbohydrates, markGuess: &carbohydratesIsGuess)
                     applyIfEmpty(&protein, with: result.protein, markGuess: &proteinIsGuess)
                     // Sodium stored as mg in UI; convert to UI unit if needed
@@ -882,6 +897,9 @@ struct MealFormView: View {
                     }
 
                     recomputeConsistencyAndBlinkIfFixed()
+
+                    // IMPORTANT: force-enable Save now that the wand finished applying values
+                    forceEnableSave = true
                 }
             }
         } catch {
@@ -1824,7 +1842,7 @@ private struct MetricField: View {
     private func inputRow() -> some View {
         if handedness == .left {
             // Mirror: put trailing accessory and unit closer to left, then text field
-            HStack(spacing: 6) {
+        HStack(spacing: 6) {
                 if let trailing = trailingAccessory {
                     trailing()
                 }
@@ -2021,11 +2039,51 @@ private struct MineralsGroupView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            MetricField(titleKey: "calcium", text: $calciumText, isGuess: $calciumIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .milligrams) })
-            MetricField(titleKey: "iron", text: $ironText, isGuess: $ironIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .milligrams) })
-            MetricField(titleKey: "potassium", text: $potassiumText, isGuess: $potassiumIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .milligrams) })
-            MetricField(titleKey: "zinc", text: $zincText, isGuess: $zincIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .milligrams) })
-            MetricField(titleKey: "magnesium", text: $magnesiumText, isGuess: $magnesiumIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .milligrams) })
+            MetricField(
+                titleKey: "calcium",
+                text: $calciumText,
+                isGuess: $calciumIsGuess,
+                keyboard: .numberPad,
+                manager: manager,
+                unitSuffix: unitSuffix,
+                validator: { ValidationThresholds.mineralMg.severityForVitaminsUI($0, unit: .milligrams) }
+            )
+            MetricField(
+                titleKey: "iron",
+                text: $ironText,
+                isGuess: $ironIsGuess,
+                keyboard: .numberPad,
+                manager: manager,
+                unitSuffix: unitSuffix,
+                validator: { ValidationThresholds.mineralMg.severityForVitaminsUI($0, unit: .milligrams) }
+            )
+            MetricField(
+                titleKey: "potassium",
+                text: $potassiumText,
+                isGuess: $potassiumIsGuess,
+                keyboard: .numberPad,
+                manager: manager,
+                unitSuffix: unitSuffix,
+                validator: { ValidationThresholds.mineralMg.severityForVitaminsUI($0, unit: .milligrams) }
+            )
+            MetricField(
+                titleKey: "zinc",
+                text: $zincText,
+                isGuess: $zincIsGuess,
+                keyboard: .numberPad,
+                manager: manager,
+                unitSuffix: unitSuffix,
+                validator: { ValidationThresholds.mineralMg.severityForVitaminsUI($0, unit: .milligrams) }
+            )
+            MetricField(
+                titleKey: "magnesium",
+                text: $magnesiumText,
+                isGuess: $magnesiumIsGuess,
+                keyboard: .numberPad,
+                manager: manager,
+                unitSuffix: unitSuffix,
+                validator: { ValidationThresholds.mineralMg.severityForVitaminsUI($0, unit: .milligrams) }
+            )
         }
     }
 }
