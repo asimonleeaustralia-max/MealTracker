@@ -21,7 +21,7 @@ struct ContentView: View {
     private var filteredMeals: [Meal] {
         let term = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !term.isEmpty else { return Array(meals) }
-        return meals.filter { $0.mealDescription.lowercased().contains(term) }
+        return meals.filter { $0.title.lowercased().contains(term) }
     }
 
     var body: some View {
@@ -74,7 +74,7 @@ struct MealRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(meal.mealDescription)
+            Text(meal.title)
                 .font(.headline)
                 .lineLimit(2)
 
@@ -135,4 +135,3 @@ private extension Double {
         truncatingRemainder(dividingBy: 1) == 0 ? String(Int(self)) : String(self)
     }
 }
-

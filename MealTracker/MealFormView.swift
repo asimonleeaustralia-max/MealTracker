@@ -627,7 +627,7 @@ struct MealFormView: View {
             reloadGalleryItems()
 
             if let meal = meal {
-                mealDescription = meal.mealDescription
+                mealDescription = meal.title
                 calories = Int(meal.calories).description
                 carbohydrates = Int(meal.carbohydrates).description
                 protein = Int(meal.protein).description
@@ -968,7 +968,7 @@ struct MealFormView: View {
 
         // Title/description
         let title = defaultTitle(using: object.date)
-        object.mealDescription = title
+        object.title = title
 
         // Energy: store in kcal in model; if UI is kJ, convert to kcal
         let kcal: Double = {

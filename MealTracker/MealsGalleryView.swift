@@ -98,7 +98,7 @@ private struct MealTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Title
-            Text(meal.mealDescription)
+            Text(meal.title)
                 .font(.headline)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
