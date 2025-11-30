@@ -214,7 +214,7 @@ struct MealFormView: View {
                 isExpanded: $isImageExpanded,
                 fullHeight: fullHeight,
                 collapsedHeight: collapsedHeight,
-                isBusy: isAnalyzing,
+                isBusy: $isAnalyzing.wrappedValue,
                 onAnalyzeTap: {
                     Task { await analyzePhoto() }
                 }
@@ -589,6 +589,7 @@ struct MealFormView: View {
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView()
+                .environmentObject(session) // Ensure SessionManager is available in SettingsView
         }
         .alert(isPresented: $showingLimitAlert) {
             Alert(

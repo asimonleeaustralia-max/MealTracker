@@ -62,9 +62,9 @@ struct ContentView: View {
     }
 
     private func delete(at offsets: IndexSet) {
-        for index in offsets {
-            context.delete(filteredMeals[index])
-        }
+        // Capture objects first to keep indices stable
+        let itemsToDelete = offsets.map { filteredMeals[$0] }
+        itemsToDelete.forEach { context.delete($0) }
         try? context.save()
     }
 }

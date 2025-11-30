@@ -83,6 +83,18 @@ public class Meal: NSManagedObject, Identifiable {
     @NSManaged public var potassiumIsGuess: Bool
     @NSManaged public var zincIsGuess: Bool
     @NSManaged public var magnesiumIsGuess: Bool
+
+    // Ensure defaults for brand new inserts so `id` is never nil in the store
+    public override func awakeFromInsert() {
+        super.awakeFromInsert()
+        // Use primitive setters to avoid unnecessary KVO/bridging
+        if value(forKey: "id") == nil {
+            setPrimitiveValue(UUID(), forKey: "id")
+        }
+        if value(forKey: "date") == nil {
+            setPrimitiveValue(Date(), forKey: "date")
+        }
+    }
 }
 
 extension Meal {
@@ -92,4 +104,3 @@ extension Meal {
         return request
     }
 }
-

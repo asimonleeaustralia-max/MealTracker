@@ -21,20 +21,19 @@ struct SettingsView: View {
         return Array(Set(list)).sorted()
     }
 
-    private var tier: AccessTier {
-        Entitlements.tier(for: session)
-    }
-
-    private var mealsRemainingText: String {
-        if let remaining = Entitlements.mealsRemainingToday(for: tier, in: context) {
-            return "\(remaining)"
-        } else {
-            return "Unlimited"
-        }
-    }
-
     var body: some View {
         let l = LocalizationManager(languageCode: appLanguageCode)
+
+        // Read environment-dependent values here (safe)
+        let tier = Entitlements.tier(for: session)
+        let mealsRemainingText: String = {
+            if let remaining = Entitlements.mealsRemainingToday(for: tier, in: context) {
+                return "\(remaining)"
+            } else {
+                return "Unlimited"
+            }
+        }()
+        let maxPhotos = Entitlements.maxPhotosPerMeal(for: tier)
 
         NavigationView {
             Form {
@@ -55,12 +54,10 @@ struct SettingsView: View {
                     HStack {
                         Text("Photos per meal (limit)")
                         Spacer()
-                        let maxPhotos = Entitlements.maxPhotosPerMeal(for: tier)
                         Text(maxPhotos >= 9000 ? "Unlimited" : "\(maxPhotos)")
                             .foregroundStyle(.secondary)
                     }
 
-                    // Simple stub controls to toggle login state for now
                     Toggle("Logged into Cloud (stub)", isOn: $session.isLoggedIn)
                         .tint(.accentColor)
                 }
@@ -121,4 +118,11 @@ struct SettingsView: View {
             }
         }
     }
+}
+
+#Preview {
+    let controller = PersistenceController(inMemory: true)
+    return SettingsView()
+        .environment(\.managedObjectContext, controller.container.viewContext)
+        .environmentObject(SessionManager())
 }
