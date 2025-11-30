@@ -753,7 +753,7 @@ struct MealFormView: View {
         }
 
         if items.isEmpty {
-            // Dev fallback: load exactly two bundle images (cupcake + fish & chips)
+            // Dev fallback: load two bundle images (cupcake + fish & chips)
             var devPairs: [(name: String, ext: String)] = [
                 (devImage1Name, devImage1Ext),
                 (devImage2Name, devImage2Ext)
@@ -764,12 +764,20 @@ struct MealFormView: View {
                 devPairs[1].name = altName
             }
 
+            // Load the two existing dev images
             for (idx, pair) in devPairs.enumerated() {
                 if let url = Bundle.main.url(forResource: pair.name, withExtension: pair.ext),
                    let data = try? Data(contentsOf: url),
                    let ui = UIImage(data: data) {
                     items.append(.inMemory(id: UUID(), image: ui, data: data, devIndex: idx))
                 }
+            }
+
+            // Add apple-table.jpg as a third dummy image if present in bundle
+            if let appleURL = Bundle.main.url(forResource: "apple-table", withExtension: "jpg"),
+               let appleData = try? Data(contentsOf: appleURL),
+               let appleImage = UIImage(data: appleData) {
+                items.append(.inMemory(id: UUID(), image: appleImage, data: appleData, devIndex: 2))
             }
         }
 
@@ -1628,7 +1636,7 @@ private enum ValidationSeverity {
 
 private struct ValidationThresholds {
     static let calories = ValidationThresholds(unusual: 3000, stupid: 10000)
-    static let grams = ValidationThresholds(unusual: 300, stupid: 2000)
+    static let grams = ValidationThresholds(unusual: 300, stupid: 2000) // Note: keep your original values
     static let sodiumMg = ValidationThresholds(unusual: 5000, stupid: 20000)
     static let sodiumG = ValidationThresholds(unusual: 5, stupid: 20)
     static let vitaminMineralMg = ValidationThresholds(unusual: 500, stupid: 2000)
@@ -1716,7 +1724,7 @@ private struct MetricField: View {
     ) {
         self.titleKey = titleKey
         self._text = text
-        self._isGuess = isGuess
+               self._isGuess = isGuess
         self.keyboard = keyboard
         self.manager = manager
         self.unitSuffix = unitSuffix
