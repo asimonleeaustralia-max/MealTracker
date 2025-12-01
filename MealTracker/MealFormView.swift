@@ -25,7 +25,7 @@ struct MealFormView: View {
     @AppStorage("showMinerals") private var showMinerals: Bool = false
 
     // Hidden title/date inputs removed from UI; we still keep local state for default title logic
-    @State private var mealDescription: String = "" // not shown in UI
+    @State private var mealDescription: String = "" // not shown in UI for new meals
     // Numeric inputs (now integers only)
     @State private var calories: String = ""
     @State private var carbohydrates: String = ""
@@ -224,13 +224,15 @@ struct MealFormView: View {
             )
 
             Form {
-                // Title field at top
-                Section {
-                    TextField("Meal title", text: $mealDescription, prompt: Text("Enter a title"))
-                        .textInputAutocapitalization(.sentences)
-                        .disableAutocorrection(false)
+                // Title field should ONLY be visible when editing an existing meal
+                if isEditing {
+                    Section {
+                        TextField("Meal title", text: $mealDescription, prompt: Text("Enter a title"))
+                            .textInputAutocapitalization(.sentences)
+                            .disableAutocorrection(false)
+                    }
+                    .padding(.vertical, 2)
                 }
-                .padding(.vertical, 2)
 
                 // Energy (no header)
                 Section {
@@ -710,7 +712,7 @@ struct MealFormView: View {
                 plantTouched = !plantProtein.isEmpty
                 supplementsTouched = !proteinSupplements.isEmpty
             } else {
-                // For new meals, prefill with an auto title based on current date/time
+                // For new meals, prefill with an auto title based on current date/time (invisible to user)
                 mealDescription = Meal.autoTitle(for: date)
             }
 
