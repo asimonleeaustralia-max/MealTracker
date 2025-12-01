@@ -53,8 +53,6 @@ struct MealsGalleryView: View {
     }
 }
 
-// ... rest of file unchanged ...
-
 // MARK: - Minimal supporting views to fix missing symbols
 
 private struct EmptyStateView: View {
@@ -95,8 +93,58 @@ private struct EmptyStateView: View {
 private struct MealTile: View {
     let meal: Meal
 
+    // Pick the most recent MealPhoto by createdAt
+    private var latestPhoto: MealPhoto? {
+        guard let set = meal.value(forKey: "photos") as? Set<MealPhoto>, !set.isEmpty else {
+            return nil
+        }
+        return set.max(by: { (a, b) in
+            let da = a.createdAt ?? .distantPast
+            let db = b.createdAt ?? .distantPast
+            return da < db
+        })
+    }
+
+    private var thumbnailImage: UIImage? {
+        guard let photo = latestPhoto else { return nil }
+        if let url = PhotoService.urlForUpload(photo),
+           let data = try? Data(contentsOf: url),
+           let img = UIImage(data: data) {
+            return img
+        }
+        // Fallback to original if upload missing
+        if let url = PhotoService.urlForOriginal(photo),
+           let data = try? Data(contentsOf: url),
+           let img = UIImage(data: data) {
+            return img
+        }
+        return nil
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            // Thumbnail image (top)
+            ZStack {
+                if let ui = thumbnailImage {
+                    Image(uiImage: ui)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(height: 140)
+                        .clipped()
+                } else {
+                    Rectangle()
+                        .fill(Color.secondary.opacity(0.10))
+                        .frame(height: 140)
+                        .overlay(
+                            Image(systemName: "photo")
+                                .font(.system(size: 28, weight: .regular))
+                                .foregroundStyle(.secondary)
+                        )
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+
             // Title
             Text(meal.title)
                 .font(.headline)
