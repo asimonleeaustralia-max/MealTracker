@@ -194,10 +194,14 @@ struct MealFormView: View {
     // MARK: - Delete confirmation state
     @State private var showingDeleteConfirm: Bool = false
 
-    var meal: Meal?
+    // MARK: - Camera state
+    @State private var showingCamera: Bool = false
+    @State private var cameraErrorMessage: String?
+
+    @State private var meal: Meal?
 
     init(meal: Meal? = nil) {
-        self.meal = meal
+        self._meal = State(initialValue: meal)
     }
 
     var isEditing: Bool { meal != nil }
@@ -220,6 +224,9 @@ struct MealFormView: View {
                 isBusy: $isAnalyzing.wrappedValue,
                 onAnalyzeTap: {
                     Task { await analyzePhoto() }
+                },
+                onCameraTap: {
+                    showingCamera = true
                 }
             )
 
@@ -604,6 +611,21 @@ struct MealFormView: View {
             SettingsView()
                 .environmentObject(session) // Ensure SessionManager is available in SettingsView
         }
+        .sheet(isPresented: $showingCamera) {
+            CameraCaptureView { result in
+                showingCamera = false
+                switch result {
+                case .success(let payload):
+                    Task { await handleCapturedPhoto(data: payload.data, suggestedExt: payload.suggestedExt) }
+                case .failure(let error):
+                    cameraErrorMessage = error.localizedDescription
+                    limitErrorMessage = cameraErrorMessage
+                    showingLimitAlert = cameraErrorMessage != nil
+                case .none:
+                    break
+                }
+            }
+        }
         .alert(isPresented: $showingLimitAlert) {
             Alert(
                 title: Text("Limit Reached"),
@@ -720,6 +742,54 @@ struct MealFormView: View {
             locationManager.startUpdating()
 
             recomputeConsistency(resetPrevMismatch: true)
+        }
+    }
+
+    // MARK: - Camera handling
+
+    private func ensureMealForPhoto() -> Meal {
+        if let m = meal {
+            return m
+        }
+        // Create a new Meal immediately to attach the photo, with minimal defaults
+        let new = Meal(context: context)
+        new.id = UUID()
+        new.date = Date()
+        new.title = Meal.autoTitle(for: new.date)
+        // Persist minimal record so relation exists
+        try? context.save()
+        // Update local state so subsequent saves edit this object
+        self.meal = new
+        return new
+    }
+
+    private func handleCapturedPhoto(data: Data, suggestedExt: String?) async {
+        let targetMeal = ensureMealForPhoto()
+        let location = await MainActor.run { locationManager.lastLocation }
+        do {
+            _ = try PhotoService.addPhoto(
+                from: data,
+                suggestedUTTypeExtension: suggestedExt,
+                to: targetMeal,
+                in: context,
+                session: session,
+                location: location
+            )
+            await MainActor.run {
+                reloadGalleryItems()
+                // Select the last (newest) item
+                selectedIndex = max(0, galleryItems.count - 1)
+            }
+        } catch PhotoServiceError.freeTierPhotoLimitReached(let max) {
+            await MainActor.run {
+                limitErrorMessage = "Free tier allows up to \(max) photos per meal."
+                showingLimitAlert = true
+            }
+        } catch {
+            await MainActor.run {
+                limitErrorMessage = "Failed to add photo: \(error.localizedDescription)"
+                showingLimitAlert = true
+            }
         }
     }
 
@@ -1473,6 +1543,7 @@ private struct GalleryHeader: View {
     let collapsedHeight: CGFloat
     let isBusy: Bool
     let onAnalyzeTap: () -> Void
+    let onCameraTap: () -> Void
 
     // Thumbnail sizing and spacing (10% smaller than 64; tighter spacing)
     private let thumbSize: CGFloat = 58
@@ -1515,10 +1586,13 @@ private struct GalleryHeader: View {
                     }
                 }
 
-                if !items.isEmpty {
-                    AnalyzeButton(isBusy: isBusy) { onAnalyzeTap() }
-                        .padding(12)
+                HStack(spacing: 10) {
+                    CameraButton { onCameraTap() }
+                    if !items.isEmpty {
+                        AnalyzeButton(isBusy: isBusy) { onAnalyzeTap() }
+                    }
                 }
+                .padding(12)
             }
 
             // Thumbnail strip
@@ -1625,6 +1699,25 @@ private struct AnalyzeButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(isBusy ? "Analyzing Photo" : "Analyze Photo")
+    }
+}
+
+private struct CameraButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(Color.black.opacity(0.6))
+                    .frame(width: 44, height: 44)
+                Image(systemName: "camera")
+                    .foregroundColor(.white)
+                    .imageScale(.medium)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Capture Photo")
     }
 }
 
