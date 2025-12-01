@@ -837,34 +837,7 @@ struct MealFormView: View {
             }
         }
 
-        if items.isEmpty {
-            // Dev fallback: load two bundle images (cupcake + fish & chips)
-            var devPairs: [(name: String, ext: String)] = [
-                (devImage1Name, devImage1Ext),
-                (devImage2Name, devImage2Ext)
-            ]
-            // Attempt a second chance for the PNG with regular space instead of narrow space, if needed
-            if Bundle.main.url(forResource: devImage2Name, withExtension: devImage2Ext) == nil {
-                let altName = devImage2Name.replacingOccurrences(of: "\u{202F}", with: " ")
-                devPairs[1].name = altName
-            }
-
-            // Load the two existing dev images
-            for (idx, pair) in devPairs.enumerated() {
-                if let url = Bundle.main.url(forResource: pair.name, withExtension: pair.ext),
-                   let data = try? Data(contentsOf: url),
-                   let ui = UIImage(data: data) {
-                    items.append(.inMemory(id: UUID(), image: ui, data: data, devIndex: idx))
-                }
-            }
-
-            // Add apple-table.jpg as a third dummy image if present in bundle
-            if let appleURL = Bundle.main.url(forResource: "apple-table", withExtension: "jpg"),
-               let appleData = try? Data(contentsOf: appleURL),
-               let appleImage = UIImage(data: appleData) {
-                items.append(.inMemory(id: UUID(), image: appleImage, data: appleData, devIndex: 2))
-            }
-        }
+        // Removed: dev fallback dummy images. Leave empty when there are no photos.
 
         self.galleryItems = items
         self.selectedIndex = min(self.selectedIndex, max(0, items.count - 1))
