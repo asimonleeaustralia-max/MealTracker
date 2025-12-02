@@ -198,6 +198,9 @@ struct MealFormView: View {
     @State private var showingCamera: Bool = false
     @State private var cameraErrorMessage: String?
 
+    // MARK: - Photo library state
+    @State private var showingPhotoPicker: Bool = false
+
     @State private var meal: Meal?
 
     init(meal: Meal? = nil) {
@@ -227,6 +230,9 @@ struct MealFormView: View {
                 },
                 onCameraTap: {
                     showingCamera = true
+                },
+                onPhotosTap: {
+                    showingPhotoPicker = true
                 }
             )
 
@@ -621,6 +627,20 @@ struct MealFormView: View {
                     cameraErrorMessage = error.localizedDescription
                     limitErrorMessage = cameraErrorMessage
                     showingLimitAlert = cameraErrorMessage != nil
+                case .none:
+                    break
+                }
+            }
+        }
+        .sheet(isPresented: $showingPhotoPicker) {
+            PhotoLibraryPickerView { result in
+                showingPhotoPicker = false
+                switch result {
+                case .success(let payload):
+                    Task { await handleCapturedPhoto(data: payload.data, suggestedExt: payload.suggestedExt) }
+                case .failure(let error):
+                    limitErrorMessage = error.localizedDescription
+                    showingLimitAlert = true
                 case .none:
                     break
                 }
@@ -1399,7 +1419,7 @@ struct MealFormView: View {
         let mono = Int(monounsaturatedFat) ?? 0
         let poly = Int(polyunsaturatedFat) ?? 0
         let sat = Int(saturatedFat) ?? 0
-        let trans = Int(transFat) ?? 0
+        let trans = Int(Int(transFat) ?? 0)
         let sum = mono + poly + sat + trans
         let hasAnySub = !(monounsaturatedFat.isEmpty && polyunsaturatedFat.isEmpty && saturatedFat.isEmpty && transFat.isEmpty)
         let hasTotal = !fat.isEmpty
@@ -1517,6 +1537,7 @@ private struct GalleryHeader: View {
     let isBusy: Bool
     let onAnalyzeTap: () -> Void
     let onCameraTap: () -> Void
+    let onPhotosTap: () -> Void
 
     // Thumbnail sizing and spacing (10% smaller than 64; tighter spacing)
     private let thumbSize: CGFloat = 58
@@ -1561,6 +1582,7 @@ private struct GalleryHeader: View {
 
                 HStack(spacing: 10) {
                     CameraButton { onCameraTap() }
+                    PhotosButton { onPhotosTap() }
                     if !items.isEmpty {
                         AnalyzeButton(isBusy: isBusy) { onAnalyzeTap() }
                     }
@@ -1691,6 +1713,25 @@ private struct CameraButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Capture Photo")
+    }
+}
+
+private struct PhotosButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(Color.black.opacity(0.6))
+                    .frame(width: 44, height: 44)
+                Image(systemName: "photo.on.rectangle")
+                    .foregroundColor(.white)
+                    .imageScale(.medium)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Choose from Photos")
     }
 }
 
@@ -2223,3 +2264,4 @@ private struct CompactSectionSpacing: ViewModifier {
         }
     }
 }
+
