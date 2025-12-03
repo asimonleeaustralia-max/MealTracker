@@ -33,6 +33,7 @@ struct PhotoService {
     // - Creates an upload-sized JPEG (max long edge 1080 px, quality ~0.72).
     // - Persists a MealPhoto object and writes both files to disk.
     // - Optionally records the capture location (latitude/longitude).
+    @MainActor
     static func addPhoto(from originalImageData: Data,
                          suggestedUTTypeExtension: String? = nil, // e.g., "heic" or "jpg"
                          to meal: Meal,
@@ -40,16 +41,32 @@ struct PhotoService {
                          session: SessionManager? = nil,
                          location: CLLocation? = nil) throws -> MealPhoto {
 
+        // Determine at runtime how Core Data sees the 'meal' relationship on MealPhoto
+        let mealRelIsToMany: Bool = {
+            guard let entity = NSEntityDescription.entity(forEntityName: "MealPhoto", in: context) else { return false }
+            return entity.relationshipsByName["meal"]?.isToMany ?? false
+        }()
+
         // Enforce free-tier photo cap (if session provided; otherwise skip)
         if let session {
             let tier = Entitlements.tier(for: session)
             let maxAllowed = Entitlements.maxPhotosPerMeal(for: tier)
             if maxAllowed < 9000 {
-                // Count existing photos for this meal
-                let request = NSFetchRequest<MealPhoto>(entityName: "MealPhoto")
-                request.predicate = NSPredicate(format: "meal == %@", meal)
-                let count = (try? context.count(for: request)) ?? 0
-                if count >= maxAllowed {
+                // Count existing photos for this meal using a predicate that matches the runtime cardinality
+                let request = NSFetchRequest<NSFetchRequestResult>(entityName: "MealPhoto")
+                if mealRelIsToMany {
+                    // Runtime model thinks 'meal' is to-many; compare with ANY
+                    request.predicate = NSPredicate(format: "ANY meal == %@", meal)
+                } else {
+                    // Normal to-one relationship
+                    request.predicate = NSPredicate(format: "meal == %@", meal)
+                }
+                request.includesSubentities = false
+                request.includesPendingChanges = true
+                request.resultType = .countResultType
+
+                let existingCount = (try? context.count(for: request)) ?? 0
+                if existingCount >= maxAllowed {
                     throw PhotoServiceError.freeTierPhotoLimitReached(max: maxAllowed)
                 }
             }
@@ -109,7 +126,18 @@ struct PhotoService {
         photo.byteSizeOriginal = byteSizeOriginal
         photo.byteSizeUpload = byteSizeUpload
         photo.sha256 = sha256
-        photo.meal = meal
+
+        // Assign relationship according to runtime cardinality
+        if mealRelIsToMany {
+            // Defensive: runtime model reports 'meal' as to-many; add via KVC set to avoid '-[Meal count]' crash.
+            // This indicates the .xcdatamodel currently compiled in your app has MealPhoto.meal as To-Many.
+            photo.mutableSetValue(forKey: "meal").add(meal)
+            #if DEBUG
+            print("PhotoService: WARNING — runtime model says MealPhoto.meal is To-Many. Please fix the Core Data model to To-One.")
+            #endif
+        } else {
+            photo.meal = meal
+        }
 
         // Optional coordinates
         if let loc = location {
@@ -131,6 +159,7 @@ struct PhotoService {
     }
 
     // Remove a photo: delete files and Core Data object
+    @MainActor
     static func removePhoto(_ photo: MealPhoto, in context: NSManagedObjectContext) {
         PhotoStore.removeFilesIfExist(original: photo.fileNameOriginal, upload: photo.fileNameUpload)
         context.delete(photo)
@@ -166,4 +195,3 @@ private extension UIImage {
         return CGSize(width: size.width * scale, height: size.height * scale)
     }
 }
-

@@ -822,14 +822,17 @@ struct MealFormView: View {
         let targetMeal = ensureMealForPhoto()
         let location = await MainActor.run { locationManager.lastLocation }
         do {
-            _ = try PhotoService.addPhoto(
-                from: data,
-                suggestedUTTypeExtension: suggestedExt,
-                to: targetMeal,
-                in: context,
-                session: session,
-                location: location
-            )
+            // Ensure we call Core Data main-context work on the main actor
+            let _ = try await MainActor.run { () throws -> MealPhoto in
+                try PhotoService.addPhoto(
+                    from: data,
+                    suggestedUTTypeExtension: suggestedExt,
+                    to: targetMeal,
+                    in: context,
+                    session: session,
+                    location: location
+                )
+            }
             await MainActor.run {
                 reloadGalleryItems()
                 // Select the last (newest) item
@@ -2299,3 +2302,4 @@ private struct CompactSectionSpacing: ViewModifier {
         }
     }
 }
+

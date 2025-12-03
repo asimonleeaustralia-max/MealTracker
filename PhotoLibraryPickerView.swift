@@ -56,7 +56,9 @@ struct PhotoLibraryPickerView: UIViewControllerRepresentable {
         @available(iOS 14.0, *)
         func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
             guard let item = results.first else {
-                picker.dismiss(animated: true) { self.completion(nil) }
+                DispatchQueue.main.async {
+                    picker.dismiss(animated: true) { self.completion(nil) }
+                }
                 return
             }
 
@@ -72,8 +74,10 @@ struct PhotoLibraryPickerView: UIViewControllerRepresentable {
             }()
 
             func finishWithData(_ data: Data, ext: String?) {
-                picker.dismiss(animated: true) {
-                    self.completion(.success(Payload(data: data, suggestedExt: ext)))
+                DispatchQueue.main.async {
+                    picker.dismiss(animated: true) {
+                        self.completion(.success(Payload(data: data, suggestedExt: ext)))
+                    }
                 }
             }
 
@@ -147,4 +151,3 @@ struct PhotoLibraryPickerView: UIViewControllerRepresentable {
         }
     }
 }
-
