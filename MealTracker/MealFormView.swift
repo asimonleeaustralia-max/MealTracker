@@ -753,6 +753,41 @@ struct MealFormView: View {
                 animalTouched = !animalProtein.isEmpty
                 plantTouched = !plantProtein.isEmpty
                 supplementsTouched = !proteinSupplements.isEmpty
+
+                // Normalize: convert "0" to "" for non-calorie fields to avoid blocking Save
+                func zeroToEmpty(_ s: String) -> String { s == "0" ? "" : s }
+
+                carbohydrates = zeroToEmpty(carbohydrates)
+                protein = zeroToEmpty(protein)
+                sodium = zeroToEmpty(sodium)
+                fat = zeroToEmpty(fat)
+
+                starch = zeroToEmpty(starch)
+                sugars = zeroToEmpty(sugars)
+                fibre = zeroToEmpty(fibre)
+
+                monounsaturatedFat = zeroToEmpty(monounsaturatedFat)
+                polyunsaturatedFat = zeroToEmpty(polyunsaturatedFat)
+                saturatedFat = zeroToEmpty(saturatedFat)
+                transFat = zeroToEmpty(transFat)
+
+                animalProtein = zeroToEmpty(animalProtein)
+                plantProtein = zeroToEmpty(plantProtein)
+                proteinSupplements = zeroToEmpty(proteinSupplements)
+
+                vitaminA = zeroToEmpty(vitaminA)
+                vitaminB = zeroToEmpty(vitaminB)
+                vitaminC = zeroToEmpty(vitaminC)
+                vitaminD = zeroToEmpty(vitaminD)
+                vitaminE = zeroToEmpty(vitaminE)
+                vitaminK = zeroToEmpty(vitaminK)
+
+                calcium = zeroToEmpty(calcium)
+                iron = zeroToEmpty(iron)
+                potassium = zeroToEmpty(potassium)
+                zinc = zeroToEmpty(zinc)
+                magnesium = zeroToEmpty(magnesium)
+
             } else {
                 // For new meals, prefill with an auto title based on current date/time (invisible to user)
                 mealDescription = Meal.autoTitle(for: date)
@@ -2264,4 +2299,3 @@ private struct CompactSectionSpacing: ViewModifier {
         }
     }
 }
-
