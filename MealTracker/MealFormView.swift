@@ -203,10 +203,16 @@ struct MealFormView: View {
 
     @State private var meal: Meal?
 
+    // New: distinguish explicit edit mode (opened from gallery) from auto-created meals for photos
+    private let explicitEditMode: Bool
+
     init(meal: Meal? = nil) {
         self._meal = State(initialValue: meal)
+        // If the caller provided a meal, we’re explicitly editing.
+        self.explicitEditMode = (meal != nil)
     }
 
+    // Keep this for other logic if needed, but UI visibility will use explicitEditMode
     var isEditing: Bool { meal != nil }
 
     var body: some View {
@@ -237,8 +243,8 @@ struct MealFormView: View {
             )
 
             Form {
-                // Title field should ONLY be visible when editing an existing meal
-                if isEditing {
+                // Title field should ONLY be visible when explicitly editing from gallery/list
+                if explicitEditMode {
                     Section {
                         TextField("Meal title", text: $mealDescription, prompt: Text("Enter a title"))
                             .textInputAutocapitalization(.sentences)
@@ -601,7 +607,7 @@ struct MealFormView: View {
             }
             // New: Delete button when editing (avoid iOS 16-only buildIf in ToolbarContent)
             ToolbarItem(placement: .bottomBar) {
-                if isEditing {
+                if explicitEditMode {
                     Button(role: .destructive) {
                         showingDeleteConfirm = true
                     } label: {
@@ -2302,4 +2308,3 @@ private struct CompactSectionSpacing: ViewModifier {
         }
     }
 }
-
