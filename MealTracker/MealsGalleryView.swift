@@ -112,26 +112,32 @@ private struct EmptyStateView: View {
 private struct MealTile: View {
     let meal: Meal
 
-    // Pick the most recent MealPhoto by createdAt
-    private var latestPhoto: MealPhoto? {
+    // Sorted photos: earliest first (to match "first picture as hero image")
+    private var sortedPhotos: [MealPhoto] {
         guard let set = meal.value(forKey: "photos") as? Set<MealPhoto>, !set.isEmpty else {
-            return nil
+            return []
         }
-        return set.max(by: { (a, b) in
+        return set.sorted { (a, b) in
             let da = a.createdAt ?? .distantPast
             let db = b.createdAt ?? .distantPast
             return da < db
-        })
+        }
     }
 
-    private var thumbnailImage: UIImage? {
-        guard let photo = latestPhoto else { return nil }
+    private var heroPhoto: MealPhoto? { sortedPhotos.first }
+
+    private var thumbnailPhotos: [MealPhoto] {
+        guard sortedPhotos.count > 1 else { return [] }
+        return Array(sortedPhotos.dropFirst())
+    }
+
+    // Load a UIImage for a MealPhoto using upload URL first, then original
+    private func loadImage(for photo: MealPhoto) -> UIImage? {
         if let url = PhotoService.urlForUpload(photo),
            let data = try? Data(contentsOf: url),
            let img = UIImage(data: data) {
             return img
         }
-        // Fallback to original if upload missing
         if let url = PhotoService.urlForOriginal(photo),
            let data = try? Data(contentsOf: url),
            let img = UIImage(data: data) {
@@ -148,10 +154,11 @@ private struct MealTile: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Thumbnail image (top)
-            ZStack {
-                if let ui = thumbnailImage {
-                    Image(uiImage: ui)
+            // Hero with inline thumbnails overlay
+            ZStack(alignment: .bottomLeading) {
+                // Hero
+                if let hero = heroPhoto, let heroImg = loadImage(for: hero) {
+                    Image(uiImage: heroImg)
                         .resizable()
                         .scaledToFill()
                         .frame(height: 140)
@@ -165,6 +172,62 @@ private struct MealTile: View {
                                 .font(.system(size: 28, weight: .regular))
                                 .foregroundStyle(.secondary)
                         )
+                }
+
+                // Thumbnails overlay (up to 3)
+                if !thumbnailPhotos.isEmpty {
+                    let thumbs = Array(thumbnailPhotos.prefix(3))
+                    HStack(spacing: 6) {
+                        ForEach(Array(thumbs.enumerated()), id: \.offset) { idx, p in
+                            ZStack {
+                                if let img = loadImage(for: p) {
+                                    Image(uiImage: img)
+                                        .resizable()
+                                        .scaledToFill()
+                                } else {
+                                    Rectangle()
+                                        .fill(Color.secondary.opacity(0.15))
+                                        .overlay(
+                                            Image(systemName: "photo")
+                                                .foregroundStyle(.secondary)
+                                        )
+                                }
+                            }
+                            .frame(width: 34, height: 34)
+                            .clipped()
+                            .cornerRadius(6)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color.white.opacity(0.9), lineWidth: 1)
+                            )
+                            .shadow(color: Color.black.opacity(0.15), radius: 2, x: 0, y: 1)
+                        }
+
+                        // If there are more thumbnails than shown, show a "+N" badge
+                        if thumbnailPhotos.count > thumbs.count {
+                            let remaining = thumbnailPhotos.count - thumbs.count
+                            Text("+\(remaining)")
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 4)
+                                .background(.ultraThinMaterial, in: Capsule())
+                                .overlay(
+                                    Capsule().stroke(Color.white.opacity(0.9), lineWidth: 1)
+                                )
+                                .shadow(color: Color.black.opacity(0.15), radius: 2, x: 0, y: 1)
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule()
+                            .fill(Color.black.opacity(0.15))
+                            .blur(radius: 8)
+                            .opacity(0.001) // visual effect only; main background via material below
+                    )
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .padding(8)
                 }
             }
             .frame(maxWidth: .infinity)
