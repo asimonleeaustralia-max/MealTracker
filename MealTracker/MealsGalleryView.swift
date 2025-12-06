@@ -275,10 +275,13 @@ private struct MealTile: View {
             }
             .padding(.top, 2)
 
-            // Date
-            Text(meal.date, style: .date)
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+            // Date + Time
+            HStack(spacing: 6) {
+                Text(meal.date, style: .date)
+                Text(meal.date, style: .time)
+            }
+            .font(.caption)
+            .foregroundStyle(.tertiary)
         }
         .padding(12)
         .background(
