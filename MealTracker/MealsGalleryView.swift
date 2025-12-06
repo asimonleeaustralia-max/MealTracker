@@ -152,27 +152,34 @@ private struct MealTile: View {
         LocalizationManager(languageCode: LocalizationManager.defaultLanguageCode)
     }
 
+    // Consistent hero aspect ratio across all tiles
+    private let heroAspect: CGFloat = 4.0 / 3.0
+    private let heroCornerRadius: CGFloat = 10
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Hero with inline thumbnails overlay
             ZStack(alignment: .bottomLeading) {
-                // Hero
-                if let hero = heroPhoto, let heroImg = loadImage(for: hero) {
-                    Image(uiImage: heroImg)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(height: 140)
-                        .clipped()
-                } else {
-                    Rectangle()
-                        .fill(Color.secondary.opacity(0.10))
-                        .frame(height: 140)
-                        .overlay(
+                // Hero (standardized size)
+                Group {
+                    if let hero = heroPhoto, let heroImg = loadImage(for: hero) {
+                        Image(uiImage: heroImg)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        ZStack {
+                            Rectangle()
+                                .fill(Color.secondary.opacity(0.10))
                             Image(systemName: "photo")
                                 .font(.system(size: 28, weight: .regular))
                                 .foregroundStyle(.secondary)
-                        )
+                        }
+                    }
                 }
+                .aspectRatio(heroAspect, contentMode: .fit)
+                .frame(maxWidth: .infinity)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: heroCornerRadius))
 
                 // Thumbnails overlay (up to 3)
                 if !thumbnailPhotos.isEmpty {
@@ -231,7 +238,6 @@ private struct MealTile: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
 
             // Title
             Text(meal.title)
