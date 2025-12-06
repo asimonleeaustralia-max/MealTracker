@@ -140,6 +140,12 @@ private struct MealTile: View {
         return nil
     }
 
+    // Localization manager for short labels (falls back to keys if not present)
+    private var localizationManager: LocalizationManager {
+        // Use device default; if you prefer app-scoped language, you can pass it via Environment.
+        LocalizationManager(languageCode: LocalizationManager.defaultLanguageCode)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Thumbnail image (top)
@@ -183,12 +189,28 @@ private struct MealTile: View {
                 Spacer(minLength: 8)
             }
 
-            // A few nutrient badges for compactness
-            HStack(spacing: 6) {
-                badge("Carbs", meal.carbohydrates)
-                badge("Protein", meal.protein)
-                badge("Fat", meal.fat)
+            // Uniform macro circles
+            HStack(spacing: 10) {
+                MacroCircle(
+                    value: Int(meal.carbohydrates),
+                    unit: "g",
+                    shortLabel: shortKey("carbs.short"),
+                    color: .blue
+                )
+                MacroCircle(
+                    value: Int(meal.protein),
+                    unit: "g",
+                    shortLabel: shortKey("protein.short"),
+                    color: .green
+                )
+                MacroCircle(
+                    value: Int(meal.fat),
+                    unit: "g",
+                    shortLabel: shortKey("fat.short"),
+                    color: .orange
+                )
             }
+            .padding(.top, 2)
 
             // Date
             Text(meal.date, style: .date)
@@ -203,6 +225,21 @@ private struct MealTile: View {
         .contentShape(RoundedRectangle(cornerRadius: 12))
     }
 
+    private func shortKey(_ key: String) -> String {
+        // Fallback to a reasonable English short label if key isn’t localized yet
+        let localized = localizationManager.localized(key)
+        switch key {
+        case "carbs.short":
+            return localized == key ? "Carb" : localized
+        case "protein.short":
+            return localized == key ? "Prot" : localized
+        case "fat.short":
+            return localized == key ? "Fat" : localized
+        default:
+            return localized
+        }
+    }
+
     @ViewBuilder
     private func badge(_ title: String, _ value: Double) -> some View {
         HStack(spacing: 4) {
@@ -214,6 +251,56 @@ private struct MealTile: View {
         .padding(.vertical, 2)
         .background(Color.secondary.opacity(0.15))
         .clipShape(Capsule())
+    }
+}
+
+// Uniform circular macro indicator
+private struct MacroCircle: View {
+    let value: Int
+    let unit: String
+    let shortLabel: String
+    let color: Color
+
+    // Visual constants
+    private let diameter: CGFloat = 48
+    private let lineWidth: CGFloat = 2
+
+    var body: some View {
+        VStack(spacing: 4) {
+            ZStack {
+                Circle()
+                    .strokeBorder(color.opacity(0.35), lineWidth: lineWidth)
+
+                Circle()
+                    .fill(color.opacity(0.12))
+
+                // Value + unit
+                VStack(spacing: 0) {
+                    Text("\(value)")
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .minimumScaleFactor(0.6)
+                        .lineLimit(1)
+
+                    Text(unit)
+                        .font(.system(size: 9, weight: .regular, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                .foregroundColor(.primary)
+                .padding(6)
+            }
+            .frame(width: diameter, height: diameter)
+
+            // Short label under the circle
+            Text(shortLabel)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(width: diameter)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(shortLabel) \(value) \(unit)")
     }
 }
 
