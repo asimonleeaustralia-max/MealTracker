@@ -36,12 +36,16 @@ struct MealsGalleryView: View {
                         ForEach(meals, id: \.objectID) { meal in
                             NavigationLink(destination: MealFormView(meal: meal)) {
                                 MealTile(meal: meal)
+                                    .padding(.horizontal, 2) // ensure inner gutter so photo never touches cell edge
                             }
                             .buttonStyle(.plain)
                         }
                     }
-                    .padding(12)
+                    .padding(.horizontal, 18) // slightly larger outer gutter
+                    .padding(.vertical, 12)
                 }
+                // Respect safe-area gutters for scroll content (iOS 17+)
+                .modifier(ScrollHorizontalContentMargins(8))
             }
         }
         .background(Color(.systemBackground))
@@ -49,6 +53,21 @@ struct MealsGalleryView: View {
             NavigationView {
                 MealFormView()
             }
+        }
+    }
+}
+
+// Helper to add horizontal content margins on iOS 17+, no-op earlier
+private struct ScrollHorizontalContentMargins: ViewModifier {
+    let inset: CGFloat
+    init(_ inset: CGFloat) { self.inset = inset }
+
+    func body(content: Content) -> some View {
+        if #available(iOS 17.0, *) {
+            content
+                .contentMargins(.horizontal, inset, for: .scrollContent)
+        } else {
+            content
         }
     }
 }
