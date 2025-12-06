@@ -16,11 +16,18 @@ struct MealsGalleryView: View {
         fetchRequest: Meal.fetchAllMealsRequest()
     ) private var meals: FetchedResults<Meal>
 
-    // Simple grid layout
-    private let columns: [GridItem] = [
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12)
-    ]
+    // Layout constants
+    private let outerHorizontalPadding: CGFloat = 16   // outer gutter on both sides
+    private let interItemSpacing: CGFloat = 12         // spacing between the two columns and between rows
+    private let tileInnerHorizontalPadding: CGFloat = 4 // subtle inner padding inside each tile
+
+    // Two equal columns (we’ll still compute exact column width via GeometryReader)
+    private var columns: [GridItem] {
+        [
+            GridItem(.flexible(), spacing: interItemSpacing, alignment: .top),
+            GridItem(.flexible(), spacing: interItemSpacing, alignment: .top)
+        ]
+    }
 
     @State private var showingAdd = false
 
@@ -30,44 +37,34 @@ struct MealsGalleryView: View {
                 EmptyStateView(onAdd: { showingAdd = true })
                     .padding()
             } else {
-                ScrollView {
-                    LazyVGrid(columns: columns, spacing: 12) {
-                        // Use objectID for identity to avoid reading the `id` attribute
-                        ForEach(meals, id: \.objectID) { meal in
-                            NavigationLink(destination: MealFormView(meal: meal)) {
-                                MealTile(meal: meal)
-                                    .padding(.horizontal, 2) // ensure inner gutter so photo never touches cell edge
+                GeometryReader { proxy in
+                    // Compute the exact width each column gets
+                    let totalWidth = proxy.size.width
+                    let available = totalWidth - (outerHorizontalPadding * 2) - interItemSpacing
+                    let columnWidth = max(0, available / 2)
+
+                    ScrollView {
+                        LazyVGrid(columns: columns, alignment: .center, spacing: interItemSpacing) {
+                            ForEach(meals, id: \.objectID) { meal in
+                                NavigationLink(destination: MealFormView(meal: meal)) {
+                                    MealTile(meal: meal, fixedWidth: columnWidth)
+                                        .padding(.horizontal, tileInnerHorizontalPadding)
+                                        .frame(width: columnWidth) // hard cap to half the screen minus gutters/spacing
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
+                        .padding(.horizontal, outerHorizontalPadding) // equal gutters on both sides
+                        .padding(.vertical, 12)
                     }
-                    .padding(.horizontal, 18) // slightly larger outer gutter
-                    .padding(.vertical, 12)
                 }
-                // Respect safe-area gutters for scroll content (iOS 17+)
-                .modifier(ScrollHorizontalContentMargins(8))
+                .background(Color(.systemBackground))
             }
         }
-        .background(Color(.systemBackground))
         .sheet(isPresented: $showingAdd) {
             NavigationView {
                 MealFormView()
             }
-        }
-    }
-}
-
-// Helper to add horizontal content margins on iOS 17+, no-op earlier
-private struct ScrollHorizontalContentMargins: ViewModifier {
-    let inset: CGFloat
-    init(_ inset: CGFloat) { self.inset = inset }
-
-    func body(content: Content) -> some View {
-        if #available(iOS 17.0, *) {
-            content
-                .contentMargins(.horizontal, inset, for: .scrollContent)
-        } else {
-            content
         }
     }
 }
@@ -111,6 +108,7 @@ private struct EmptyStateView: View {
 
 private struct MealTile: View {
     let meal: Meal
+    let fixedWidth: CGFloat
 
     // Sorted photos: earliest first (to match "first picture as hero image")
     private var sortedPhotos: [MealPhoto] {
@@ -148,24 +146,38 @@ private struct MealTile: View {
 
     // Localization manager for short labels (falls back to keys if not present)
     private var localizationManager: LocalizationManager {
-        // Use device default; if you prefer app-scoped language, you can pass it via Environment.
         LocalizationManager(languageCode: LocalizationManager.defaultLanguageCode)
     }
 
-    // Consistent hero aspect ratio across all tiles
-    private let heroAspect: CGFloat = 4.0 / 3.0
+    // Visual constants
+    private let heroHeight: CGFloat = 160 // single fixed height for all tiles
     private let heroCornerRadius: CGFloat = 10
+    private let portraitZoom: CGFloat = 1.15 // extra zoom for portrait sources to strengthen center crop
+
+    // Preload hero image once
+    private var heroUIImage: UIImage? {
+        guard let hero = heroPhoto else { return nil }
+        return loadImage(for: hero)
+    }
+
+    // Orientation check
+    private var isPortraitHero: Bool {
+        guard let img = heroUIImage else { return false }
+        return img.size.height > img.size.width
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Hero with inline thumbnails overlay
             ZStack(alignment: .bottomLeading) {
-                // Hero (standardized size)
                 Group {
-                    if let hero = heroPhoto, let heroImg = loadImage(for: hero) {
-                        Image(uiImage: heroImg)
+                    if let img = heroUIImage {
+                        Image(uiImage: img)
                             .resizable()
-                            .scaledToFill()
+                            .scaledToFill()               // fill the fixed box
+                            .frame(width: fixedWidth, height: heroHeight)
+                            .clipped()                    // crop overflow
+                            .scaleEffect(isPortraitHero ? portraitZoom : 1.0, anchor: .center)
                     } else {
                         ZStack {
                             Rectangle()
@@ -174,18 +186,17 @@ private struct MealTile: View {
                                 .font(.system(size: 28, weight: .regular))
                                 .foregroundStyle(.secondary)
                         }
+                        .frame(width: fixedWidth, height: heroHeight)
+                        .clipped()
                     }
                 }
-                .aspectRatio(heroAspect, contentMode: .fit)
-                .frame(maxWidth: .infinity)
-                .clipped()
                 .clipShape(RoundedRectangle(cornerRadius: heroCornerRadius))
 
                 // Thumbnails overlay (up to 3)
                 if !thumbnailPhotos.isEmpty {
                     let thumbs = Array(thumbnailPhotos.prefix(3))
                     HStack(spacing: 6) {
-                        ForEach(Array(thumbs.enumerated()), id: \.offset) { idx, p in
+                        ForEach(Array(thumbs.enumerated()), id: \.offset) { _, p in
                             ZStack {
                                 if let img = loadImage(for: p) {
                                     Image(uiImage: img)
@@ -237,7 +248,6 @@ private struct MealTile: View {
                     .padding(8)
                 }
             }
-            .frame(maxWidth: .infinity)
 
             // Title
             Text(meal.title)
@@ -290,6 +300,7 @@ private struct MealTile: View {
             .foregroundStyle(.tertiary)
         }
         .padding(12)
+        .frame(width: fixedWidth, alignment: .center) // ensure the whole tile respects the column width
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color(.secondarySystemBackground))
@@ -298,7 +309,6 @@ private struct MealTile: View {
     }
 
     private func shortKey(_ key: String) -> String {
-        // Fallback to a reasonable English short label if key isn’t localized yet
         let localized = localizationManager.localized(key)
         switch key {
         case "carbs.short":
@@ -363,7 +373,6 @@ private struct MacroCircle: View {
             }
             .frame(width: diameter, height: diameter)
 
-            // Short label under the circle
             Text(shortLabel)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
