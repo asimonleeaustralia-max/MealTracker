@@ -104,6 +104,8 @@ extension Meal {
     static func fetchAllMealsRequest() -> NSFetchRequest<Meal> {
         let request = NSFetchRequest<Meal>(entityName: "Meal")
         request.sortDescriptors = [NSSortDescriptor(key: "date", ascending: false)]
+        // Prefetch photos to reduce faulting during UI updates/removals
+        request.relationshipKeyPathsForPrefetching = ["photos"]
         return request
     }
 

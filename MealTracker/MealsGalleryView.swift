@@ -45,7 +45,8 @@ struct MealsGalleryView: View {
 
                     ScrollView {
                         LazyVGrid(columns: columns, alignment: .center, spacing: interItemSpacing) {
-                            ForEach(meals, id: \.objectID) { meal in
+                            // Filter out deleted objects to avoid rendering after deletion
+                            ForEach(meals.filter { !$0.isDeleted }, id: \.objectID) { meal in
                                 NavigationLink(destination: MealFormView(meal: meal)) {
                                     MealTile(meal: meal, fixedWidth: columnWidth)
                                         .padding(.horizontal, tileInnerHorizontalPadding)
@@ -188,145 +189,157 @@ private struct MealTile: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Hero with inline thumbnails overlay
-            ZStack(alignment: .bottomLeading) {
-                Group {
-                    if let img = heroUIImage {
-                        Image(uiImage: img)
-                            .resizable()
-                            .scaledToFill()               // fill the fixed box
-                            .frame(width: fixedWidth, height: heroHeight)
-                            .clipped()                    // crop overflow
-                            .scaleEffect(isPortraitHero ? portraitZoom : 1.0, anchor: .center)
-                    } else {
-                        ZStack {
-                            Rectangle()
-                                .fill(Color.secondary.opacity(0.10))
-                            Image(systemName: "photo")
-                                .font(.system(size: 28, weight: .regular))
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(width: fixedWidth, height: heroHeight)
-                        .clipped()
-                    }
-                }
-                .clipShape(RoundedRectangle(cornerRadius: heroCornerRadius))
-
-                // Thumbnails overlay (up to 3)
-                if !thumbnailPhotos.isEmpty {
-                    let thumbs = Array(thumbnailPhotos.prefix(3))
-                    HStack(spacing: 6) {
-                        ForEach(Array(thumbs.enumerated()), id: \.offset) { _, p in
+        // Defensive: avoid touching properties if the object is deleted or contextless
+        if meal.isDeleted || meal.managedObjectContext == nil {
+            // Minimal placeholder with same outer sizing so grid layout remains stable
+            Color.clear
+                .frame(width: fixedWidth, height: heroHeight)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color(.secondarySystemBackground))
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 12))
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                // Hero with inline thumbnails overlay
+                ZStack(alignment: .bottomLeading) {
+                    Group {
+                        if let img = heroUIImage {
+                            Image(uiImage: img)
+                                .resizable()
+                                .scaledToFill()               // fill the fixed box
+                                .frame(width: fixedWidth, height: heroHeight)
+                                .clipped()                    // crop overflow
+                                .scaleEffect(isPortraitHero ? portraitZoom : 1.0, anchor: .center)
+                        } else {
                             ZStack {
-                                if let img = loadImage(for: p) {
-                                    Image(uiImage: img)
-                                        .resizable()
-                                        .scaledToFill()
-                                } else {
-                                    Rectangle()
-                                        .fill(Color.secondary.opacity(0.15))
-                                        .overlay(
-                                            Image(systemName: "photo")
-                                                .foregroundStyle(.secondary)
-                                        )
-                                }
+                                Rectangle()
+                                    .fill(Color.secondary.opacity(0.10))
+                                Image(systemName: "photo")
+                                    .font(.system(size: 28, weight: .regular))
+                                    .foregroundStyle(.secondary)
                             }
-                            .frame(width: 34, height: 34)
+                            .frame(width: fixedWidth, height: heroHeight)
                             .clipped()
-                            .cornerRadius(6)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(Color.white.opacity(0.9), lineWidth: 1)
-                            )
-                            .shadow(color: Color.black.opacity(0.15), radius: 2, x: 0, y: 1)
                         }
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: heroCornerRadius))
 
-                        // If there are more thumbnails than shown, show a "+N" badge
-                        if thumbnailPhotos.count > thumbs.count {
-                            let remaining = thumbnailPhotos.count - thumbs.count
-                            Text("+\(remaining)")
-                                .font(.caption2)
-                                .fontWeight(.semibold)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 4)
-                                .background(.ultraThinMaterial, in: Capsule())
+                    // Thumbnails overlay (up to 3)
+                    if !thumbnailPhotos.isEmpty {
+                        let thumbs = Array(thumbnailPhotos.prefix(3))
+                        HStack(spacing: 6) {
+                            ForEach(Array(thumbs.enumerated()), id: \.offset) { _, p in
+                                ZStack {
+                                    if let img = loadImage(for: p) {
+                                        Image(uiImage: img)
+                                            .resizable()
+                                            .scaledToFill()
+                                    } else {
+                                        Rectangle()
+                                            .fill(Color.secondary.opacity(0.15))
+                                            .overlay(
+                                                Image(systemName: "photo")
+                                                    .foregroundStyle(.secondary)
+                                            )
+                                    }
+                                }
+                                .frame(width: 34, height: 34)
+                                .clipped()
+                                .cornerRadius(6)
                                 .overlay(
-                                    Capsule().stroke(Color.white.opacity(0.9), lineWidth: 1)
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .stroke(Color.white.opacity(0.9), lineWidth: 1)
                                 )
                                 .shadow(color: Color.black.opacity(0.15), radius: 2, x: 0, y: 1)
+                            }
+
+                            // If there are more thumbnails than shown, show a "+N" badge
+                            if thumbnailPhotos.count > thumbs.count {
+                                let remaining = thumbnailPhotos.count - thumbs.count
+                                Text("+\(remaining)")
+                                    .font(.caption2)
+                                    .fontWeight(.semibold)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 4)
+                                    .background(.ultraThinMaterial, in: Capsule())
+                                    .overlay(
+                                        Capsule().stroke(Color.white.opacity(0.9), lineWidth: 1)
+                                    )
+                                    .shadow(color: Color.black.opacity(0.15), radius: 2, x: 0, y: 1)
+                            }
                         }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule()
+                                .fill(Color.black.opacity(0.15))
+                                .blur(radius: 8)
+                                .opacity(0.001) // visual effect only; main background via material below
+                        )
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .padding(8)
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 8)
-                    .background(
-                        Capsule()
-                            .fill(Color.black.opacity(0.15))
-                            .blur(radius: 8)
-                            .opacity(0.001) // visual effect only; main background via material below
-                    )
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .padding(8)
                 }
+
+                // Title
+                Text(meal.title)
+                    .font(.headline)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+
+                // Quick stats row
+                HStack(spacing: 8) {
+                    Label("\(energyDisplayValue)", systemImage: "flame")
+                        .labelStyle(.iconOnly)
+                        .foregroundStyle(.secondary)
+
+                    Text("\(energyDisplayValue) \(energyDisplaySuffix)")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
+                    Spacer(minLength: 8)
+                }
+
+                // Uniform macro circles
+                HStack(spacing: 10) {
+                    MacroCircle(
+                        value: Int(meal.carbohydrates),
+                        unit: "g",
+                        shortLabel: shortKey("carbs.short"),
+                        color: .blue
+                    )
+                    MacroCircle(
+                        value: Int(meal.protein),
+                        unit: "g",
+                        shortLabel: shortKey("protein.short"),
+                        color: .green
+                    )
+                    MacroCircle(
+                        value: Int(meal.fat),
+                        unit: "g",
+                        shortLabel: shortKey("fat.short"),
+                        color: .orange
+                    )
+                }
+                .padding(.top, 2)
+
+                // Date + Time
+                HStack(spacing: 6) {
+                    Text(meal.date, style: .date)
+                    Text(meal.date, style: .time)
+                }
+                .font(.caption)
+                .foregroundStyle(.tertiary)
             }
-
-            // Title
-            Text(meal.title)
-                .font(.headline)
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-
-            // Quick stats row
-            HStack(spacing: 8) {
-                Label("\(energyDisplayValue)", systemImage: "flame")
-                    .labelStyle(.iconOnly)
-                    .foregroundStyle(.secondary)
-
-                Text("\(energyDisplayValue) \(energyDisplaySuffix)")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-
-                Spacer(minLength: 8)
-            }
-
-            // Uniform macro circles
-            HStack(spacing: 10) {
-                MacroCircle(
-                    value: Int(meal.carbohydrates),
-                    unit: "g",
-                    shortLabel: shortKey("carbs.short"),
-                    color: .blue
-                )
-                MacroCircle(
-                    value: Int(meal.protein),
-                    unit: "g",
-                    shortLabel: shortKey("protein.short"),
-                    color: .green
-                )
-                MacroCircle(
-                    value: Int(meal.fat),
-                    unit: "g",
-                    shortLabel: shortKey("fat.short"),
-                    color: .orange
-                )
-            }
-            .padding(.top, 2)
-
-            // Date + Time
-            HStack(spacing: 6) {
-                Text(meal.date, style: .date)
-                Text(meal.date, style: .time)
-            }
-            .font(.caption)
-            .foregroundStyle(.tertiary)
+            .padding(12)
+            .frame(width: fixedWidth, alignment: .center) // ensure the whole tile respects the column width
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(.secondarySystemBackground))
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 12))
         }
-        .padding(12)
-        .frame(width: fixedWidth, alignment: .center) // ensure the whole tile respects the column width
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(.secondarySystemBackground))
-        )
-        .contentShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private func shortKey(_ key: String) -> String {
@@ -411,3 +424,4 @@ private extension Double {
         truncatingRemainder(dividingBy: 1) == 0 ? String(Int(self)) : String(self)
     }
 }
+
