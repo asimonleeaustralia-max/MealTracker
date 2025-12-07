@@ -107,8 +107,12 @@ private struct EmptyStateView: View {
 }
 
 private struct MealTile: View {
-    let meal: Meal
+    // Observe changes to the managed object so the tile re-renders when edited
+    @ObservedObject var meal: Meal
     let fixedWidth: CGFloat
+
+    // Respect user energy unit setting for display
+    @AppStorage("energyUnit") private var energyUnit: EnergyUnit = .calories
 
     // Sorted photos: earliest first (to match "first picture as hero image")
     private var sortedPhotos: [MealPhoto] {
@@ -164,6 +168,23 @@ private struct MealTile: View {
     private var isPortraitHero: Bool {
         guard let img = heroUIImage else { return false }
         return img.size.height > img.size.width
+    }
+
+    // Energy display computed from stored kcal
+    private var energyDisplayValue: Int {
+        switch energyUnit {
+        case .calories:
+            return Int(meal.calories.rounded())
+        case .kilojoules:
+            return Int((meal.calories * 4.184).rounded())
+        }
+    }
+
+    private var energyDisplaySuffix: String {
+        switch energyUnit {
+        case .calories: return "kcal"
+        case .kilojoules: return "kJ"
+        }
     }
 
     var body: some View {
@@ -257,11 +278,11 @@ private struct MealTile: View {
 
             // Quick stats row
             HStack(spacing: 8) {
-                Label("\(Int(meal.calories))", systemImage: "flame")
+                Label("\(energyDisplayValue)", systemImage: "flame")
                     .labelStyle(.iconOnly)
                     .foregroundStyle(.secondary)
 
-                Text("\(Int(meal.calories)) kcal")
+                Text("\(energyDisplayValue) \(energyDisplaySuffix)")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
 
