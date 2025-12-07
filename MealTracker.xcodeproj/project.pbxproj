@@ -13,9 +13,15 @@
 		C34176E02ED2794C00C73645 /* PhotoAssetDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34176DF2ED2794C00C73645 /* PhotoAssetDTO.swift */; };
 		C34176E22ED2795200C73645 /* PhotoService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34176E12ED2795200C73645 /* PhotoService.swift */; };
 		C34176E42ED288BC00C73645 /* MealPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34176E32ED288BC00C73645 /* MealPhoto.swift */; };
+		C35F5E7D2EDEFAA400DD2844 /* PhotoLibraryPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C35F5E7C2EDEFAA400DD2844 /* PhotoLibraryPickerView.swift */; };
 		C381065E2ED29E5500C796E0 /* LocalBarcodeDB.swift in Sources */ = {isa = PBXBuildFile; fileRef = C381065D2ED29E5500C796E0 /* LocalBarcodeDB.swift */; };
 		C38106602ED29E5A00C796E0 /* PhotoNutritionGuesser.swift in Sources */ = {isa = PBXBuildFile; fileRef = C381065F2ED29E5A00C796E0 /* PhotoNutritionGuesser.swift */; };
 		C38106622ED29E6100C796E0 /* LocalBarcodeDB.json in Resources */ = {isa = PBXBuildFile; fileRef = C38106612ED29E6100C796E0 /* LocalBarcodeDB.json */; };
+		C3BC02E82EDDACE8004C1779 /* CameraCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3BC02E72EDDACE8004C1779 /* CameraCaptureView.swift */; };
+		C3C2B9712ED44E7000E9D4F4 /* FeaturePrintClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3C2B9702ED44E7000E9D4F4 /* FeaturePrintClassifier.swift */; };
+		C3C2B9732ED44E8500E9D4F4 /* FoodClassPriors.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3C2B9722ED44E8500E9D4F4 /* FoodClassPriors.swift */; };
+		C3F0A6FA2ED59B32003949B8 /* SessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3F0A6F92ED59B32003949B8 /* SessionManager.swift */; };
+		C3F0A6FC2ED59B34003949B8 /* Entitlements.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3F0A6FB2ED59B34003949B8 /* Entitlements.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -25,16 +31,27 @@
 		C34176DF2ED2794C00C73645 /* PhotoAssetDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoAssetDTO.swift; sourceTree = "<group>"; };
 		C34176E12ED2795200C73645 /* PhotoService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoService.swift; sourceTree = "<group>"; };
 		C34176E32ED288BC00C73645 /* MealPhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MealPhoto.swift; sourceTree = "<group>"; };
+		C35F5E7C2EDEFAA400DD2844 /* PhotoLibraryPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoLibraryPickerView.swift; sourceTree = "<group>"; };
 		C3798F872ECA75BE00945BBF /* MealTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MealTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C381065D2ED29E5500C796E0 /* LocalBarcodeDB.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalBarcodeDB.swift; sourceTree = "<group>"; };
 		C381065F2ED29E5A00C796E0 /* PhotoNutritionGuesser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoNutritionGuesser.swift; sourceTree = "<group>"; };
 		C38106612ED29E6100C796E0 /* LocalBarcodeDB.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = LocalBarcodeDB.json; sourceTree = "<group>"; };
+		C3BC02E72EDDACE8004C1779 /* CameraCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCaptureView.swift; sourceTree = "<group>"; };
+		C3C2B9702ED44E7000E9D4F4 /* FeaturePrintClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeaturePrintClassifier.swift; sourceTree = "<group>"; };
+		C3C2B9722ED44E8500E9D4F4 /* FoodClassPriors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodClassPriors.swift; sourceTree = "<group>"; };
+		C3F0A6F92ED59B32003949B8 /* SessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionManager.swift; sourceTree = "<group>"; };
+		C3F0A6FB2ED59B34003949B8 /* Entitlements.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Entitlements.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		C3798F892ECA75BE00945BBF /* MealTracker */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = MealTracker;
+			sourceTree = "<group>";
+		};
+		C3C2B96B2ED441FE00E9D4F4 /* ProjectPhotos */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ProjectPhotos;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -53,6 +70,7 @@
 		C3798F7E2ECA75BE00945BBF = {
 			isa = PBXGroup;
 			children = (
+				C3C2B96B2ED441FE00E9D4F4 /* ProjectPhotos */,
 				C32A3DC12ECC7397009C2DFD /* Localizable.strings */,
 				C3798F892ECA75BE00945BBF /* MealTracker */,
 				C3798F882ECA75BE00945BBF /* Products */,
@@ -64,6 +82,12 @@
 				C381065D2ED29E5500C796E0 /* LocalBarcodeDB.swift */,
 				C381065F2ED29E5A00C796E0 /* PhotoNutritionGuesser.swift */,
 				C38106612ED29E6100C796E0 /* LocalBarcodeDB.json */,
+				C3C2B9702ED44E7000E9D4F4 /* FeaturePrintClassifier.swift */,
+				C3C2B9722ED44E8500E9D4F4 /* FoodClassPriors.swift */,
+				C3F0A6F92ED59B32003949B8 /* SessionManager.swift */,
+				C3F0A6FB2ED59B34003949B8 /* Entitlements.swift */,
+				C3BC02E72EDDACE8004C1779 /* CameraCaptureView.swift */,
+				C35F5E7C2EDEFAA400DD2844 /* PhotoLibraryPickerView.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -92,6 +116,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				C3798F892ECA75BE00945BBF /* MealTracker */,
+				C3C2B96B2ED441FE00E9D4F4 /* ProjectPhotos */,
 			);
 			name = MealTracker;
 			packageProductDependencies = (
@@ -154,10 +179,16 @@
 				C381065E2ED29E5500C796E0 /* LocalBarcodeDB.swift in Sources */,
 				C38106602ED29E5A00C796E0 /* PhotoNutritionGuesser.swift in Sources */,
 				C34176E22ED2795200C73645 /* PhotoService.swift in Sources */,
+				C35F5E7D2EDEFAA400DD2844 /* PhotoLibraryPickerView.swift in Sources */,
 				C34176E02ED2794C00C73645 /* PhotoAssetDTO.swift in Sources */,
+				C3F0A6FC2ED59B34003949B8 /* Entitlements.swift in Sources */,
 				C34176E42ED288BC00C73645 /* MealPhoto.swift in Sources */,
 				C34176DC2ED2794700C73645 /* PhotoStore.swift in Sources */,
+				C3C2B9732ED44E8500E9D4F4 /* FoodClassPriors.swift in Sources */,
 				C34176DE2ED2794A00C73645 /* ImageResizer.swift in Sources */,
+				C3BC02E82EDDACE8004C1779 /* CameraCaptureView.swift in Sources */,
+				C3F0A6FA2ED59B32003949B8 /* SessionManager.swift in Sources */,
+				C3C2B9712ED44E7000E9D4F4 /* FeaturePrintClassifier.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

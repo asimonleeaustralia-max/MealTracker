@@ -11,11 +11,11 @@ import CoreData
 @objc(Meal)
 public class Meal: NSManagedObject, Identifiable {
     @NSManaged public var id: UUID
-    @NSManaged public var mealDescription: String
+    @NSManaged public var title: String
     @NSManaged public var calories: Double
     @NSManaged public var carbohydrates: Double
     @NSManaged public var protein: Double
-    @NSManaged public var salt: Double
+    @NSManaged public var sodium: Double
     @NSManaged public var fat: Double
     @NSManaged public var date: Date
 
@@ -54,7 +54,7 @@ public class Meal: NSManagedObject, Identifiable {
     @NSManaged public var caloriesIsGuess: Bool
     @NSManaged public var carbohydratesIsGuess: Bool
     @NSManaged public var proteinIsGuess: Bool
-    @NSManaged public var saltIsGuess: Bool
+    @NSManaged public var sodiumIsGuess: Bool
     @NSManaged public var fatIsGuess: Bool
     @NSManaged public var starchIsGuess: Bool
     @NSManaged public var sugarsIsGuess: Bool
@@ -83,13 +83,86 @@ public class Meal: NSManagedObject, Identifiable {
     @NSManaged public var potassiumIsGuess: Bool
     @NSManaged public var zincIsGuess: Bool
     @NSManaged public var magnesiumIsGuess: Bool
+
+    // Ensure defaults for brand new inserts so `id` is never nil in the store
+    public override func awakeFromInsert() {
+        super.awakeFromInsert()
+        if value(forKey: "id") == nil {
+            setPrimitiveValue(UUID(), forKey: "id")
+        }
+        if value(forKey: "date") == nil {
+            setPrimitiveValue(Date(), forKey: "date")
+        }
+        // Title is required in the model; default to empty string on brand-new rows
+        if value(forKey: "title") == nil {
+            setPrimitiveValue("", forKey: "title")
+        }
+    }
 }
 
 extension Meal {
     static func fetchAllMealsRequest() -> NSFetchRequest<Meal> {
         let request = NSFetchRequest<Meal>(entityName: "Meal")
         request.sortDescriptors = [NSSortDescriptor(key: "date", ascending: false)]
+        // Prefetch photos to reduce faulting during UI updates/removals
+        request.relationshipKeyPathsForPrefetching = ["photos"]
         return request
+    }
+
+    // Auto-generate a reasonable title based on time-of-day and weekday.
+    // Windows:
+    // - Breakfast: 05:00–10:59
+    // - Lunch:     11:00–14:59
+    // - Dinner:    18:00–21:59
+    // - Snack:     all other times (shows "at HH:mm Weekday")
+    static func autoTitle(for date: Date, locale: Locale = .current) -> String {
+        var cal = Calendar.current
+        cal.locale = locale
+
+        let comps = cal.dateComponents([.hour, .minute, .weekday], from: date)
+        let hour = comps.hour ?? 0
+        let minute = comps.minute ?? 0
+
+        let inBreakfast = (hour >= 5 && hour < 11)
+        let inLunch = (hour >= 11 && hour < 15)
+        let inDinner = (hour >= 18 && hour < 22)
+
+        let weekdayName: String = {
+            let df = DateFormatter()
+            df.locale = locale
+            df.setLocalizedDateFormatFromTemplate("EEEE")
+            return df.string(from: date)
+        }()
+
+        let timeString: String = {
+            let tf = DateFormatter()
+            tf.locale = locale
+            tf.timeStyle = .short
+            tf.dateStyle = .none
+            return tf.string(from: date)
+        }()
+
+        func dayPart() -> String {
+            switch (hour, minute) {
+            case (5..<8, _): return "early morning"
+            case (8..<11, _): return "morning"
+            case (11..<14, _): return "midday"
+            case (14..<18, _): return "afternoon"
+            case (18..<22, _): return "evening"
+            case (22..<24, _), (0..<1, _): return "late night"
+            default: return "overnight" // 01:00–04:59
+            }
+        }
+
+        if inBreakfast {
+            return "Breakfast \(weekdayName) \(dayPart())"
+        } else if inLunch {
+            return "Lunch \(weekdayName) \(dayPart())"
+        } else if inDinner {
+            return "Dinner \(weekdayName) \(dayPart())"
+        } else {
+            return "Snack at \(timeString) \(weekdayName)"
+        }
     }
 }
 

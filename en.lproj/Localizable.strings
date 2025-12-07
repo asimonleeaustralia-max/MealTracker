@@ -68,3 +68,14 @@
 "potassium" = "Potassium";
 "zinc" = "Zinc";
 "magnesium" = "Magnesium";
+
+"handedness" = "Handedness";
+"left_handed" = "Left-handed";
+"right_handed" = "Right-handed";
+
+"confirm_delete_title" = "Delete Meal";
+"confirm_delete_message" = "This Cannot Be Undone";
+
+"carbs.short" = "Carb";
+"protein.short" = "Prot";
+"fat.short" = "Fat";

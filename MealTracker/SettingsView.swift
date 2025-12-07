@@ -1,7 +1,10 @@
 import SwiftUI
+import CoreData
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.managedObjectContext) private var context
+    @EnvironmentObject var session: SessionManager
 
     @AppStorage("energyUnit") private var energyUnit: EnergyUnit = .calories
     @AppStorage("measurementSystem") private var measurementSystem: MeasurementSystem = .metric
@@ -21,13 +24,49 @@ struct SettingsView: View {
     var body: some View {
         let l = LocalizationManager(languageCode: appLanguageCode)
 
+        // Read environment-dependent values here (safe)
+        let tier = Entitlements.tier(for: session)
+        let mealsRemainingText: String = {
+            if let remaining = Entitlements.mealsRemainingToday(for: tier, in: context) {
+                return "\(remaining)"
+            } else {
+                return "Unlimited"
+            }
+        }()
+        let maxPhotos = Entitlements.maxPhotosPerMeal(for: tier)
+
         NavigationView {
             Form {
+                // Tier & limits section
+                Section(header: Text("Account & Plan")) {
+                    HStack {
+                        Text("Access Tier")
+                        Spacer()
+                        Text(tier == .paid ? "Paid (Cloud)" : "Free")
+                            .foregroundStyle(.secondary)
+                    }
+                    HStack {
+                        Text("Meals left today")
+                        Spacer()
+                        Text(mealsRemainingText)
+                            .foregroundStyle(.secondary)
+                    }
+                    HStack {
+                        Text("Photos per meal (limit)")
+                        Spacer()
+                        Text(maxPhotos >= 9000 ? "Unlimited" : "\(maxPhotos)")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Toggle("Logged into Cloud (stub)", isOn: $session.isLoggedIn)
+                        .tint(.accentColor)
+                }
+
                 // Handedness (no header)
                 Section {
                     Picker(l.localized("handedness"), selection: $handedness) {
-                        Text(l.localized("right_handed")).tag(Handedness.right)
                         Text(l.localized("left_handed")).tag(Handedness.left)
+                        Text(l.localized("right_handed")).tag(Handedness.right)
                     }
                     .pickerStyle(.segmented)
                 }
@@ -61,7 +100,6 @@ struct SettingsView: View {
 
                 Section {
                     Toggle(l.localized("show_minerals_entry"), isOn: $showMinerals)
-                    // Using same unit as vitamins; if you want a separate unit later, add a new AppStorage and picker.
                 }
 
                 // Language (no header)
@@ -82,3 +120,9 @@ struct SettingsView: View {
     }
 }
 
+#Preview {
+    let controller = PersistenceController(inMemory: true)
+    return SettingsView()
+        .environment(\.managedObjectContext, controller.container.viewContext)
+        .environmentObject(SessionManager())
+}

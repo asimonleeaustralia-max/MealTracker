@@ -8,11 +8,22 @@
 
 import UIKit
 import CoreData
+import CoreLocation
 
-enum PhotoServiceError: Error {
+enum PhotoServiceError: Error, LocalizedError {
     case invalidImage
     case writeFailed
     case coreDataSaveFailed(Error)
+    case freeTierPhotoLimitReached(max: Int)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidImage: return "Invalid image data."
+        case .writeFailed: return "Failed to write photo to disk."
+        case .coreDataSaveFailed(let err): return "Failed to save photo: \(err.localizedDescription)"
+        case .freeTierPhotoLimitReached(let max): return "Free tier allows up to \(max) photos per meal."
+        }
+    }
 }
 
 struct PhotoService {
@@ -21,10 +32,45 @@ struct PhotoService {
     // - Stores the original JPEG/HEIC bytes as-is (camera quality) without recompression.
     // - Creates an upload-sized JPEG (max long edge 1080 px, quality ~0.72).
     // - Persists a MealPhoto object and writes both files to disk.
+    // - Optionally records the capture location (latitude/longitude).
+    @MainActor
     static func addPhoto(from originalImageData: Data,
                          suggestedUTTypeExtension: String? = nil, // e.g., "heic" or "jpg"
                          to meal: Meal,
-                         in context: NSManagedObjectContext) throws -> MealPhoto {
+                         in context: NSManagedObjectContext,
+                         session: SessionManager? = nil,
+                         location: CLLocation? = nil) throws -> MealPhoto {
+
+        // Determine at runtime how Core Data sees the 'meal' relationship on MealPhoto
+        let mealRelIsToMany: Bool = {
+            guard let entity = NSEntityDescription.entity(forEntityName: "MealPhoto", in: context) else { return false }
+            return entity.relationshipsByName["meal"]?.isToMany ?? false
+        }()
+
+        // Enforce free-tier photo cap (if session provided; otherwise skip)
+        if let session {
+            let tier = Entitlements.tier(for: session)
+            let maxAllowed = Entitlements.maxPhotosPerMeal(for: tier)
+            if maxAllowed < 9000 {
+                // Count existing photos for this meal using a predicate that matches the runtime cardinality
+                let request = NSFetchRequest<NSFetchRequestResult>(entityName: "MealPhoto")
+                if mealRelIsToMany {
+                    // Runtime model thinks 'meal' is to-many; compare with ANY
+                    request.predicate = NSPredicate(format: "ANY meal == %@", meal)
+                } else {
+                    // Normal to-one relationship
+                    request.predicate = NSPredicate(format: "meal == %@", meal)
+                }
+                request.includesSubentities = false
+                request.includesPendingChanges = true
+                request.resultType = .countResultType
+
+                let existingCount = (try? context.count(for: request)) ?? 0
+                if existingCount >= maxAllowed {
+                    throw PhotoServiceError.freeTierPhotoLimitReached(max: maxAllowed)
+                }
+            }
+        }
 
         // Load original image to read dimensions (don’t recompress)
         guard let image = UIImage(data: originalImageData) else {
@@ -39,7 +85,6 @@ struct PhotoService {
             if let ext = suggestedUTTypeExtension?.lowercased(), ["jpg", "jpeg", "heic", "png"].contains(ext) {
                 return ext == "jpeg" ? "jpg" : ext
             }
-            // Try to infer from data signature
             if originalImageData.isJPEG { return "jpg" }
             if originalImageData.isHEIC { return "heic" }
             if originalImageData.isPNG { return "png" }
@@ -60,7 +105,6 @@ struct PhotoService {
 
         // Prepare upload image (1080p long-edge, medium compression)
         guard let resized = ImageResizer.resizeToLongEdge(1080, image: image, jpegQuality: 0.72) else {
-            // If resize fails, clean up original
             try? FileManager.default.removeItem(at: originalURL)
             throw PhotoServiceError.invalidImage
         }
@@ -82,12 +126,31 @@ struct PhotoService {
         photo.byteSizeOriginal = byteSizeOriginal
         photo.byteSizeUpload = byteSizeUpload
         photo.sha256 = sha256
-        photo.meal = meal
+
+        // Assign relationship according to runtime cardinality
+        if mealRelIsToMany {
+            // Defensive: runtime model reports 'meal' as to-many; add via KVC set to avoid '-[Meal count]' crash.
+            // This indicates the .xcdatamodel currently compiled in your app has MealPhoto.meal as To-Many.
+            photo.mutableSetValue(forKey: "meal").add(meal)
+            #if DEBUG
+            print("PhotoService: WARNING — runtime model says MealPhoto.meal is To-Many. Please fix the Core Data model to To-One.")
+            #endif
+        } else {
+            photo.meal = meal
+        }
+
+        // Optional coordinates
+        if let loc = location {
+            // If your generated properties are NSNumber? instead of Double, change these two assignments accordingly:
+            // photo.latitude = NSNumber(value: loc.coordinate.latitude)
+            // photo.longitude = NSNumber(value: loc.coordinate.longitude)
+            photo.latitude = loc.coordinate.latitude
+            photo.longitude = loc.coordinate.longitude
+        }
 
         do {
             try context.save()
         } catch {
-            // cleanup files if Core Data save fails
             PhotoStore.removeFilesIfExist(original: originalName, upload: uploadName)
             throw PhotoServiceError.coreDataSaveFailed(error)
         }
@@ -96,6 +159,7 @@ struct PhotoService {
     }
 
     // Remove a photo: delete files and Core Data object
+    @MainActor
     static func removePhoto(_ photo: MealPhoto, in context: NSManagedObjectContext) {
         PhotoStore.removeFilesIfExist(original: photo.fileNameOriginal, upload: photo.fileNameUpload)
         context.delete(photo)
@@ -117,7 +181,6 @@ struct PhotoService {
 private extension Data {
     var isJPEG: Bool { starts(with: [0xFF, 0xD8]) }
     var isPNG: Bool { starts(with: [0x89, 0x50, 0x4E, 0x47]) }
-    // HEIC magic isn’t as straightforward; this checks for 'ftyp' + 'heic'/'heif' brands.
     var isHEIC: Bool {
         guard count >= 12 else { return false }
         let header = self.prefix(12)

@@ -3,7 +3,8 @@
 //  MealTracker
 //
 //  iOS 13+ on-device pipeline: detect barcodes with Vision, look up in LocalBarcodeDB,
-//  OCR nutrition labels, and as a last resort, make a visual guess from the photo.
+//  OCR nutrition labels, then FeaturePrint (no-training) fallback, and as a last resort,
+//  a visual heuristic guess from the photo.
 //
 
 import Foundation
@@ -56,37 +57,85 @@ struct PhotoNutritionGuesser {
     // Debug flag to print OCR text
     private static let debugOCR = false
 
-    // Public API: try barcode first; if no hit, OCR; if still no hit, visual guess
+    // Public API: try barcode first; if no hit, OCR; if still no hit, FeaturePrint; if still no hit, visual guess
     static func guess(from imageData: Data, languageCode: String? = nil) async throws -> GuessResult? {
         guard let image = UIImage(data: imageData) else {
             throw GuessError.invalidImage
         }
         // Prefer a downscaled image to reduce CPU on older devices
-        let workingImage = downscaleIfNeeded(image, maxLongEdge: 1280)
+        let baseImage = downscaleIfNeeded(image, maxLongEdge: 1280)
 
-        // 1) Try barcode detection
-        if let code = await detectFirstBarcode(in: workingImage),
-           let entry = LocalBarcodeDB.lookup(code: code) {
-            return map(entry: entry)
-        }
+        // Prepare rotation variants to improve robustness to angle/pose:
+        // 0°, 90°, 180°, 270°
+        let variants = rotationVariants(of: baseImage)
 
-        // 2) OCR nutrition parsing (dual-pass: fast then accurate)
-        if let text = await recognizeTextDualPass(in: workingImage, languageCode: languageCode) {
-            if debugOCR {
-                print("OCR text:\n\(text)\n--- end OCR ---")
-            }
-            let result = parseNutrition(from: text)
-            if result.hasAnyValue {
-                return result
+        // 1) Try barcode detection on each rotation (stop on first hit)
+        for img in variants {
+            if let code = await detectFirstBarcode(in: img),
+               let entry = LocalBarcodeDB.lookup(code: code) {
+                // Packaged item: keep as-is (may imply multiple servings; do not force single-dish)
+                return map(entry: entry)
             }
         }
 
-        // 3) Visual heuristic guess as a last resort (with minimal vitamin/mineral fallback)
-        if let visual = visualGuess(in: workingImage) {
-            return visual
+        // 2) OCR nutrition parsing (dual-pass) on each rotation, pick the best parse
+        // Packaged item / label text: keep as-is (may imply multiple servings)
+        var bestParsed: GuessResult?
+        var bestParsedScore = -1
+        for img in variants {
+            if let text = await recognizeTextDualPass(in: img, languageCode: languageCode) {
+                if debugOCR {
+                    print("OCR text (rotation variant):\n\(text)\n--- end OCR ---")
+                }
+                let result = parseNutrition(from: text)
+                let score = result.parsedFieldCount
+                if score > bestParsedScore {
+                    bestParsedScore = score
+                    bestParsed = result.hasAnyValue ? result : bestParsed
+                    if score >= 10 { break }
+                }
+            }
+        }
+        if let parsed = bestParsed, parsed.hasAnyValue {
+            return parsed
         }
 
-        return nil
+        // 3) FeaturePrint (no-training) fallback: classify to a label and use priors.
+        // Choose the most confident among rotations.
+        var bestFP: GuessResult?
+        var bestFPConfidence: Double = -1.0
+        for img in variants {
+            if let match = await FeaturePrintClassifier.classify(image: img) {
+                // Portion proxy from saliency (largest salient object area ratio)
+                let area = (img.cgImage).map { largestSalientObjectAreaRatio(cgImage: $0) } ?? 0.35
+                if let guess = FoodClassPriors.guess(for: match.label, areaRatio: area) {
+                    // Keep the most confident
+                    if match.confidence > bestFPConfidence {
+                        bestFPConfidence = match.confidence
+                        bestFP = guess
+                    }
+                }
+            }
+        }
+        if let fp = bestFP {
+            return fp
+        }
+
+        // 4) Visual heuristic guess as a last resort; choose the most confident among rotations.
+        // Enforce SINGLE-DISH interpretation: use the largest salient object only to estimate portion.
+        var bestVisual: GuessResult?
+        var bestVisualConfidence = -Double.infinity
+        for img in variants {
+            if let visual = visualGuessSingleDish(in: img) {
+                // Use single-dish confidence
+                let conf = visualConfidenceSingleDish(in: img, guess: visual)
+                if conf > bestVisualConfidence {
+                    bestVisualConfidence = conf
+                    bestVisual = visual
+                }
+            }
+        }
+        return bestVisual
     }
 
     private static func downscaleIfNeeded(_ image: UIImage, maxLongEdge: CGFloat) -> UIImage {
@@ -98,6 +147,48 @@ struct PhotoNutritionGuesser {
         let renderer = UIGraphicsImageRenderer(size: target)
         return renderer.image { _ in
             image.draw(in: CGRect(origin: .zero, size: target))
+        }
+    }
+
+    // Create 0°, 90°, 180°, 270° rotation variants
+    private static func rotationVariants(of image: UIImage) -> [UIImage] {
+        var list: [UIImage] = [image]
+        if let r90 = rotate90(image, times: 1) { list.append(r90) }
+        if let r180 = rotate90(image, times: 2) { list.append(r180) }
+        if let r270 = rotate90(image, times: 3) { list.append(r270) }
+        return list
+    }
+
+    // Rotate by 90° increments efficiently
+    private static func rotate90(_ image: UIImage, times: Int) -> UIImage? {
+        let t = ((times % 4) + 4) % 4
+        guard t != 0 else { return image }
+        var transform = CGAffineTransform.identity
+        var newSize = image.size
+
+        switch t {
+        case 1: // 90°
+            transform = CGAffineTransform(rotationAngle: .pi / 2).translatedBy(x: 0, y: -image.size.height)
+            newSize = CGSize(width: image.size.height, height: image.size.width)
+        case 2: // 180°
+            transform = CGAffineTransform(rotationAngle: .pi).translatedBy(x: -image.size.width, y: -image.size.height)
+        case 3: // 270°
+            transform = CGAffineTransform(rotationAngle: 3 * .pi / 2).translatedBy(x: -image.size.width, y: 0)
+            newSize = CGSize(width: image.size.height, height: image.size.width)
+        default:
+            break
+        }
+
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        return renderer.image { ctx in
+            ctx.cgContext.translateBy(x: 0, y: newSize.height)
+            ctx.cgContext.scaleBy(x: 1.0, y: -1.0)
+            ctx.cgContext.concatenate(transform)
+            if let cg = image.cgImage {
+                ctx.cgContext.draw(cg, in: CGRect(origin: .zero, size: image.size))
+            } else {
+                image.draw(in: CGRect(origin: .zero, size: image.size))
+            }
         }
     }
 
@@ -501,109 +592,104 @@ struct PhotoNutritionGuesser {
         return result
     }
 
-    // MARK: - Visual fallback guess (heuristic)
+    // Single-dish confidence: based on largest salient object only
+    private static func visualConfidenceSingleDish(in image: UIImage, guess: GuessResult) -> Double {
+        guard let cg = image.cgImage else { return -Double.infinity }
+        let area = largestSalientObjectAreaRatio(cgImage: cg)
+        let macroPresence = (guess.carbohydrates ?? 0) + (guess.protein ?? 0) + (guess.fat ?? 0)
+        return area * 1.0 + (macroPresence > 0 ? 0.1 : 0.0)
+    }
+
+    // MARK: - Visual fallback guess (heuristic) with single-dish constraint
     // Produces conservative estimates for calories/carbs/protein/fat only.
-    // Now also adds very small, conservative vitamin/mineral values as a last resort.
-    private static func visualGuess(in image: UIImage) -> GuessResult? {
+    // Enhanced for fried, beige, large-plate scenes (e.g., fish & chips).
+    private static func visualGuessSingleDish(in image: UIImage) -> GuessResult? {
         guard let cgImage = image.cgImage else { return nil }
 
-        // 1) Estimate salient area ratio
-        let areaRatio = salientAreaRatio(cgImage: cgImage) // 0.0 ... 1.0
+        // 1) Estimate area of the LARGEST salient object (single dish proxy)
+        let rawAreaRatio = largestSalientObjectAreaRatio(cgImage: cgImage) // 0.0 ... 1.0
 
-        // 2) Simple color histogram to infer category
-        let category = dominantFoodCategory(from: image)
+        // 2) Color features for category and “hearty fried plate” detection
+        let stats = colorFeatures(from: image)
+        let category = dominantFoodCategory(fromStats: stats)
 
-        // 3) Map category + area to kcal and macros
-        // areaRatio ~ portion size proxy. Clamp to reasonable range.
-        let clampedArea = max(0.1, min(0.9, areaRatio))
-        // Base kcal per serving for categories
+        // Hearty fried plate signal: warm + neutral dominate, very little green
+        let heartyPlate = (stats.warm + stats.neutral) > 0.70 && stats.green < 0.10
+        let isDessert = (category == .dessertOrCake)
+
+        // 3) Portion proxy with override: for hearty plates, raise the area floor
+        let clampedAreaBase = max(0.12, min(0.85, rawAreaRatio))
+        let clampedArea = heartyPlate ? max(0.55, clampedAreaBase) : clampedAreaBase
+
+        // Slightly stronger scaling, benefits large single-dish scenes
+        let scale = 0.70 + 1.00 * (clampedArea - 0.30) // area 0.30 -> 0.70x, 0.85 -> ~1.25x
+
+        // Base kcal per serving (raised where appropriate)
         let baseKcal: Double
-        let macroSplit: (carb: Double, protein: Double, fat: Double) // proportions summing to 1
+        let macroSplit: (carb: Double, protein: Double, fat: Double)
         switch category {
         case .dessertOrCake:
-            baseKcal = 380
+            baseKcal = 420
             macroSplit = (carb: 0.55, protein: 0.07, fat: 0.38)
         case .carbHeavy:
-            baseKcal = 320
-            macroSplit = (carb: 0.70, protein: 0.12, fat: 0.18)
+            baseKcal = 540
+            macroSplit = (carb: 0.64, protein: 0.12, fat: 0.24)
         case .proteinHeavy:
-            baseKcal = 280
-            macroSplit = (carb: 0.10, protein: 0.55, fat: 0.35)
+            baseKcal = 460
+            macroSplit = (carb: 0.12, protein: 0.48, fat: 0.40)
         case .vegOrSalad:
             baseKcal = 180
             macroSplit = (carb: 0.45, protein: 0.15, fat: 0.40)
         }
 
-        // Scale kcal by area (roughly linear; bias toward 1.0 at medium portions)
-        let kcal = Int((baseKcal * (0.7 + 0.6 * (clampedArea - 0.4))).rounded())
+        // Fried bonus scaled by warm+neutral dominance
+        let friedSignal = stats.warm + stats.neutral
+        let friedBonus: Double = {
+            guard clampedArea > 0.35 else { return 0 }
+            if friedSignal > 0.78 { return 320 }
+            if friedSignal > 0.65 { return 220 }
+            if friedSignal > 0.52 { return 140 }
+            return 0
+        }()
+
+        // Compute kcal
+        var kcal = Int((baseKcal * scale + friedBonus).rounded())
+
+        // Apply “hearty floor” ONLY for non-dessert categories to avoid cupcakes hitting 700 kcal.
+        if heartyPlate && !isDessert {
+            kcal = max(kcal, 680)
+        }
+        let kcalClamped = max(180, min(1400, kcal))
 
         // Convert macro proportions to grams using kcal factors (4/4/9)
-        let carbKcal = Double(kcal) * macroSplit.carb
-        let proteinKcal = Double(kcal) * macroSplit.protein
-        let fatKcal = Double(kcal) * macroSplit.fat
+        let carbKcal = Double(kcalClamped) * macroSplit.carb
+        let proteinKcal = Double(kcalClamped) * macroSplit.protein
+        let fatKcal = Double(kcalClamped) * macroSplit.fat
 
         let carbG = Int((carbKcal / 4.0).rounded())
         let proteinG = Int((proteinKcal / 4.0).rounded())
         let fatG = Int((fatKcal / 9.0).rounded())
 
         var guess = GuessResult()
-        guess.calories = max(50, kcal)
+        guess.calories = max(50, kcalClamped)
         guess.carbohydrates = max(0, carbG)
         guess.protein = max(0, proteinG)
         guess.fat = max(0, fatG)
-        // Leave sodium and subfields nil; we cannot infer them reliably from image alone.
 
-        // Minimal vitamin/mineral fallback (mg), category-based conservative values.
-        // These are intentionally small and should be treated as low-confidence.
+        // Minimal vitamin/mineral fallback (mg), category-based conservative values (unchanged)
         switch category {
         case .dessertOrCake:
-            guess.vitaminA = 0 // 0.03 mg → 0 after rounding; keep 0 to avoid implying presence
-            guess.vitaminB = 0 // 0.02 mg
-            guess.vitaminC = 0 // 0.01 mg
-            guess.vitaminD = 0 // 0.001 mg
-            guess.vitaminE = 0 // 0.05 mg
-            guess.vitaminK = 0 // 0.002 mg
-            guess.calcium = 20
-            guess.iron = 0
-            guess.potassium = 40
-            guess.zinc = 0
-            guess.magnesium = 5
+            guess.vitaminA = 0; guess.vitaminB = 0; guess.vitaminC = 0; guess.vitaminD = 0; guess.vitaminE = 0; guess.vitaminK = 0
+            guess.calcium = 20; guess.iron = 0; guess.potassium = 40; guess.zinc = 0; guess.magnesium = 5
         case .carbHeavy:
-            guess.vitaminA = 0 // 0.02 mg
-            guess.vitaminB = 0 // 0.05 mg
-            guess.vitaminC = 0 // 0.01 mg
-            guess.vitaminD = 0
-            guess.vitaminE = 0 // 0.02 mg
-            guess.vitaminK = 0 // 0.002 mg
-            guess.calcium = 10
-            guess.iron = 0
-            guess.potassium = 50
-            guess.zinc = 0
-            guess.magnesium = 10
+            guess.vitaminA = 0; guess.vitaminB = 0; guess.vitaminC = 0; guess.vitaminD = 0; guess.vitaminE = 0; guess.vitaminK = 0
+            guess.calcium = 10; guess.iron = 0; guess.potassium = 50; guess.zinc = 0; guess.magnesium = 10
         case .proteinHeavy:
-            guess.vitaminA = 0 // 0.02 mg
-            guess.vitaminB = 0 // 0.10 mg
-            guess.vitaminC = 0
-            guess.vitaminD = 0 // 0.002 mg
-            guess.vitaminE = 0 // 0.10 mg
-            guess.vitaminK = 0 // 0.003 mg
-            guess.calcium = 15
-            guess.iron = 1
-            guess.potassium = 80
-            guess.zinc = 1
-            guess.magnesium = 12
+            guess.vitaminA = 0; guess.vitaminB = 0; guess.vitaminC = 0; guess.vitaminD = 0; guess.vitaminE = 0; guess.vitaminK = 0
+            guess.calcium = 15; guess.iron = 1; guess.potassium = 80; guess.zinc = 1; guess.magnesium = 12
         case .vegOrSalad:
-            guess.vitaminA = 0 // 0.30 mg -> still 0 if rounding Int; OCR path would capture real amounts
-            guess.vitaminB = 0 // 0.05 mg
-            guess.vitaminC = 12
-            guess.vitaminD = 0
-            guess.vitaminE = 0 // 0.40 mg
-            guess.vitaminK = 0 // 0.08 mg
-            guess.calcium = 40
-            guess.iron = 1
-            guess.potassium = 200
-            guess.zinc = 0
-            guess.magnesium = 20
+            guess.vitaminA = 0; guess.vitaminB = 0; guess.vitaminC = 12; guess.vitaminD = 0; guess.vitaminE = 0; guess.vitaminK = 0
+            guess.calcium = 40; guess.iron = 1; guess.potassium = 200; guess.zinc = 0; guess.magnesium = 20
         }
 
         return guess
@@ -617,8 +703,8 @@ struct PhotoNutritionGuesser {
         case vegOrSalad
     }
 
-    // Estimate salient foreground area ratio using Vision saliency (iOS 13+)
-    private static func salientAreaRatio(cgImage: CGImage) -> Double {
+    // Largest salient object ratio (single-dish proxy)
+    private static func largestSalientObjectAreaRatio(cgImage: CGImage) -> Double {
         if #available(iOS 13.0, *) {
             let request = VNGenerateAttentionBasedSaliencyImageRequest()
             let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
@@ -626,25 +712,21 @@ struct PhotoNutritionGuesser {
                 try handler.perform([request])
                 if let result = request.results?.first as? VNSaliencyImageObservation,
                    let salient = result.salientObjects, !salient.isEmpty {
-                    // Union of salient bounding boxes
-                    let union = salient.reduce(salient.first!.boundingBox) { partial, next in
-                        partial.union(next.boundingBox)
-                    }
-                    // boundingBox is in normalized coordinates
-                    let area = Double(union.width * union.height)
-                    // Clip to [0, 1]
+                    // Take the largest salient object's area (normalized)
+                    let largest = salient.max(by: { $0.boundingBox.width * $0.boundingBox.height < $1.boundingBox.width * $1.boundingBox.height })!
+                    let area = Double(largest.boundingBox.width * largest.boundingBox.height)
                     return max(0.0, min(1.0, area))
                 }
             } catch {
                 // fall through to simple fallback
             }
         }
-        // Fallback: assume medium area if saliency unavailable
-        return 0.45
+        // Fallback: modest single-dish assumption if saliency unavailable
+        return 0.35
     }
 
-    // Very lightweight color-based categorization
-    private static func dominantFoodCategory(from image: UIImage) -> FoodCategory {
+    // Extract coarse color features used by category/bias rules
+    private static func colorFeatures(from image: UIImage) -> (warm: Double, green: Double, neutral: Double, dark: Double, bright: Double) {
         // Downscale and compute average + histogram-ish buckets
         let size = CGSize(width: 64, height: 64)
         UIGraphicsBeginImageContextWithOptions(size, true, 1.0)
@@ -652,14 +734,14 @@ struct PhotoNutritionGuesser {
         let small = UIGraphicsGetImageFromCurrentImageContext()
         UIGraphicsEndImageContext()
 
-        guard let img = small, let cg = img.cgImage else { return .carbHeavy }
+        guard let img = small, let cg = img.cgImage else { return (0,0,0,0,0) }
         let width = cg.width
         let height = cg.height
         let bytesPerPixel = 4
         let bytesPerRow = bytesPerPixel * width
         let bitsPerComponent = 8
         var data = [UInt8](repeating: 0, count: Int(bytesPerRow * height))
-        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) else { return .carbHeavy }
+        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) else { return (0,0,0,0,0) }
         guard let ctx = CGContext(data: &data,
                                   width: width,
                                   height: height,
@@ -667,10 +749,9 @@ struct PhotoNutritionGuesser {
                                   bytesPerRow: bytesPerRow,
                                   space: colorSpace,
                                   bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
-        else { return .carbHeavy }
+        else { return (0,0,0,0,0) }
         ctx.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
 
-        var redSum = 0.0, greenSum = 0.0, blueSum = 0.0
         var warmCount = 0, greenCount = 0, neutralCount = 0, darkCount = 0, brightCount = 0
 
         for y in 0..<height {
@@ -681,8 +762,6 @@ struct PhotoNutritionGuesser {
                 let b = Double(data[idx + 2])
                 let luma = 0.2126 * r + 0.7152 * g + 0.0722 * b
 
-                redSum += r; greenSum += g; blueSum += b
-
                 if r > g && r > b { warmCount += 1 } // browns/reds -> baked/fried/dessert
                 if g > r && g > b { greenCount += 1 } // greens -> veg/salad
                 if abs(r - g) < 20 && abs(g - b) < 20 { neutralCount += 1 } // beige/neutral -> carbs/grains
@@ -691,13 +770,21 @@ struct PhotoNutritionGuesser {
             }
         }
 
-        // Heuristic rules
-        let total = width * height
-        let warmRatio = Double(warmCount) / Double(total)
-        let greenRatio = Double(greenCount) / Double(total)
-        let neutralRatio = Double(neutralCount) / Double(total)
-        let darkRatio = Double(darkCount) / Double(total)
-        let brightRatio = Double(brightCount) / Double(total)
+        let total = max(1, width * height)
+        return (warm: Double(warmCount)/Double(total),
+                green: Double(greenCount)/Double(total),
+                neutral: Double(neutralCount)/Double(total),
+                dark: Double(darkCount)/Double(total),
+                bright: Double(brightCount)/Double(total))
+    }
+
+    // Category using precomputed stats (so we don't recompute twice)
+    private static func dominantFoodCategory(fromStats stats: (warm: Double, green: Double, neutral: Double, dark: Double, bright: Double)) -> FoodCategory {
+        let warmRatio = stats.warm
+        let greenRatio = stats.green
+        let neutralRatio = stats.neutral
+        let darkRatio = stats.dark
+        let brightRatio = stats.bright
 
         // Dessert/cake: warm colors + either bright highlights (frosting) or dark (chocolate)
         if warmRatio > 0.35 && (brightRatio > 0.08 || darkRatio > 0.10) {
@@ -707,7 +794,7 @@ struct PhotoNutritionGuesser {
         if greenRatio > 0.28 {
             return .vegOrSalad
         }
-        // Carb-heavy: neutral/beige dominates (bread, pasta, rice)
+        // Carb-heavy: neutral/beige dominates (bread, pasta, rice, fried potatoes)
         if neutralRatio > 0.30 {
             return .carbHeavy
         }
@@ -749,6 +836,38 @@ private extension PhotoNutritionGuesser.GuessResult {
         || potassium != nil
         || zinc != nil
         || magnesium != nil
+    }
+
+    // Count how many fields were parsed to score OCR variants
+    var parsedFieldCount: Int {
+        var c = 0
+        if calories != nil { c += 1 }
+        if carbohydrates != nil { c += 1 }
+        if protein != nil { c += 1 }
+        if fat != nil { c += 1 }
+        if sodiumMg != nil { c += 1 }
+        if sugars != nil { c += 1 }
+        if starch != nil { c += 1 }
+        if fibre != nil { c += 1 }
+        if monounsaturatedFat != nil { c += 1 }
+        if polyunsaturatedFat != nil { c += 1 }
+        if saturatedFat != nil { c += 1 }
+        if transFat != nil { c += 1 }
+        if animalProtein != nil { c += 1 }
+        if plantProtein != nil { c += 1 }
+        if proteinSupplements != nil { c += 1 }
+        if vitaminA != nil { c += 1 }
+        if vitaminB != nil { c += 1 }
+        if vitaminC != nil { c += 1 }
+        if vitaminD != nil { c += 1 }
+        if vitaminE != nil { c += 1 }
+        if vitaminK != nil { c += 1 }
+        if calcium != nil { c += 1 }
+        if iron != nil { c += 1 }
+        if potassium != nil { c += 1 }
+        if zinc != nil { c += 1 }
+        if magnesium != nil { c += 1 }
+        return c
     }
 }
 

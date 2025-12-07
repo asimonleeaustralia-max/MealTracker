@@ -21,7 +21,7 @@ struct ContentView: View {
     private var filteredMeals: [Meal] {
         let term = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !term.isEmpty else { return Array(meals) }
-        return meals.filter { $0.mealDescription.lowercased().contains(term) }
+        return meals.filter { $0.title.lowercased().contains(term) }
     }
 
     var body: some View {
@@ -62,9 +62,9 @@ struct ContentView: View {
     }
 
     private func delete(at offsets: IndexSet) {
-        for index in offsets {
-            context.delete(filteredMeals[index])
-        }
+        // Capture objects first to keep indices stable
+        let itemsToDelete = offsets.map { filteredMeals[$0] }
+        itemsToDelete.forEach { context.delete($0) }
         try? context.save()
     }
 }
@@ -74,7 +74,7 @@ struct MealRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(meal.mealDescription)
+            Text(meal.title)
                 .font(.headline)
                 .lineLimit(2)
 
@@ -92,7 +92,7 @@ struct MealRow: View {
                     NutrientBadge(title: "Carbs", value: meal.carbohydrates)
                     NutrientBadge(title: "Protein", value: meal.protein)
                     NutrientBadge(title: "Fat", value: meal.fat)
-                    NutrientBadge(title: "Sodium", value: meal.salt)
+                    NutrientBadge(title: "Sodium", value: meal.sodium)
                     NutrientBadge(title: "Starch", value: meal.starch)
                     NutrientBadge(title: "Sugars", value: meal.sugars)
                     NutrientBadge(title: "Fibre", value: meal.fibre)
