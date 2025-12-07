@@ -169,14 +169,6 @@ struct MealFormView: View {
     @State private var galleryItems: [GalleryItem] = [] // ordered, display-ready
     @State private var selectedIndex: Int = 0
 
-    // Bundle resources for dev fallback (cupcake + fish & chips)
-    // IMG_0204.jpg.webp -> resource name "IMG_0204.jpg", ext "webp"
-    private let devImage1Name = "IMG_0204.jpg"
-    private let devImage1Ext = "webp"
-    // Screenshot 2025-11-24 at 6.30.52 pm.png
-    private let devImage2Name = "Screenshot 2025-11-24 at 6.30.52 pm"
-    private let devImage2Ext = "png"
-
     // Expanded header height toggle (kept from previous UI)
     @State private var isImageExpanded: Bool = false
 
@@ -829,7 +821,7 @@ struct MealFormView: View {
         let location = await MainActor.run { locationManager.lastLocation }
         do {
             // Ensure we call Core Data main-context work on the main actor
-            let _ = try await MainActor.run { () throws -> MealPhoto in
+            let newPhoto = try await MainActor.run { () throws -> MealPhoto in
                 try PhotoService.addPhoto(
                     from: data,
                     suggestedUTTypeExtension: suggestedExt,
@@ -839,7 +831,12 @@ struct MealFormView: View {
                     location: location
                 )
             }
+
+            // Warm up the upload file to avoid racing the first thumbnail read
             await MainActor.run {
+                if let url = PhotoService.urlForUpload(newPhoto) ?? PhotoService.urlForOriginal(newPhoto) {
+                    _ = warmUpFileRead(url: url, retries: 2, delay: 0.08)
+                }
                 reloadGalleryItems()
                 // Select the last (newest) item
                 selectedIndex = max(0, galleryItems.count - 1)
@@ -855,6 +852,18 @@ struct MealFormView: View {
                 showingLimitAlert = true
             }
         }
+    }
+
+    // Attempt to read the file; optionally retry quickly if first attempt fails.
+    private func warmUpFileRead(url: URL, retries: Int, delay: TimeInterval) -> Bool {
+        if (try? Data(contentsOf: url)) != nil { return true }
+        var remaining = retries
+        while remaining > 0 {
+            remaining -= 1
+            RunLoop.current.run(until: Date().addingTimeInterval(delay))
+            if (try? Data(contentsOf: url)) != nil { return true }
+        }
+        return false
     }
 
     // MARK: - Deletion
@@ -895,16 +904,26 @@ struct MealFormView: View {
                 }
                 for p in sorted.prefix(maxPhotos) {
                     if let url = PhotoService.urlForUpload(p) ?? PhotoService.urlForOriginal(p) {
-                        items.append(.persistent(photo: p, url: url))
+                        // Cache-busting token: file modification date (or size as fallback)
+                        let version = fileVersionToken(for: url)
+                        items.append(.persistent(photo: p, url: url, version: version))
                     }
                 }
             }
         }
 
-        // Removed: dev fallback dummy images. Leave empty when there are no photos.
-
         self.galleryItems = items
         self.selectedIndex = min(self.selectedIndex, max(0, items.count - 1))
+    }
+
+    private func fileVersionToken(for url: URL) -> String {
+        let keys: Set<URLResourceKey> = [.contentModificationDateKey, .fileSizeKey]
+        if let vals = try? url.resourceValues(forKeys: keys) {
+            let ts = vals.contentModificationDate?.timeIntervalSince1970 ?? 0
+            let size = (vals.fileSize ?? 0)
+            return "\(ts)-\(size)"
+        }
+        return UUID().uuidString // very unlikely, but guarantees different identity
     }
 
     // MARK: - Analyze button logic
@@ -923,9 +942,9 @@ struct MealFormView: View {
         let imageData: Data? = {
             guard selectedIndex < galleryItems.count else { return nil }
             switch galleryItems[selectedIndex] {
-            case .persistent(_, let url):
+            case .persistent(_, let url, _):
                 return try? Data(contentsOf: url)
-            case .inMemory(_, _, let data, _):
+            case .inMemory(_, _, let data, _, _):
                 return data
             }
         }()
@@ -1547,26 +1566,27 @@ struct MealFormView: View {
 // MARK: - Gallery models and views
 
 private enum GalleryItem: Identifiable, Equatable {
-    case persistent(photo: MealPhoto, url: URL)
-    case inMemory(id: UUID, image: UIImage, data: Data, devIndex: Int)
+    case persistent(photo: MealPhoto, url: URL, version: String)
+    case inMemory(id: UUID, image: UIImage, data: Data, devIndex: Int, version: String)
 
     var id: String {
         switch self {
-        case .persistent(let p, _):
-            return p.objectID.uriRepresentation().absoluteString
-        case .inMemory(let id, _, _, let idx):
-            return id.uuidString + "_\(idx)"
+        case .persistent(let p, _, let version):
+            // Include a cache-busting version (file modification date or size)
+            return p.objectID.uriRepresentation().absoluteString + "#\(version)"
+        case .inMemory(let id, _, _, let idx, let version):
+            return id.uuidString + "_\(idx)#\(version)"
         }
     }
 
     var thumbnailImage: UIImage? {
         switch self {
-        case .persistent(_, let url):
+        case .persistent(_, let url, _):
             if let data = try? Data(contentsOf: url) {
                 return UIImage(data: data)
             }
             return nil
-        case .inMemory(_, let img, _, _):
+        case .inMemory(_, let img, _, _, _):
             return img
         }
     }
@@ -2308,3 +2328,4 @@ private struct CompactSectionSpacing: ViewModifier {
         }
     }
 }
+
