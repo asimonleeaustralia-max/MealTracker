@@ -9,11 +9,13 @@ import SwiftUI
 import CoreData
 import CoreLocation
 import UIKit
+import AVFoundation
 
 struct MealFormView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.managedObjectContext) private var context
     @EnvironmentObject var session: SessionManager
+    @Environment(\.scenePhase) private var scenePhase
 
     // App settings
     @AppStorage("energyUnit") private var energyUnit: EnergyUnit = .calories
@@ -189,6 +191,14 @@ struct MealFormView: View {
     // MARK: - Camera state
     @State private var showingCamera: Bool = false
     @State private var cameraErrorMessage: String?
+
+    // Auto-open gating and permission alert
+    @State private var didAutoOpenThisActivation: Bool = false
+    @State private var showingCameraPermissionAlert: Bool = false
+    @State private var cameraPermissionMessage: String?
+
+    // Track if this home screen is currently visible (not pushed away)
+    @State private var isHomeVisible: Bool = false
 
     // MARK: - Photo library state
     @State private var showingPhotoPicker: Bool = false
@@ -651,6 +661,17 @@ struct MealFormView: View {
                 dismissButton: .default(Text("OK"))
             )
         }
+        // Camera permission alert with Settings deep link
+        .alert("Camera Access Needed", isPresented: $showingCameraPermissionAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+        } message: {
+            Text(cameraPermissionMessage ?? "Please enable camera access in Settings to take meal photos.")
+        }
         // Delete confirmation
         .confirmationDialog(
             LocalizationManager(languageCode: appLanguageCode).localized("confirm_delete_title"),
@@ -673,6 +694,9 @@ struct MealFormView: View {
             lastFocused = newFocus
         })
         .onAppear {
+            // Mark this home screen visible
+            isHomeVisible = true
+
             // Build gallery items from Core Data or dev fallback
             reloadGalleryItems()
 
@@ -795,6 +819,26 @@ struct MealFormView: View {
             locationManager.startUpdating()
 
             recomputeConsistency(resetPrevMismatch: true)
+
+            // Auto-open camera if we're on the home screen and the app is active
+            if scenePhase == .active {
+                scheduleAutoOpenCameraIfNeeded()
+            }
+        }
+        // Keep isHomeVisible in sync when navigating away (e.g., into gallery)
+        .onDisappear {
+            isHomeVisible = false
+        }
+        // Also auto-open when app becomes active from background; reset gate when leaving active
+        .onChange(of: scenePhase) { phase in
+            switch phase {
+            case .active:
+                scheduleAutoOpenCameraIfNeeded()
+            case .inactive, .background:
+                didAutoOpenThisActivation = false
+            default:
+                break
+            }
         }
     }
 
@@ -864,6 +908,53 @@ struct MealFormView: View {
             if (try? Data(contentsOf: url)) != nil { return true }
         }
         return false
+    }
+
+    // Auto-open camera scheduling and permission
+    private func scheduleAutoOpenCameraIfNeeded() {
+        // Only once per activation, only on the home screen (new-meal mode), and not if another modal is showing
+        guard !didAutoOpenThisActivation else { return }
+        guard isHomeVisible else { return }
+        guard !explicitEditMode else { return }
+        guard !showingCamera && !showingPhotoPicker && !showingSettings else { return }
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else { return }
+
+        didAutoOpenThisActivation = true
+        Task { @MainActor in
+            // Small delay so the view hierarchy is ready for presentation
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            await presentCameraAfterPermission()
+        }
+    }
+
+    @MainActor
+    private func presentCameraAfterPermission() async {
+        let status = AVCaptureDevice.authorizationStatus(for: .video)
+        switch status {
+        case .authorized:
+            showingCamera = true
+        case .notDetermined:
+            let granted = await requestCameraAccess()
+            if granted {
+                showingCamera = true
+            } else {
+                cameraPermissionMessage = "Camera access is required to take meal photos. You can enable it in Settings."
+                showingCameraPermissionAlert = true
+            }
+        case .denied, .restricted:
+            cameraPermissionMessage = "Camera access is disabled. Please enable it in Settings > Privacy > Camera."
+            showingCameraPermissionAlert = true
+        @unknown default:
+            break
+        }
+    }
+
+    private func requestCameraAccess() async -> Bool {
+        await withCheckedContinuation { continuation in
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                continuation.resume(returning: granted)
+            }
+        }
     }
 
     // MARK: - Deletion
@@ -2328,4 +2419,3 @@ private struct CompactSectionSpacing: ViewModifier {
         }
     }
 }
-
