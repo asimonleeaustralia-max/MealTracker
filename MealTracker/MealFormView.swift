@@ -19,7 +19,6 @@ struct MealFormView: View {
 
     // App settings
     @AppStorage("energyUnit") private var energyUnit: EnergyUnit = .calories
-    @AppStorage("measurementSystem") private var measurementSystem: MeasurementSystem = .metric
     @AppStorage("appLanguageCode") private var appLanguageCode: String = LocalizationManager.defaultLanguageCode
     @AppStorage("sodiumUnit") private var sodiumUnit: SodiumUnit = .milligrams
     @AppStorage("showVitamins") private var showVitamins: Bool = false

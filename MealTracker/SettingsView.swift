@@ -7,7 +7,6 @@ struct SettingsView: View {
     @EnvironmentObject var session: SessionManager
 
     @AppStorage("energyUnit") private var energyUnit: EnergyUnit = .calories
-    @AppStorage("measurementSystem") private var measurementSystem: MeasurementSystem = .metric
     @AppStorage("appLanguageCode") private var appLanguageCode: String = LocalizationManager.defaultLanguageCode
     @AppStorage("sodiumUnit") private var sodiumUnit: SodiumUnit = .milligrams
     @AppStorage("showVitamins") private var showVitamins: Bool = false
@@ -85,15 +84,6 @@ struct SettingsView: View {
                     Picker("", selection: $energyUnit) {
                         Text(l.localized("calories")).tag(EnergyUnit.calories)
                         Text(l.localized("kilojoules")).tag(EnergyUnit.kilojoules)
-                    }
-                    .pickerStyle(.segmented)
-                }
-
-                // Measurement system (no header)
-                Section {
-                    Picker("", selection: $measurementSystem) {
-                        Text(l.localized("metric")).tag(MeasurementSystem.metric)
-                        Text(l.localized("imperial")).tag(MeasurementSystem.imperial)
                     }
                     .pickerStyle(.segmented)
                 }

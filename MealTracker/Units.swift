@@ -16,10 +16,7 @@ enum EnergyUnit: String, CaseIterable, Codable, Equatable, Hashable {
     }
 }
 
-enum MeasurementSystem: String, CaseIterable, Codable, Equatable, Hashable {
-    case metric
-    case imperial
-}
+// MeasurementSystem removed; app defaults to metric everywhere.
 
 enum SodiumUnit: String, CaseIterable, Codable, Equatable, Hashable {
     case milligrams
@@ -83,4 +80,3 @@ enum Handedness: String, CaseIterable, Codable, Equatable, Hashable {
     case right
     case left
 }
-
