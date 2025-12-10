@@ -14,6 +14,10 @@ struct SettingsView: View {
     @AppStorage("showMinerals") private var showMinerals: Bool = false
     @AppStorage("handedness") private var handedness: Handedness = .right
 
+    @State private var syncedDateText: String = "—"
+    @State private var isSyncing: Bool = false
+    @State private var syncError: String?
+
     private var availableLanguages: [String] {
         let codes = Bundle.main.localizations.filter { $0.lowercased() != "base" }
         let list = codes.isEmpty ? Bundle.main.preferredLocalizations : codes
@@ -68,6 +72,30 @@ struct SettingsView: View {
 
                     Toggle("Logged into Cloud (stub)", isOn: $session.isLoggedIn)
                         .tint(.accentColor)
+
+                    // Date Synced (Cloud Stub)
+                    Section {
+                        HStack {
+                            Text("Synced Date")
+                            Spacer()
+                            Text(syncedDateText).foregroundStyle(.secondary)
+                        }
+                        Button {
+                            Task { await syncNow() }
+                        } label: {
+                            if isSyncing {
+                                ProgressView().progressViewStyle(.circular)
+                            } else {
+                                Text("Sync now")
+                            }
+                        }
+                        .disabled(isSyncing)
+                        if let syncError {
+                            Text(syncError)
+                                .font(.footnote)
+                                .foregroundStyle(.red)
+                        }
+                    }
                 }
 
                 // Handedness (no header)
@@ -101,11 +129,46 @@ struct SettingsView: View {
                     Toggle(l.localized("show_minerals_entry"), isOn: $showMinerals)
                 }
             }
+            .onAppear {
+                Task { await loadSyncedDate() }
+            }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(l.localized("done")) { dismiss() }
                 }
             }
+        }
+    }
+
+    @MainActor
+    private func loadSyncedDate() async {
+        isSyncing = true
+        syncError = nil
+        defer { isSyncing = false }
+        do {
+            if let d = try await session.dateSync.getSyncedDate() {
+                syncedDateText = DateFormatter.localizedString(from: d, dateStyle: .medium, timeStyle: .short)
+            } else {
+                syncedDateText = "Not set"
+            }
+        } catch {
+            syncError = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func syncNow() async {
+        isSyncing = true
+        syncError = nil
+        defer { isSyncing = false }
+        do {
+            // For demo: set "now" as the synced date, then read back to display
+            let now = Date()
+            try await session.dateSync.setSyncedDate(now)
+            try await Task.sleep(nanoseconds: 150_000_000) // small delay to mimic network
+            try await loadSyncedDate()
+        } catch {
+            syncError = error.localizedDescription
         }
     }
 }

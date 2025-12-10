@@ -14,6 +14,7 @@
 		C34176E22ED2795200C73645 /* PhotoService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34176E12ED2795200C73645 /* PhotoService.swift */; };
 		C34176E42ED288BC00C73645 /* MealPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34176E32ED288BC00C73645 /* MealPhoto.swift */; };
 		C35F5E7D2EDEFAA400DD2844 /* PhotoLibraryPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C35F5E7C2EDEFAA400DD2844 /* PhotoLibraryPickerView.swift */; };
+		C376B3542EE98CFC0003C83B /* DateSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C376B3532EE98CFC0003C83B /* DateSyncService.swift */; };
 		C381065E2ED29E5500C796E0 /* LocalBarcodeDB.swift in Sources */ = {isa = PBXBuildFile; fileRef = C381065D2ED29E5500C796E0 /* LocalBarcodeDB.swift */; };
 		C38106602ED29E5A00C796E0 /* PhotoNutritionGuesser.swift in Sources */ = {isa = PBXBuildFile; fileRef = C381065F2ED29E5A00C796E0 /* PhotoNutritionGuesser.swift */; };
 		C38106622ED29E6100C796E0 /* LocalBarcodeDB.json in Resources */ = {isa = PBXBuildFile; fileRef = C38106612ED29E6100C796E0 /* LocalBarcodeDB.json */; };
@@ -32,6 +33,7 @@
 		C34176E12ED2795200C73645 /* PhotoService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoService.swift; sourceTree = "<group>"; };
 		C34176E32ED288BC00C73645 /* MealPhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MealPhoto.swift; sourceTree = "<group>"; };
 		C35F5E7C2EDEFAA400DD2844 /* PhotoLibraryPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoLibraryPickerView.swift; sourceTree = "<group>"; };
+		C376B3532EE98CFC0003C83B /* DateSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateSyncService.swift; sourceTree = "<group>"; };
 		C3798F872ECA75BE00945BBF /* MealTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MealTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C381065D2ED29E5500C796E0 /* LocalBarcodeDB.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalBarcodeDB.swift; sourceTree = "<group>"; };
 		C381065F2ED29E5A00C796E0 /* PhotoNutritionGuesser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoNutritionGuesser.swift; sourceTree = "<group>"; };
@@ -88,6 +90,7 @@
 				C3F0A6FB2ED59B34003949B8 /* Entitlements.swift */,
 				C3BC02E72EDDACE8004C1779 /* CameraCaptureView.swift */,
 				C35F5E7C2EDEFAA400DD2844 /* PhotoLibraryPickerView.swift */,
+				C376B3532EE98CFC0003C83B /* DateSyncService.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -185,6 +188,7 @@
 				C34176E42ED288BC00C73645 /* MealPhoto.swift in Sources */,
 				C34176DC2ED2794700C73645 /* PhotoStore.swift in Sources */,
 				C3C2B9732ED44E8500E9D4F4 /* FoodClassPriors.swift in Sources */,
+				C376B3542EE98CFC0003C83B /* DateSyncService.swift in Sources */,
 				C34176DE2ED2794A00C73645 /* ImageResizer.swift in Sources */,
 				C3BC02E82EDDACE8004C1779 /* CameraCaptureView.swift in Sources */,
 				C3F0A6FA2ED59B32003949B8 /* SessionManager.swift in Sources */,

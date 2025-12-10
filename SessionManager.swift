@@ -8,7 +8,12 @@ final class SessionManager: ObservableObject {
         didSet { UserDefaults.standard.set(isLoggedIn, forKey: "session_isLoggedIn") }
     }
 
-    init() {
+    // Expose the cloud date sync stub to the app
+    let dateSync: DateSyncService
+
+    init(dateSync: DateSyncService = CloudDateSyncStub()) {
         self.isLoggedIn = UserDefaults.standard.bool(forKey: "session_isLoggedIn")
+        self.dateSync = dateSync
     }
 }
+
