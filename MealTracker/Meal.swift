@@ -19,6 +19,10 @@ public class Meal: NSManagedObject, Identifiable {
     @NSManaged public var fat: Double
     @NSManaged public var date: Date
 
+    // Optional coordinates (Double in code; optional in model is fine, 0.0 used when unset)
+    @NSManaged public var latitude: Double
+    @NSManaged public var longitude: Double
+
     // Existing attributes
     @NSManaged public var starch: Double
     @NSManaged public var sugars: Double
