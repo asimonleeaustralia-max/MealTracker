@@ -50,7 +50,7 @@ struct SettingsView: View {
                     HStack {
                         Text("Access Tier")
                         Spacer()
-                        Text(tier == .paid ? "Paid (Cloud)" : "Free")
+                        Text(tier == .paid ? "Pro (Cloud)" : "Free")
                             .foregroundStyle(.secondary)
                     }
                     HStack {
@@ -116,3 +116,4 @@ struct SettingsView: View {
         .environment(\.managedObjectContext, controller.container.viewContext)
         .environmentObject(SessionManager())
 }
+

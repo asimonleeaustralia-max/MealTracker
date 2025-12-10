@@ -4,6 +4,13 @@ import CoreData
 enum AccessTier: String {
     case free
     case paid
+
+    var displayName: String {
+        switch self {
+        case .free: return "Free"
+        case .paid: return "Pro"
+        }
+    }
 }
 
 struct Entitlements {
@@ -64,3 +71,4 @@ struct Entitlements {
         return max(0, maxPerDay - used)
     }
 }
+
