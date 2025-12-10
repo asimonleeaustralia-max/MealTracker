@@ -37,6 +37,15 @@ struct SettingsView: View {
 
         NavigationView {
             Form {
+                // Language (moved to top)
+                Section {
+                    Picker(l.localized("choose_language"), selection: $appLanguageCode) {
+                        ForEach(availableLanguages, id: \.self) { code in
+                            Text(LocalizationManager.displayName(for: code)).tag(code)
+                        }
+                    }
+                }
+
                 // Tier & limits section
                 Section(header: Text("Account & Plan")) {
                     HStack {
@@ -100,15 +109,6 @@ struct SettingsView: View {
 
                 Section {
                     Toggle(l.localized("show_minerals_entry"), isOn: $showMinerals)
-                }
-
-                // Language (no header)
-                Section {
-                    Picker(l.localized("choose_language"), selection: $appLanguageCode) {
-                        ForEach(availableLanguages, id: \.self) { code in
-                            Text(LocalizationManager.displayName(for: code)).tag(code)
-                        }
-                    }
                 }
             }
             .toolbar {
