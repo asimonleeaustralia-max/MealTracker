@@ -299,12 +299,8 @@ struct PhotoNutritionGuesser {
             request.recognitionLevel = level
             request.usesLanguageCorrection = true
 
-            // Language hints if provided
-            if let code = normalizedLanguageCode(languageCode) {
-                request.recognitionLanguages = [code, "en"]
-            } else {
-                request.recognitionLanguages = ["en"]
-            }
+            // Accept all supported languages for the given level/revision, optionally biasing with provided code.
+            request.recognitionLanguages = recognitionLanguagesFor(level: level, preferredCode: languageCode)
 
             let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
             DispatchQueue.global(qos: .userInitiated).async {
@@ -315,6 +311,55 @@ struct PhotoNutritionGuesser {
                 }
             }
         }
+    }
+
+    // Build a comprehensive language list for Vision OCR, including non-Latin scripts,
+    // and bias it by placing the preferred code first when available.
+    private static func recognitionLanguagesFor(level: VNRequestTextRecognitionLevel, preferredCode: String?) -> [String] {
+        let normalizedPreferred = normalizedLanguageCode(preferredCode)
+
+        // Query supported languages for the current revision and requested level.
+        let supported: [String] = {
+            // Always call the revision-based API; choose a revision based on availability.
+            let revision: Int
+            if #available(iOS 15.0, *) {
+                revision = VNRecognizeTextRequest.currentRevision
+            } else {
+                // First public revision available on iOS 13+
+                revision = VNRecognizeTextRequestRevision1
+            }
+            return (try? VNRecognizeTextRequest.supportedRecognitionLanguages(for: level, revision: revision)) ?? []
+        }()
+
+        // Deduplicate while preserving order
+        func unique(_ array: [String]) -> [String] {
+            var seen = Set<String>()
+            var result: [String] = []
+            for code in array {
+                if !seen.contains(code) {
+                    seen.insert(code)
+                    result.append(code)
+                }
+            }
+            return result
+        }
+
+        var languages = unique(supported)
+
+        // If a preferred code is supplied, try to bias by moving it to the front.
+        if let pref = normalizedPreferred {
+            if let idx = languages.firstIndex(of: pref) {
+                languages.remove(at: idx)
+            }
+            languages.insert(pref, at: 0)
+        }
+
+        // Ensure English is present (common labels) but avoid duplicates.
+        if !languages.contains("en") {
+            languages.append("en")
+        }
+
+        return languages
     }
 
     private static func normalizedLanguageCode(_ code: String?) -> String? {
@@ -870,4 +915,3 @@ private extension PhotoNutritionGuesser.GuessResult {
         return c
     }
 }
-
