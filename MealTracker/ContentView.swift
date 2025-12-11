@@ -28,7 +28,7 @@ struct ContentView: View {
         NavigationView {
             Group {
                 if filteredMeals.isEmpty {
-                    Text("No meals")
+                    Text(LocalizedStringKey("no_meals"))
                         .foregroundColor(.secondary)
                 } else {
                     List {
@@ -42,13 +42,13 @@ struct ContentView: View {
                     .listStyle(InsetGroupedListStyle())
                 }
             }
-            .navigationTitle("Meals")
+            .navigationTitle(LocalizedStringKey("meals_title"))
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         showingAdd = true
                     } label: {
-                        Label("Add Meal", systemImage: "plus")
+                        Label(LocalizedStringKey("add_meal"), systemImage: "plus")
                     }
                 }
             }
@@ -57,7 +57,7 @@ struct ContentView: View {
                     MealFormView()
                 }
             }
-            .searchable(text: $searchText, prompt: Text("Search meals"))
+            .searchable(text: $searchText, prompt: Text(LocalizedStringKey("search_meals")))
         }
     }
 
@@ -81,7 +81,7 @@ struct MealRow: View {
             HStack(spacing: 12) {
                 Label("\(meal.calories)", systemImage: "flame")
                     .labelStyle(.iconOnly)
-                Text("\(Int(meal.calories)) kcal")
+                Text("\(Int(meal.calories)) \(NSLocalizedString("kcal_suffix", comment: ""))")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
@@ -89,18 +89,18 @@ struct MealRow: View {
 
                 // Expanded nutrient badges including new fields
                 HStack(spacing: 8) {
-                    NutrientBadge(title: "Carbs", value: meal.carbohydrates)
-                    NutrientBadge(title: "Protein", value: meal.protein)
-                    NutrientBadge(title: "Fat", value: meal.fat)
-                    NutrientBadge(title: "Sodium", value: meal.sodium)
-                    NutrientBadge(title: "Starch", value: meal.starch)
-                    NutrientBadge(title: "Sugars", value: meal.sugars)
-                    NutrientBadge(title: "Fibre", value: meal.fibre)
+                    NutrientBadge(title: NSLocalizedString("carbs.title", comment: ""), value: meal.carbohydrates)
+                    NutrientBadge(title: NSLocalizedString("protein.title", comment: ""), value: meal.protein)
+                    NutrientBadge(title: NSLocalizedString("fat.title", comment: ""), value: meal.fat)
+                    NutrientBadge(title: NSLocalizedString("sodium.title", comment: ""), value: meal.sodium)
+                    NutrientBadge(title: NSLocalizedString("starch.title", comment: ""), value: meal.starch)
+                    NutrientBadge(title: NSLocalizedString("sugars.title", comment: ""), value: meal.sugars)
+                    NutrientBadge(title: NSLocalizedString("fibre.title", comment: ""), value: meal.fibre)
                     // New fat breakdown badges
-                    NutrientBadge(title: "Mono", value: meal.monounsaturatedFat)
-                    NutrientBadge(title: "Poly", value: meal.polyunsaturatedFat)
-                    NutrientBadge(title: "Sat", value: meal.saturatedFat)
-                    NutrientBadge(title: "Trans", value: meal.transFat)
+                    NutrientBadge(title: NSLocalizedString("fat.mono.short", comment: ""), value: meal.monounsaturatedFat)
+                    NutrientBadge(title: NSLocalizedString("fat.poly.short", comment: ""), value: meal.polyunsaturatedFat)
+                    NutrientBadge(title: NSLocalizedString("fat.sat.short", comment: ""), value: meal.saturatedFat)
+                    NutrientBadge(title: NSLocalizedString("fat.trans.short", comment: ""), value: meal.transFat)
                 }
             }
             .font(.footnote)
@@ -135,3 +135,4 @@ private extension Double {
         truncatingRemainder(dividingBy: 1) == 0 ? String(Int(self)) : String(self)
     }
 }
+

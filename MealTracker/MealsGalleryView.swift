@@ -81,11 +81,11 @@ private struct EmptyStateView: View {
                 .font(.system(size: 48, weight: .regular))
                 .foregroundStyle(.secondary)
 
-            Text("No meals yet")
+            Text(LocalizedStringKey("no_meals_yet"))
                 .font(.title3)
                 .fontWeight(.semibold)
 
-            Text("Add your first meal to start tracking.")
+            Text(LocalizedStringKey("add_first_meal_message"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -93,7 +93,7 @@ private struct EmptyStateView: View {
             Button {
                 onAdd()
             } label: {
-                Label("Add Meal", systemImage: "plus")
+                Label(LocalizedStringKey("add_meal"), systemImage: "plus")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
@@ -183,8 +183,8 @@ private struct MealTile: View {
 
     private var energyDisplaySuffix: String {
         switch energyUnit {
-        case .calories: return "kcal"
-        case .kilojoules: return "kJ"
+        case .calories: return NSLocalizedString("kcal_suffix", comment: "")
+        case .kilojoules: return NSLocalizedString("kj_suffix", comment: "")
         }
     }
 

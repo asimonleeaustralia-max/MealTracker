@@ -17,7 +17,7 @@ struct PhotoLibraryPickerView: UIViewControllerRepresentable {
         case exportFailed
         var errorDescription: String? {
             switch self {
-            case .exportFailed: return "Failed to load selected photo."
+            case .exportFailed: return NSLocalizedString("photo_export_failed_error", comment: "")
             }
         }
     }

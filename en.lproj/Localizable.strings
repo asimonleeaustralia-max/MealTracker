@@ -1,5 +1,51 @@
-/* Nutrients */
+"ok" = "OK";
+"cancel" = "Cancel";
+"close" = "Close";
+"done" = "Done";
+"save" = "Save";
+"edit" = "Edit";
+"delete" = "Delete";
+"yes" = "Yes";
+"no" = "No";
+"settings" = "Settings";
+"back" = "Back";
+"error" = "Error";
+"retry" = "Retry";
+
+"search" = "Search";
+"search_meals" = "Search meals";
+
+"meals_title" = "Meals";
+"no_meals" = "No meals";
+"add_meal" = "Add Meal";
+
+"no_meals_yet" = "No meals yet";
+"add_first_meal_message" = "Add your first meal to start tracking.";
+
+"kcal_suffix" = "kcal";
+"kj_suffix" = "kJ";
+"energy_kcal_suffix" = "kcal";
+"energy_kj_suffix" = "kJ";
+
+"carbs.title" = "Carbs";
+"protein.title" = "Protein";
+"fat.title" = "Fat";
+"sodium.title" = "Sodium";
+"starch.title" = "Starch";
+"sugars.title" = "Sugars";
+"fibre.title" = "Fibre";
+
+"fat.mono.short" = "Mono";
+"fat.poly.short" = "Poly";
+"fat.sat.short" = "Sat";
+"fat.trans.short" = "Trans";
+
+"carbs.short" = "Carb";
+"protein.short" = "Prot";
+"fat.short" = "Fat";
+
 "calories" = "Calories";
+"kilojoules" = "Kilojoules";
 "carbohydrates" = "Carbohydrates";
 "sugars" = "Sugars";
 "starch" = "Starch";
@@ -13,32 +59,32 @@
 "polyunsaturated_fat" = "Polyunsaturated fat";
 "saturated_fat" = "Saturated fat";
 "trans_fat" = "Trans fat";
+"sodium" = "Sodium";
 
-/* Accuracy */
 "accurate" = "Accurate";
 "guess" = "Guess";
 "accuracy" = "Accuracy";
 
-/* Common actions */
-"save" = "Save";
-"settings" = "Settings";
-"done" = "Done";
-
-/* Settings */
+"settings_title" = "Settings";
 "language" = "Language";
+"choose_language" = "Choose language";
 "measurement_system" = "Measurement system";
 "metric" = "Metric";
 "imperial" = "Imperial";
 "energy_unit" = "Energy unit";
-"choose_language" = "Choose language";
+"energy_unit.calories" = "Calories";
+"energy_unit.kilojoules" = "Kilojoules";
 
-/* Units */
-"kcal_suffix" = "kcal";
-"kj_suffix" = "kJ";
+"handedness" = "Handedness";
+"left_handed" = "Left-handed";
+"right_handed" = "Right-handed";
 
-/* Vitamins */
 "show_vitamins_entry" = "Show Vitamins Entry";
 "vitamins_unit" = "Vitamins unit";
+"vitamins_unit.mg" = "mg";
+"vitamins_unit.ug" = "µg";
+"show_minerals_entry" = "Show Minerals Entry";
+
 "vitamin_a" = "Vitamin A";
 "vitamin_b" = "Vitamin B";
 "vitamin_c" = "Vitamin C";
@@ -46,36 +92,55 @@
 "vitamin_e" = "Vitamin E";
 "vitamin_k" = "Vitamin K";
 
-/* Optional UI Strings */
-"add_meal" = "Add Meal";
-"edit_meal" = "Edit Meal";
-"cancel" = "Cancel";
-"meal_details" = "Meal details";
-"meal_description" = "Meal Description";
-"meal_date" = "Meal Date";
-"nutrition" = "Nutrition";
-"salt" = "Salt";
-"show_details" = "Show Details";
-"show_vitamins" = "Show Vitamins";
-"show_minerals" = "Show Minerals";
-
-"hide_minerals" = "Hide Minerals";
-"hide_vitamins" = "Hide Vitamins";
-
-"show_minerals_entry" = "Show Minerals Entry";
 "calcium" = "Calcium";
 "iron" = "Iron";
 "potassium" = "Potassium";
 "zinc" = "Zinc";
 "magnesium" = "Magnesium";
 
-"handedness" = "Handedness";
-"left_handed" = "Left-handed";
-"right_handed" = "Right-handed";
+"show_details" = "Show Details";
+"show_vitamins" = "Show Vitamins";
+"show_minerals" = "Show Minerals";
+"hide_minerals" = "Hide Minerals";
+"hide_vitamins" = "Hide Vitamins";
+
+"edit_meal" = "Edit Meal";
+"meal_details" = "Meal details";
+"meal_description" = "Meal Description";
+"meal_date" = "Meal Date";
+"nutrition" = "Nutrition";
+"salt" = "Salt";
 
 "confirm_delete_title" = "Delete Meal";
 "confirm_delete_message" = "This Cannot Be Undone";
+"confirm_delete_confirm" = "Delete";
+"confirm_delete_cancel" = "Cancel";
 
-"carbs.short" = "Carb";
-"protein.short" = "Prot";
-"fat.short" = "Fat";
+"account_plan_section_title" = "Account & Plan";
+"access_tier" = "Access Tier";
+"access_tier.free" = "Free";
+"access_tier.paid" = "Pro (Cloud)";
+"meals_left_today" = "Meals left today";
+"photos_per_meal_limit" = "Photos per meal (limit)";
+"unlimited" = "Unlimited";
+"logged_in_cloud_stub" = "Logged into Cloud (stub)";
+"synced_date" = "Synced Date";
+"sync_now" = "Sync now";
+"synced_date_not_set" = "Not set";
+
+"data_sharing_section_title" = "Data Sharing";
+"data_sharing_picker_title" = "Sharing";
+"data_sharing.public" = "Public";
+"data_sharing.private" = "Private";
+"data_sharing.public_explanation" = "You agree to share meal information with the app creator to improve food metrics and train AI models.";
+"data_sharing.private_explanation" = "All data is saved on this device only.";
+
+"camera_unavailable_error" = "Camera not available on this device.";
+"camera_permission_denied_error" = "Camera permission denied.";
+"camera_export_failed_error" = "Failed to capture photo.";
+"photo_export_failed_error" = "Failed to load selected photo.";
+
+"invalid_image_error" = "Invalid image data.";
+"write_failed_error" = "Failed to write photo to disk.";
+"coredata_save_failed_error_prefix" = "Failed to save photo:";
+"free_tier_photo_limit_reached" = "Free tier allows up to %d photos per meal.";

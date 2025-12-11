@@ -18,10 +18,17 @@ enum PhotoServiceError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .invalidImage: return "Invalid image data."
-        case .writeFailed: return "Failed to write photo to disk."
-        case .coreDataSaveFailed(let err): return "Failed to save photo: \(err.localizedDescription)"
-        case .freeTierPhotoLimitReached(let max): return "Free tier allows up to \(max) photos per meal."
+        case .invalidImage:
+            return NSLocalizedString("invalid_image_error", comment: "")
+        case .writeFailed:
+            return NSLocalizedString("write_failed_error", comment: "")
+        case .coreDataSaveFailed(let err):
+            let prefix = NSLocalizedString("coredata_save_failed_error_prefix", comment: "")
+            return "\(prefix) \(err.localizedDescription)"
+        case .freeTierPhotoLimitReached(let max):
+            // Use %d in Localizable; String(format:) to inject the number
+            let fmt = NSLocalizedString("free_tier_photo_limit_reached", comment: "")
+            return String(format: fmt, max)
         }
     }
 }

@@ -15,9 +15,9 @@ struct CameraCaptureView: UIViewControllerRepresentable {
         case exportFailed
         var errorDescription: String? {
             switch self {
-            case .cameraUnavailable: return "Camera not available on this device."
-            case .permissionDenied: return "Camera permission denied."
-            case .exportFailed: return "Failed to capture photo."
+            case .cameraUnavailable: return NSLocalizedString("camera_unavailable_error", comment: "")
+            case .permissionDenied: return NSLocalizedString("camera_permission_denied_error", comment: "")
+            case .exportFailed: return NSLocalizedString("camera_export_failed_error", comment: "")
             }
         }
     }
@@ -69,9 +69,7 @@ struct CameraCaptureView: UIViewControllerRepresentable {
             }
 
             // Prefer original image
-            if let image = info[.originalImage] as? UIImage {
-                // Try to export without heavy recompression: if the underlying data is available via PHAsset this API doesn't expose it.
-                // So we’ll choose JPEG with quality 0.95 as a near-original fallback.
+            if let image = info[ .originalImage ] as? UIImage {
                 let suggestedExt = "jpg"
                 if let data = image.jpegData(compressionQuality: 0.95) {
                     completion(.success(Payload(data: data, suggestedExt: suggestedExt)))

@@ -9,17 +9,17 @@ enum DataSharingPreference: String, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .public: return "Public"
-        case .private: return "Private"
+        case .public: return NSLocalizedString("data_sharing.public", comment: "")
+        case .private: return NSLocalizedString("data_sharing.private", comment: "")
         }
     }
 
     var explanation: String {
         switch self {
         case .public:
-            return "You agree to share meal information with the app creator to improve food metrics and train AI models."
+            return NSLocalizedString("data_sharing.public_explanation", comment: "")
         case .private:
-            return "All data is saved on this device only."
+            return NSLocalizedString("data_sharing.private_explanation", comment: "")
         }
     }
 }
@@ -58,7 +58,7 @@ struct SettingsView: View {
             if let remaining = Entitlements.mealsRemainingToday(for: tier, in: context) {
                 return "\(remaining)"
             } else {
-                return "Unlimited"
+                return NSLocalizedString("unlimited", comment: "")
             }
         }()
         let maxPhotos = Entitlements.maxPhotosPerMeal(for: tier)
@@ -75,33 +75,33 @@ struct SettingsView: View {
                 }
 
                 // Tier & limits section
-                Section(header: Text("Account & Plan")) {
+                Section(header: Text(LocalizedStringKey("account_plan_section_title"))) {
                     HStack {
-                        Text("Access Tier")
+                        Text(LocalizedStringKey("access_tier"))
                         Spacer()
-                        Text(tier == .paid ? "Pro (Cloud)" : "Free")
+                        Text(tier == .paid ? NSLocalizedString("access_tier.paid", comment: "") : NSLocalizedString("access_tier.free", comment: ""))
                             .foregroundStyle(.secondary)
                     }
                     HStack {
-                        Text("Meals left today")
+                        Text(LocalizedStringKey("meals_left_today"))
                         Spacer()
                         Text(mealsRemainingText)
                             .foregroundStyle(.secondary)
                     }
                     HStack {
-                        Text("Photos per meal (limit)")
+                        Text(LocalizedStringKey("photos_per_meal_limit"))
                         Spacer()
-                        Text(maxPhotos >= 9000 ? "Unlimited" : "\(maxPhotos)")
+                        Text(maxPhotos >= 9000 ? NSLocalizedString("unlimited", comment: "") : "\(maxPhotos)")
                             .foregroundStyle(.secondary)
                     }
 
-                    Toggle("Logged into Cloud (stub)", isOn: $session.isLoggedIn)
+                    Toggle(LocalizedStringKey("logged_in_cloud_stub"), isOn: $session.isLoggedIn)
                         .tint(.accentColor)
 
                     // Date Synced (Cloud Stub)
                     Section {
                         HStack {
-                            Text("Synced Date")
+                            Text(LocalizedStringKey("synced_date"))
                             Spacer()
                             Text(syncedDateText).foregroundStyle(.secondary)
                         }
@@ -111,7 +111,7 @@ struct SettingsView: View {
                             if isSyncing {
                                 ProgressView().progressViewStyle(.circular)
                             } else {
-                                Text("Sync now")
+                                Text(LocalizedStringKey("sync_now"))
                             }
                         }
                         .disabled(isSyncing)
@@ -124,8 +124,8 @@ struct SettingsView: View {
                 }
 
                 // Data sharing preference
-                Section(header: Text("Data Sharing")) {
-                    Picker("Sharing", selection: $dataSharing) {
+                Section(header: Text(LocalizedStringKey("data_sharing_section_title"))) {
+                    Picker(LocalizedStringKey("data_sharing_picker_title"), selection: $dataSharing) {
                         ForEach(DataSharingPreference.allCases) { option in
                             Text(option.displayName).tag(option)
                         }
@@ -190,7 +190,7 @@ struct SettingsView: View {
             if let d = try await session.dateSync.getSyncedDate() {
                 syncedDateText = DateFormatter.localizedString(from: d, dateStyle: .medium, timeStyle: .short)
             } else {
-                syncedDateText = "Not set"
+                syncedDateText = NSLocalizedString("synced_date_not_set", comment: "")
             }
         } catch {
             syncError = error.localizedDescription
@@ -220,3 +220,4 @@ struct SettingsView: View {
         .environment(\.managedObjectContext, controller.container.viewContext)
         .environmentObject(SessionManager())
 }
+
