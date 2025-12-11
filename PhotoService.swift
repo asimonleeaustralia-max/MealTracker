@@ -55,10 +55,8 @@ struct PhotoService {
                 // Count existing photos for this meal using a predicate that matches the runtime cardinality
                 let request = NSFetchRequest<NSFetchRequestResult>(entityName: "MealPhoto")
                 if mealRelIsToMany {
-                    // Runtime model thinks 'meal' is to-many; compare with ANY
                     request.predicate = NSPredicate(format: "ANY meal == %@", meal)
                 } else {
-                    // Normal to-one relationship
                     request.predicate = NSPredicate(format: "meal == %@", meal)
                 }
                 request.includesSubentities = false
@@ -129,8 +127,6 @@ struct PhotoService {
 
         // Assign relationship according to runtime cardinality
         if mealRelIsToMany {
-            // Defensive: runtime model reports 'meal' as to-many; add via KVC set to avoid '-[Meal count]' crash.
-            // This indicates the .xcdatamodel currently compiled in your app has MealPhoto.meal as To-Many.
             photo.mutableSetValue(forKey: "meal").add(meal)
             #if DEBUG
             print("PhotoService: WARNING — runtime model says MealPhoto.meal is To-Many. Please fix the Core Data model to To-One.")
@@ -139,13 +135,14 @@ struct PhotoService {
             photo.meal = meal
         }
 
-        // Optional coordinates
+        // Optional coordinates on photo
         if let loc = location {
-            // If your generated properties are NSNumber? instead of Double, change these two assignments accordingly:
-            // photo.latitude = NSNumber(value: loc.coordinate.latitude)
-            // photo.longitude = NSNumber(value: loc.coordinate.longitude)
             photo.latitude = loc.coordinate.latitude
             photo.longitude = loc.coordinate.longitude
+
+            // Overwrite meal coordinates as requested (last photo with location wins)
+            meal.latitude = loc.coordinate.latitude
+            meal.longitude = loc.coordinate.longitude
         }
 
         do {
@@ -195,3 +192,4 @@ private extension UIImage {
         return CGSize(width: size.width * scale, height: size.height * scale)
     }
 }
+
