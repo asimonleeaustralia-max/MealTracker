@@ -371,17 +371,18 @@ struct PhotoNutritionGuesser {
     // MARK: - Parsing
 
     private static func parseNutrition(from rawText: String) -> GuessResult {
-        // Normalize whitespace, lowercase for matching; keep original lines for numeric extraction
+        // Normalize OCR text robustly for multilingual matching
         let lines = rawText
             .components(separatedBy: .newlines)
+            .map { TextNormalizer.normalize($0) }
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
 
         var result = GuessResult()
 
-        // Regex helpers
+        // Regex helpers with non-Latin-aware boundaries
         func firstMatch(_ pattern: String, in text: String) -> NSTextCheckingResult? {
-            let options: NSRegularExpression.Options = [.caseInsensitive]
+            let options: NSRegularExpression.Options = []
             guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else { return nil }
             let range = NSRange(text.startIndex..<text.endIndex, in: text)
             return regex.firstMatch(in: text, options: [], range: range)
@@ -394,6 +395,7 @@ struct PhotoNutritionGuesser {
 
         func toInt(_ s: String?) -> Int? {
             guard var str = s?.trimmingCharacters(in: .whitespacesAndNewlines), !str.isEmpty else { return nil }
+            // normalize decimal comma to dot
             str = str.replacingOccurrences(of: ",", with: ".")
             if let val = Double(str) {
                 return Int(round(val))
@@ -406,9 +408,25 @@ struct PhotoNutritionGuesser {
             return nil
         }
 
+        // Boundary pattern: start or separator before; separator or end after
+        let BSTART = "(?:(?<=^)|(?<=[\\s:：•·\\-\\(\\)\\[\\]，。、，、|/]))"
+        let BEND = "(?:(?=$)|(?=[\\s:：•·\\-\\(\\)\\[\\]，。、，、|/]))"
+
+        // Localized unit fragments
+        let grams = LocalizedUnits.gramsPattern
+        let milligrams = LocalizedUnits.milligramsPattern
+        let micrograms = LocalizedUnits.microgramsPattern
+        let kcalUnits = LocalizedUnits.kcalPattern
+        let kJUnits = LocalizedUnits.kjPattern
+
+        // Build a single alternation for keywords safely escaped
+        func alternation(_ words: [String]) -> String {
+            words.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
+        }
+
         func parseGramValue(_ line: String, keywords: [String]) -> Int? {
-            let joined = keywords.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
-            let pattern = "(?:^|\\b)(?:\(joined))\\b[^\\n\\r\\d]{0,15}([0-9]+[\\.,]?[0-9]*)\\s*(g|grams?)\\b"
+            let joined = alternation(keywords)
+            let pattern = "\(BSTART)(?:\(joined))\(BEND)[^\\n\\r\\d]{0,20}([0-9]+[\\.,]?[0-9]*)\\s*(?:\(grams))\(BEND)"
             if let m = firstMatch(pattern, in: line) {
                 return toInt(extractNumber(from: line, group: 1, in: m))
             }
@@ -416,8 +434,8 @@ struct PhotoNutritionGuesser {
         }
 
         func parseMilligramValue(_ line: String, keywords: [String]) -> Int? {
-            let joined = keywords.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
-            let pattern = "(?:^|\\b)(?:\(joined))\\b[^\\n\\r\\d]{0,15}([0-9]+[\\.,]?[0-9]*)\\s*(mg|milligrams?)\\b"
+            let joined = alternation(keywords)
+            let pattern = "\(BSTART)(?:\(joined))\(BEND)[^\\n\\r\\d]{0,20}([0-9]+[\\.,]?[0-9]*)\\s*(?:\(milligrams))\(BEND)"
             if let m = firstMatch(pattern, in: line) {
                 return toInt(extractNumber(from: line, group: 1, in: m))
             }
@@ -425,9 +443,8 @@ struct PhotoNutritionGuesser {
         }
 
         func parseMicrogramValue(_ line: String, keywords: [String]) -> Int? {
-            let joined = keywords.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
-            // match "µg" or "ug" or "micrograms"
-            let pattern = "(?:^|\\b)(?:\(joined))\\b[^\\n\\r\\d]{0,15}([0-9]+[\\.,]?[0-9]*)\\s*(µg|ug|micrograms?)\\b"
+            let joined = alternation(keywords)
+            let pattern = "\(BSTART)(?:\(joined))\(BEND)[^\\n\\r\\d]{0,20}([0-9]+[\\.,]?[0-9]*)\\s*(?:\(micrograms))\(BEND)"
             if let m = firstMatch(pattern, in: line) {
                 if let micro = toInt(extractNumber(from: line, group: 1, in: m)) {
                     // convert µg to mg
@@ -439,14 +456,14 @@ struct PhotoNutritionGuesser {
         }
 
         func parseSodiumOrSalt(_ line: String) -> Int? {
-            if let mg = parseMilligramValue(line, keywords: ["sodium", "na", "sodio", "natrium"]) {
+            if let mg = parseMilligramValue(line, keywords: sodiumKeys) {
                 return mg
             }
-            if let g = parseGramValue(line, keywords: ["sodium", "na", "sodio", "natrium"]) {
+            if let g = parseGramValue(line, keywords: sodiumKeys) {
                 return g * 1000
             }
             // Salt line (convert g of salt to mg sodium: 1 g salt ≈ 400 mg sodium)
-            if let gSalt = parseGramValue(line, keywords: ["salt", "sel", "salz", "sale", "sal"]) {
+            if let gSalt = parseGramValue(line, keywords: saltKeys) {
                 let sodiumMg = Int(round(Double(gSalt) * 400.0))
                 return sodiumMg
             }
@@ -454,55 +471,328 @@ struct PhotoNutritionGuesser {
         }
 
         func parseEnergy(_ line: String) -> Int? {
-            // kcal direct
-            if let mKcal = firstMatch("(?:\\benergy\\b|\\bcalories?\\b|\\bkcal\\b)[^\\d]{0,15}([0-9]+[\\.,]?[0-9]*)\\s*(kcal|cal)?\\b", in: line) {
+            // kcal direct with localized tokens
+            if let mKcal = firstMatch("\(BSTART)(?:\(energyKeysKcal))\(BEND)[^\\d]{0,20}([0-9]+[\\.,]?[0-9]*)\\s*(?:\(kcalUnits))\(BEND)", in: line) {
                 if let val = toInt(extractNumber(from: line, group: 1, in: mKcal)) {
                     return val
                 }
             }
             // kJ conversion
-            if let mKJ = firstMatch("(?:\\benergy\\b|\\bkJ\\b)[^\\d]{0,15}([0-9]+[\\.,]?[0-9]*)\\s*(kJ)\\b", in: line) {
+            if let mKJ = firstMatch("\(BSTART)(?:\(energyKeysKJ))\(BEND)[^\\d]{0,20}([0-9]+[\\.,]?[0-9]*)\\s*(?:\(kJUnits))\(BEND)", in: line) {
                 if let kj = toInt(extractNumber(from: line, group: 1, in: mKJ)) {
                     let kcal = Int(round(Double(kj) / 4.184))
                     return kcal
                 }
             }
-            // Bare "xxx kcal"
-            if let mBare = firstMatch("([0-9]+[\\.,]?[0-9]*)\\s*kcal\\b", in: line),
+            // Bare "xxx kcal" localized
+            if let mBare = firstMatch("([0-9]+[\\.,]?[0-9]*)\\s*(?:\(kcalUnits))\(BEND)", in: line),
                let val = toInt(extractNumber(from: line, group: 1, in: mBare)) {
                 return val
             }
             return nil
         }
 
-        // Known keyword sets (includes "of which ..." phrases seen on EU labels)
-        let carbsKeys = ["carb", "carbs", "carbohydrate", "carbohydrates", "glucides", "kohlenhydrate", "hidratos", "carboidrati"]
-        let proteinKeys = ["protein", "proteins", "proteína", "proteine", "eiweiß", "eiweiss"]
-        let fatKeys = ["fat", "fats", "lipid", "lipids", "grasas", "grassi", "matières grasses"]
-        let sugarKeys = ["sugars", "sugar", "of which sugars", "incl. sugars", "sucre", "zucker", "azúcares", "zuccheri"]
-        let fibreKeys = ["fibre", "fiber", "fibra", "faser"]
-        let starchKeys = ["starch", "almidón", "amido", "stärke", "amidon"]
-        let satKeys = ["saturated", "sat fat", "saturates", "of which saturates", "acides gras saturés", "gesättigte", "grassi saturi"]
-        let transKeys = ["trans", "trans fat", "acides gras trans", "grassi trans"]
-        let monoKeys = ["monounsaturated", "mono", "acides gras monoinsaturés", "einfach ungesättigt", "monoinsaturi"]
-        let polyKeys = ["polyunsaturated", "poly", "acides gras polyinsaturés", "mehrfach ungesättigt", "polinsaturi"]
+        // MARK: Multilingual keyword aliases
+
+        // Carbohydrates
+        let carbsKeys: [String] = [
+            // English
+            "carb","carbs","carbohydrate","carbohydrates",
+            // French
+            "glucide","glucides","dont sucres",
+            // German
+            "kohlenhydrat","kohlenhydrate","davon zucker",
+            // Spanish/Portuguese
+            "hidratos de carbono","hidratos","carbohidrato","carbohidratos","carboidrato","carboidratos",
+            // Italian
+            "carboidrati","di cui zuccheri",
+            // Dutch
+            "koolhydraten","waarvan suikers",
+            // Nordic
+            "kolhydrater","kulhydrater","karbohydrater",
+            // Polish/Czech/Slovak/Hungarian/Romanian
+            "węglowodany","cukry","sacharidy","cukry z toho","sacharidov","cukry z toho","szénhidrát","zaharuri","carbohidrați",
+            // Greek
+            "υδατάνθρακες","εκ των οποίων σάκχαρα",
+            // Turkish
+            "karbonhidrat","şekerler",
+            // Russian/Ukrainian/Bulgarian (Cyrillic)
+            "углеводы","в том числе сахара","вуглеводи","в т.ч. цукри","въглехидрати","от които захари",
+            // Arabic
+            "كربوهيدرات","نشويات","منها سكريات","منها سكر",
+            // Hebrew
+            "פחמימות","מתוכן סוכרים",
+            // Hindi/Bengali
+            "कार्बोहाइड्रेट","कार्ब्स","शर्करा","जिसमें शर्करा","কার্বোহাইড্রেট","কার্বস","চিনি","যার মধ্যে চিনি",
+            // Thai
+            "คาร์โบไฮเดรต","คาร์บ","น้ำตาลรวม","ซึ่งน้ำตาล",
+            // Vietnamese
+            "carbohydrat","carb","tinh bột","đường trong đó",
+            // Indonesian/Malay
+            "karbohidrat","karbo","gula termasuk",
+            // Chinese (Simplified/Traditional)
+            "碳水化合物","碳水","其中糖","糖",
+            // Japanese
+            "炭水化物","糖質","うち糖類",
+            // Korean
+            "탄수화물","당류","그중 당류","그중당류"
+        ]
+
+        // Protein
+        let proteinKeys: [String] = [
+            "protein","proteins","proteína","proteínas","proteine","eiweiß","eiweiss","eiweıß",
+            "proteína","proteine","proteínas",
+            "proteine","протеин","белки","білки","протеини",
+            "البروتين","بروتين",
+            "חלבון",
+            "प्रोटीन","প্রোটিন",
+            "โปรตีน",
+            "proteină","proteine","proteínas",
+            "蛋白质","蛋白","たんぱく質","蛋白質","단백질"
+        ]
+
+        // Fat
+        let fatKeys: [String] = [
+            "fat","fats","lipid","lipids",
+            "grasas","grasa","grassi","matières grasses","matiere grasse",
+            "fett","fette","fette gesamt",
+            "vet","vetten",
+            "yağ","yağlar",
+            "жиры","жир","жиры всего","жири",
+            "دهون","دهن",
+            "שומן",
+            "वसा","চর্বি",
+            "ไขมัน",
+            "lemak","lemak total",
+            "脂肪","總脂肪","總脂","脂質","脂肪総量",
+            "지방"
+        ]
+
+        // Sugars
+        let sugarKeys: [String] = [
+            "sugars","sugar","incl. sugars","of which sugars",
+            "sucre","sucres","dont sucres",
+            "zucker","davon zucker",
+            "azúcares","azucar","de los cuales azúcares",
+            "zuccheri","di cui zuccheri",
+            "açúcares","açúcar",
+            "sukker","hvorav sukkerarter","sockerarter",
+            "cukry","z toho cukry","z toho cukrů",
+            "cukry z toho",
+            "zaharuri","din care zaharuri",
+            "şekerler","şeker",
+            "сахара","в т.ч. сахара","цукри",
+            "سكريات","سكر",
+            "סוכרים",
+            "शर्करा","चीनी",
+            "น้ำตาล",
+            "đường","đường trong đó",
+            "gula",
+            "糖","其中糖","糖類","うち糖類",
+            "당류","그중 당류"
+        ]
+
+        // Fibre
+        let fibreKeys: [String] = [
+            "fibre","fiber","fibra","faser",
+            "fibres alimentaires","fibres",
+            "балластные вещества","клетчатка","харчові волокна",
+            "ألياف","الياف",
+            "סיבים תזונתיים","סיבים",
+            "रेशा","फाइबर","আঁশ","ফাইবার",
+            "ใยอาหาร",
+            "chất xơ",
+            "serat",
+            "膳食纤维","膳食纖維","食物繊維",
+            "식이섬유"
+        ]
+
+        // Starch
+        let starchKeys: [String] = [
+            "starch","almidón","amido","stärke","amidon",
+            "féculents","féculent",
+            "skrobia","škrob","škroby","škroboviny",
+            "نشا","النشا",
+            "עמילן",
+            "स्टार्च","मांडा","স্টার্চ",
+            "แป้ง",
+            "tinh bột",
+            "pati","kanji",
+            "淀粉","澱粉",
+            "でんぷん",
+            "전분"
+        ]
+
+        // Saturated fat
+        let satKeys: [String] = [
+            "saturated","sat fat","saturates","of which saturates",
+            "acides gras saturés","dont acides gras saturés",
+            "gesättigte","davon gesättigte fettsäuren","gesättigte fettsäuren",
+            "ácidos grasos saturados","de los cuales saturados",
+            "grassi saturi","di cui acidi grassi saturi",
+            "ácidos graxos saturados",
+            "mættede fedtsyrer","mättat fett","mettede fettsyrer",
+            "kwasy tłuszczowe nasycone","z toho nasýtené mastné kyseliny",
+            "grăsimi saturate",
+            "doymuş yağ asitleri","doymuş yağ",
+            "насыщенные жирные кислоты","в т.ч. насыщенные",
+            "دهون مشبعة",
+            "שומן רווי",
+            "संतृप्त वसा","স্যাচুরেটেড ফ্যাট",
+            "ไขมันอิ่มตัว",
+            "chất béo bão hòa",
+            "lemak jenuh",
+            "饱和脂肪","飽和脂肪","飽和脂肪酸",
+            "飽和脂肪酸","飽和脂肪",
+            "飽和脂肪酸","飽和脂肪",
+            "飽和脂肪酸","飽和脂肪",
+            "飽和脂肪酸",
+            "飽和脂肪酸",
+            "飽和脂肪酸",
+            "飽和脂肪酸",
+            "飽和脂肪酸",
+            "飽和脂肪酸",
+            "飽和脂肪酸",
+            "飽和脂肪酸",
+            "飽和脂肪酸",
+            "飽和脂肪酸",
+            "飽和脂肪酸",
+            "飽和脂肪酸",
+            // Japanese/Korean concise
+            "飽和脂肪酸","飽和脂肪","飽和脂肪酸",
+            "포화지방"
+        ]
+
+        // Trans fat
+        let transKeys: [String] = [
+            "trans","trans fat","acides gras trans","grassi trans",
+            "ácidos grasos trans","ácidos graxos trans",
+            "transfett","trans-fettsäuren",
+            "kwasy tłuszczowe trans",
+            "grasimi trans",
+            "트랜스지방","trans yağ",
+            "трансжиры","транс-жиры",
+            "دهون متحولة",
+            "שומן טרנס",
+            "ट्रांस वसा","ট্রান্স ফ্যাট",
+            "ไขมันทรานส์",
+            "chất béo chuyển hóa",
+            "lemak trans",
+            "反式脂肪","反式脂肪酸","反式",
+            "トランス脂肪酸"
+        ]
+
+        // Mono
+        let monoKeys: [String] = [
+            "monounsaturated","mono",
+            "acides gras monoinsaturés","monoinsaturés",
+            "einfach ungesättigt","einfach ungesättigte fettsäuren",
+            "monoinsaturi","acidi grassi monoinsaturi",
+            "ácidos grasos monoinsaturados",
+            "ácidos graxos monoinsaturados",
+            "mättade enkelomättade","enkelomättat fett",
+            "jednonienasycone kwasy tłuszczowe",
+            "grăsimi mononesaturate",
+            "tekli doymamış yağlar",
+            "мононенасыщенные жирные кислоты",
+            "دهون أحادية غير مشبعة",
+            "שומן חד-בלתי רווי",
+            "एकल असंतृप्त वसा",
+            "ไขมันไม่อิ่มตัวเชิงเดี่ยว",
+            "chất béo đơn không bão hòa",
+            "lemak tak jenuh tunggal",
+            "单不饱和脂肪","單不飽和脂肪",
+            "一価不飽和脂肪酸",
+            "단일불포화지방"
+        ]
+
+        // Poly
+        let polyKeys: [String] = [
+            "polyunsaturated","poly",
+            "acides gras polyinsaturés","polyinsaturés",
+            "mehrfach ungesättigt","mehrfach ungesättigte fettsäuren",
+            "polinsaturi","acidi grassi polinsaturi",
+            "ácidos grasos poliinsaturados",
+            "ácidos graxos poliinsaturados",
+            "fleromättat fett",
+            "wielonienasycone kwasy tłuszczowe",
+            "grăsimi polinesaturate",
+            "çoklu doymamış yağlar",
+            "полиненасыщенные жирные кислоты",
+            "دهون متعددة غير مشبعة",
+            "שומן רב-בלתי רווי",
+            "बहु असंतृप्त वसा",
+            "ไขมันไม่อิ่มตัวเชิงซ้อน",
+            "chất béo đa không bão hòa",
+            "lemak tak jenuh ganda",
+            "多不饱和脂肪","多不飽和脂肪",
+            "多価不飽和脂肪酸",
+            "다중불포화지방"
+        ]
 
         // Vitamins/minerals keywords
-        let vitAKeys = ["vitamin a", "vit a", "retinol", "retinyl"]
-        let vitBKeys = ["vitamin b", "vit b", "b-complex", "b complex", "b group", "b-group"]
-        let vitCKeys = ["vitamin c", "vit c", "ascorbic"]
-        let vitDKeys = ["vitamin d", "vit d", "cholecalciferol"]
-        let vitEKeys = ["vitamin e", "vit e", "tocopherol"]
-        let vitKKeys = ["vitamin k", "vit k", "phylloquinone", "menaquinone"]
+        let vitAKeys = ["vitamin a","vit a","retinol","retinyl","витамин a","retinolo","retinal","维生素a","維生素a","ビタミンa","비타민a","فيتامين a","ויטמין a","विटामिन a","ভিটামিন a"]
+        let vitBKeys = ["vitamin b","vit b","b-complex","b complex","b group","b-group","витамин b","complexo b","grupo b","维生素b","維生素b","ビタミンb","비타민b","فيتامين b","ויטמין b","विटामिन b","ভিটামিন b"]
+        let vitCKeys = ["vitamin c","vit c","ascorbic","ascorbate","ácido ascórbico","витамин c","维生素c","維生素c","ビタミンc","비타민c","فيتامين c","ויטמין c","विटामिन c","ভিটামিন c"]
+        let vitDKeys = ["vitamin d","vit d","cholecalciferol","витамин d","维生素d","維生素d","ビタミンd","비타민d","فيتامين d","ויטמין d","विटामिन d","ভিটামিন d"]
+        let vitEKeys = ["vitamin e","vit e","tocopherol","витамин e","维生素e","維生素e","ビタミンe","비타민e","فيتامين e","ויטמין e","विटामिन e","ভিটামিন e"]
+        let vitKKeys = ["vitamin k","vit k","phylloquinone","menaquinone","витамин k","维生素k","維生素k","ビタミンk","비타민k","فيتامين k","ויטמין k","विटामिन k","ভিটামিন k"]
 
-        let calciumKeys = ["calcium", "ca"]
-        let ironKeys = ["iron", "fe"]
-        let potassiumKeys = ["potassium", "kalium", "k"]
-        let zincKeys = ["zinc", "zn"]
-        let magnesiumKeys = ["magnesium", "mg"] // note: "mg" is also unit; rely on context around keywords
+        let calciumKeys = ["calcium","ca","кальций","кальций (ca)","钙","鈣","カルシウム","칼슘","كالسيوم","סידן","कैल्शियम","ক্যালসিয়াম"]
+        let ironKeys = ["iron","fe","железо","залізо","铁","鐵","鉄","철","حديد","ברזל","लोहा","আয়রন"]
+        let potassiumKeys = ["potassium","kalium","k","калий","калій","钾","鉀","カリウム","칼륨","بوتاسيوم","אשלגן","पोटैशियम","পটাশিয়াম"]
+        let zincKeys = ["zinc","zn","цинк","цинк (zn)","锌","鋅","亜鉛","아연","زنك","אבץ","जिंक","দস্তা"]
+        let magnesiumKeys = ["magnesium","mg","магний","магній","镁","鎂","マグネシウム","마그네슘","مغنيسيوم","מגנזיום","मैग्नीशियम","ম্যাগনেসিয়াম"]
+
+        // Sodium and salt
+        let sodiumKeys = ["sodium","na","sodio","natrium","ナトリウム","나트륨","钠","鈉","натрий","натрій","صوديوم","נתרן","सोडियम","সোডিয়াম","natrium (na)"]
+        let saltKeys = ["salt","sel","salz","sale","sal","salzgehalt","盐","鹽","塩分","소금","соль","сіль","ملح","מלח","नमक","লবণ"]
+
+        // Energy label aliases
+        let energyKeysKcal = alternation([
+            "energy","calorie","calories","kcal",
+            "énergie","énergie kcal",
+            "energie","energie kcal",
+            "energía","calorías","kcal",
+            "energia","calorie","chilocalorie","kcal",
+            "energia","calorias","quilocalorias","kcal",
+            "energia","kalorien","kilokalorien","kcal",
+            "energia","kcal","kalorii",
+            "energia","kcal","калории","ккал",
+            "طاقة","كيلوكالوري","سعرات","سعرات حرارية","كيلو كالوري","كيلو-كالوري","kcal",
+            "אנרגיה","קק\"ל","קק״ל","kcal",
+            "ऊर्जा","किलो कैलोरी","किलो-कैलोरी","kcal",
+            "শক্তি","কিলোক্যালোরি","kcal",
+            "พลังงาน","กิโลแคลอรี","กกcal","kcal",
+            "năng lượng","kcal",
+            "tenaga","kalori","kcal",
+            "能量","千卡","大卡","kcal",
+            "エネルギー","キロカロリー","kcal",
+            "에너지","킬로칼로리","kcal"
+        ])
+
+        let energyKeysKJ = alternation([
+            "energy","kJ","kilojoule","kilojoules",
+            "énergie","kJ",
+            "energie","kJ",
+            "energía","kJ",
+            "energia","kJ",
+            "energia","kJ",
+            "energia","kJ","кДж","килоджоуль","килоджоули",
+            "طاقة","كيلوجول","kJ",
+            "אנרגיה","ק\"ג'","קג׳","kJ",
+            "ऊर्जा","किलो जूल","kJ",
+            "শক্তি","কিলোজুল","kJ",
+            "พลังงาน","กิโลจูล","kJ",
+            "năng lượng","kJ",
+            "tenaga","kilojoule","kJ",
+            "能量","千焦","kJ",
+            "エネルギー","キロジュール","kJ",
+            "에너지","킬로줄","kJ"
+        ])
 
         for raw in lines {
-            let line = raw.lowercased()
+            let line = raw
 
             if result.calories == nil, let kcal = parseEnergy(line) {
                 result.calories = kcal
@@ -913,5 +1203,130 @@ private extension PhotoNutritionGuesser.GuessResult {
         if zinc != nil { c += 1 }
         if magnesium != nil { c += 1 }
         return c
+    }
+}
+
+// MARK: - Text Normalization and Localized Units
+
+private enum TextNormalizer {
+    static func normalize(_ s: String) -> String {
+        // NFKC to compose compatibility forms, width folding, etc.
+        var t = s.precomposedStringWithCompatibilityMapping
+
+        // Replace common punctuation variants with ASCII
+        t = t.replacingOccurrences(of: "：", with: ":")
+        t = t.replacingOccurrences(of: "・", with: "·")
+        t = t.replacingOccurrences(of: "．", with: ".")
+        t = t.replacingOccurrences(of: "，", with: ",")
+        t = t.replacingOccurrences(of: "／", with: "/")
+        t = t.replacingOccurrences(of: "－", with: "-")
+        t = t.replacingOccurrences(of: "–", with: "-")
+        t = t.replacingOccurrences(of: "—", with: "-")
+        t = t.replacingOccurrences(of: "•", with: "•") // keep bullet
+        t = t.replacingOccurrences(of: "·", with: "·")
+
+        // Map micro symbols and common OCR confusions
+        t = t.replacingOccurrences(of: "µ", with: "u") // µg -> ug
+        t = t.replacingOccurrences(of: "μ", with: "u") // Greek mu
+        t = t.replacingOccurrences(of: "㎎", with: "mg")
+        t = t.replacingOccurrences(of: "㎏", with: "kg")
+        t = t.replacingOccurrences(of: "㏄", with: "cc")
+        t = t.replacingOccurrences(of: "㎉", with: "kcal")
+        t = t.replacingOccurrences(of: "㎈", with: "kcal")
+        t = t.replacingOccurrences(of: "㎖", with: "ml")
+        t = t.replacingOccurrences(of: "㎍", with: "ug")
+        t = t.replacingOccurrences(of: "㎜", with: "mm")
+        t = t.replacingOccurrences(of: "０", with: "0")
+        t = t.replacingOccurrences(of: "１", with: "1")
+        t = t.replacingOccurrences(of: "２", with: "2")
+        t = t.replacingOccurrences(of: "３", with: "3")
+        t = t.replacingOccurrences(of: "４", with: "4")
+        t = t.replacingOccurrences(of: "５", with: "5")
+        t = t.replacingOccurrences(of: "６", with: "6")
+        t = t.replacingOccurrences(of: "７", with: "7")
+        t = t.replacingOccurrences(of: "８", with: "8")
+        t = t.replacingOccurrences(of: "９", with: "9")
+
+        // Lowercase (safe for scripts with case; others unaffected)
+        t = t.lowercased()
+
+        // Remove diacritics for Latin/Greek/Cyrillic only to aid matching; keep other scripts untouched.
+        // Heuristic: if string contains only Latin/Greek/Cyrillic ranges, strip diacritics.
+        if t.range(of: #"^[\p{Latin}\p{Greek}\p{Cyrillic}\s\p{Number}\p{Punctuation}]+$"#, options: .regularExpression) != nil {
+            t = t.folding(options: [.diacriticInsensitive, .widthInsensitive, .caseInsensitive], locale: .current)
+        }
+
+        // Collapse whitespace
+        t = t.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+
+        return t
+    }
+}
+
+private enum LocalizedUnits {
+    // grams
+    static let gramsPattern: String = {
+        alternation([
+            "g","gram","grams","gramme","grammes","grammi",
+            "гр","г","грамм","грамма",
+            "克","公克",
+            "グラム",
+            "그램",
+            "กรัม",
+            "גרם",
+            "ग्राम",
+            "গ্রাম",
+            "غ","غرام","جرام"
+        ])
+    }()
+
+    // milligrams
+    static let milligramsPattern: String = {
+        alternation([
+            "mg","milligram","milligrams","milligramme","milligrammes","milligrammi",
+            "мг","миллиграмм","миллиграмма",
+            "毫克",
+            "ミリグラム",
+            "밀리그램",
+            "มก\\.","มิลลิกรัม",
+            "מ\"ג","מג","מיליגרם",
+            "मि\\.ग्रा","मिलीग्राम",
+            "মিগ্রা","মিলিগ্রাম",
+            "ملغم","ميليغرام","مليغرام"
+        ])
+    }()
+
+    // micrograms
+    static let microgramsPattern: String = {
+        alternation([
+            "ug","mcg","µg","microgram","micrograms","microgramme","microgrammes","microgrammi",
+            "мкг","микрограмм","микрограмма",
+            "微克",
+            "マイクログラム",
+            "마이크로그램",
+            "ไมโครกรัม",
+            "מק\"ג","מקג","מיקרוגרם",
+            "माइक्रोग्राम",
+            "মাইক্রোগ্রাম",
+            "ميكروغرام"
+        ])
+    }()
+
+    // kcal
+    static let kcalPattern: String = {
+        alternation([
+            "kcal","ккал","千卡","大卡","キロカロリー","킬로칼로리","กิโลแคลอรี","كيلوكالوري","קק\"ל","קק״ל"
+        ])
+    }()
+
+    // kJ
+    static let kjPattern: String = {
+        alternation([
+            "kj","кдж","千焦","キロジュール","킬로줄","กิโลจูล","كيلوجول","ק\"ג'","קג׳"
+        ])
+    }()
+
+    private static func alternation(_ words: [String]) -> String {
+        words.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
     }
 }
