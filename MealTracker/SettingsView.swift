@@ -1,6 +1,29 @@
 import SwiftUI
 import CoreData
 
+enum DataSharingPreference: String, CaseIterable, Identifiable {
+    case `public`
+    case `private`
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .public: return "Public"
+        case .private: return "Private"
+        }
+    }
+
+    var explanation: String {
+        switch self {
+        case .public:
+            return "You agree to share meal information with the app creator to improve food metrics and train AI models."
+        case .private:
+            return "All data is saved on this device only."
+        }
+    }
+}
+
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.managedObjectContext) private var context
@@ -13,6 +36,8 @@ struct SettingsView: View {
     @AppStorage("vitaminsUnit") private var vitaminsUnit: VitaminsUnit = .milligrams
     @AppStorage("showMinerals") private var showMinerals: Bool = false
     @AppStorage("handedness") private var handedness: Handedness = .right
+    // New: data sharing preference (default = public)
+    @AppStorage("dataSharingPreference") private var dataSharing: DataSharingPreference = .public
 
     @State private var syncedDateText: String = "—"
     @State private var isSyncing: Bool = false
@@ -98,6 +123,22 @@ struct SettingsView: View {
                     }
                 }
 
+                // Data sharing preference
+                Section(header: Text("Data Sharing")) {
+                    Picker("Sharing", selection: $dataSharing) {
+                        ForEach(DataSharingPreference.allCases) { option in
+                            Text(option.displayName).tag(option)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Text(dataSharing.explanation)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityLabel(dataSharing.explanation)
+                }
+
                 // Handedness (no header)
                 Section {
                     Picker(l.localized("handedness"), selection: $handedness) {
@@ -179,4 +220,3 @@ struct SettingsView: View {
         .environment(\.managedObjectContext, controller.container.viewContext)
         .environmentObject(SessionManager())
 }
-
