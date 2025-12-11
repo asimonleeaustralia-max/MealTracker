@@ -88,6 +88,9 @@ public class Meal: NSManagedObject, Identifiable {
     @NSManaged public var zincIsGuess: Bool
     @NSManaged public var magnesiumIsGuess: Bool
 
+    // Optional: last sync GUID assigned by cloud after successful sync (nil when never synced)
+    @NSManaged public var lastSyncGUID: String?
+
     // Ensure defaults for brand new inserts so `id` is never nil in the store
     public override func awakeFromInsert() {
         super.awakeFromInsert()
@@ -101,6 +104,7 @@ public class Meal: NSManagedObject, Identifiable {
         if value(forKey: "title") == nil {
             setPrimitiveValue("", forKey: "title")
         }
+        // Do not set lastSyncGUID here — it should remain nil until a successful sync.
     }
 }
 
@@ -168,5 +172,18 @@ extension Meal {
             return "Snack at \(timeString) \(weekdayName)"
         }
     }
-}
 
+    // MARK: - Sync helpers
+
+    // Set the last sync GUID after a successful cloud sync
+    func markSynced(with guid: String, in context: NSManagedObjectContext) {
+        lastSyncGUID = guid
+        try? context.save()
+    }
+
+    // Clear the sync marker (e.g., if local changes need re-upload)
+    func clearSyncMarker(in context: NSManagedObjectContext) {
+        lastSyncGUID = nil
+        try? context.save()
+    }
+}
