@@ -38,6 +38,8 @@ struct SettingsView: View {
     @AppStorage("handedness") private var handedness: Handedness = .right
     // New: data sharing preference (default = public)
     @AppStorage("dataSharingPreference") private var dataSharing: DataSharingPreference = .public
+    // New: Simulants group visibility (default disabled)
+    @AppStorage("showSimulants") private var showSimulants: Bool = false
 
     @State private var syncedDateText: String = "—"
     @State private var isSyncing: Bool = false
@@ -169,6 +171,11 @@ struct SettingsView: View {
                 Section {
                     Toggle(l.localized("show_minerals_entry"), isOn: $showMinerals)
                 }
+
+                // New: Simulants section toggle (default off)
+                Section {
+                    Toggle(l.localized("show_simulants_entry"), isOn: $showSimulants)
+                }
             }
             .onAppear {
                 Task { await loadSyncedDate() }
@@ -220,4 +227,3 @@ struct SettingsView: View {
         .environment(\.managedObjectContext, controller.container.viewContext)
         .environmentObject(SessionManager())
 }
-
