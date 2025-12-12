@@ -39,6 +39,8 @@ struct MealFormView: View {
     @State private var alcohol: String = ""
     // Nicotine (milligrams)
     @State private var nicotine: String = ""
+    // Theobromine (milligrams)
+    @State private var theobromine: String = ""
 
     // Added missing nutrient fields
     @State private var starch: String = ""
@@ -75,6 +77,7 @@ struct MealFormView: View {
     @State private var fatIsGuess = true
     @State private var alcoholIsGuess = true
     @State private var nicotineIsGuess = true
+    @State private var theobromineIsGuess = true
     @State private var starchIsGuess = true
     @State private var sugarsIsGuess = true
     @State private var fibreIsGuess = true
@@ -393,7 +396,7 @@ struct MealFormView: View {
             proteinSection(l: l)
             fatSection(l: l)
             sodiumSection(l: l)
-            // Alcohol and Nicotine are in Stimulants group, shown only when enabled in settings
+            // Alcohol, Nicotine, Theobromine are in Stimulants group, shown only when enabled in settings
             if showSimulants { stimulantsSection(l: l) }
             if showVitamins { vitaminsSection(l: l) }
             if showMinerals { mineralsSection(l: l) }
@@ -699,7 +702,7 @@ struct MealFormView: View {
         .padding(.vertical, 2)
     }
 
-    // New: Stimulants group (Alcohol + Nicotine)
+    // New: Stimulants group (Alcohol + Nicotine + Theobromine)
     private func stimulantsSection(l: LocalizationManager) -> some View {
         Section {
             ToggleDetailsButton(
@@ -724,6 +727,16 @@ struct MealFormView: View {
                         titleKey: "Nicotine",
                         text: numericBindingInt($nicotine),
                         isGuess: $nicotineIsGuess,
+                        keyboard: .numberPad,
+                        manager: l,
+                        unitSuffix: "mg",
+                        isPrelocalizedTitle: true,
+                        validator: { ValidationThresholds.vitaminMineralMg.severity(for: $0) }
+                    )
+                    MetricField(
+                        titleKey: "Theobromine",
+                        text: numericBindingInt($theobromine),
+                        isGuess: $theobromineIsGuess,
                         keyboard: .numberPad,
                         manager: l,
                         unitSuffix: "mg",
@@ -796,6 +809,7 @@ struct MealFormView: View {
             fat = Int(meal.fat).description
             alcohol = Int(meal.alcohol).description
             nicotine = Int(meal.nicotine).description
+            theobromine = Int(meal.theobromine).description
             starch = Int(meal.starch).description
             sugars = Int(meal.sugars).description
             fibre = Int(meal.fibre).description
@@ -829,6 +843,7 @@ struct MealFormView: View {
             fatIsGuess = meal.fatIsGuess
             alcoholIsGuess = meal.alcoholIsGuess
             nicotineIsGuess = meal.nicotineIsGuess
+            theobromineIsGuess = meal.theobromineIsGuess
             starchIsGuess = meal.starchIsGuess
             sugarsIsGuess = meal.sugarsIsGuess
             fibreIsGuess = meal.fibreIsGuess
@@ -873,6 +888,7 @@ struct MealFormView: View {
             fat = zeroToEmpty(fat)
             alcohol = zeroToEmpty(alcohol)
             nicotine = zeroToEmpty(nicotine)
+            theobromine = zeroToEmpty(theobromine)
 
             starch = zeroToEmpty(starch)
             sugars = zeroToEmpty(sugars)
@@ -1132,7 +1148,7 @@ struct MealFormView: View {
                     applyIfEmpty(&fat, with: result.fat, markGuess: &fatIsGuess)
 
                     // Removed: result.alcohol (not provided by GuessResult)
-                    // Nicotine not provided by GuessResult either.
+                    // Nicotine and Theobromine not provided by GuessResult either.
 
                     applyIfEmpty(&sugars, with: result.sugars, markGuess: &sugarsIsGuess)
                     sugarsTouched = sugarsTouched || !sugars.isEmpty
@@ -1202,7 +1218,7 @@ struct MealFormView: View {
     private var isValid: Bool {
         guard let cal = Int(calories), cal > 0 else { return false }
         let allNumericStrings = [
-            calories, carbohydrates, protein, sodium, fat, alcohol, nicotine,
+            calories, carbohydrates, protein, sodium, fat, alcohol, nicotine, theobromine,
             starch, sugars, fibre, monounsaturatedFat, polyunsaturatedFat, saturatedFat, transFat,
             animalProtein, plantProtein, proteinSupplements,
             vitaminA, vitaminB, vitaminC, vitaminD, vitaminE, vitaminK,
@@ -1277,6 +1293,7 @@ struct MealFormView: View {
         object.fat = Double(intOrZero(fat))
         object.alcohol = Double(intOrZero(alcohol))
         object.nicotine = Double(intOrZero(nicotine))
+        object.theobromine = Double(intOrZero(theobromine))
 
         let sodiumMg: Double = {
             let val = Double(intOrZero(sodium))
@@ -1327,6 +1344,7 @@ struct MealFormView: View {
         object.fatIsGuess = fatIsGuess
         object.alcoholIsGuess = alcoholIsGuess
         object.nicotineIsGuess = nicotineIsGuess
+        object.theobromineIsGuess = theobromineIsGuess
         object.starchIsGuess = starchIsGuess
         object.sugarsIsGuess = sugarsIsGuess
         object.fibreIsGuess = fibreIsGuess
