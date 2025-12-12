@@ -27,6 +27,10 @@ public class Meal: NSManagedObject, Identifiable {
     @NSManaged public var alcohol: Double
     @NSManaged public var alcoholIsGuess: Bool
 
+    // Stimulant: Nicotine (milligrams) and accuracy flag
+    @NSManaged public var nicotine: Double
+    @NSManaged public var nicotineIsGuess: Bool
+
     // Existing attributes
     @NSManaged public var starch: Double
     @NSManaged public var sugars: Double
@@ -191,3 +195,4 @@ extension Meal {
         try? context.save()
     }
 }
+
