@@ -24,6 +24,8 @@ struct MealFormView: View {
     @AppStorage("showVitamins") private var showVitamins: Bool = false
     @AppStorage("vitaminsUnit") private var vitaminsUnit: VitaminsUnit = .milligrams
     @AppStorage("showMinerals") private var showMinerals: Bool = false
+    // New: stimulants group visibility (key matches SettingsView)
+    @AppStorage("showSimulants") private var showSimulants: Bool = false
 
     // Hidden title/date inputs removed from UI; we still keep local state for default title logic
     @State private var mealDescription: String = "" // not shown in UI for new meals
@@ -129,6 +131,8 @@ struct MealFormView: View {
     @State private var expandedFat = false
     @State private var expandedVitamins = false
     @State private var expandedMinerals = false
+    // New: Stimulants expansion
+    @State private var expandedStimulants = false
 
     // Group consistency states
     @State private var carbsMismatch = false
@@ -386,7 +390,8 @@ struct MealFormView: View {
             proteinSection(l: l)
             fatSection(l: l)
             sodiumSection(l: l)
-            alcoholSection(l: l)
+            // Alcohol moved into Stimulants group, shown only when enabled in settings
+            if showSimulants { stimulantsSection(l: l) }
             if showVitamins { vitaminsSection(l: l) }
             if showMinerals { mineralsSection(l: l) }
         }
@@ -691,19 +696,30 @@ struct MealFormView: View {
         .padding(.vertical, 2)
     }
 
-    private func alcoholSection(l: LocalizationManager) -> some View {
+    // New: Stimulants group (currently only Alcohol)
+    private func stimulantsSection(l: LocalizationManager) -> some View {
         Section {
-            MetricField(
-                titleKey: "Alcohol",
-                text: numericBindingInt($alcohol),
-                isGuess: $alcoholIsGuess,
-                keyboard: .numberPad,
-                manager: l,
-                unitSuffix: "g",
-                isPrelocalizedTitle: true,
-                validator: { ValidationThresholds.grams.severity(for: $0) }
+            ToggleDetailsButton(
+                isExpanded: $expandedStimulants,
+                titleCollapsed: l.localized("show_stimulants"),
+                titleExpanded: l.localized("hide_stimulants")
             )
-            .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 2, trailing: 16))
+
+            if expandedStimulants {
+                VStack(spacing: 0) {
+                    MetricField(
+                        titleKey: "Alcohol",
+                        text: numericBindingInt($alcohol),
+                        isGuess: $alcoholIsGuess,
+                        keyboard: .numberPad,
+                        manager: l,
+                        unitSuffix: "g",
+                        isPrelocalizedTitle: true,
+                        validator: { ValidationThresholds.grams.severity(for: $0) }
+                    )
+                }
+                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+            }
         }
         .padding(.vertical, 2)
     }
