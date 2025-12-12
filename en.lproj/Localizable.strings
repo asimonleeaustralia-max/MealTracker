@@ -60,6 +60,7 @@
 "saturated_fat" = "Saturated fat";
 "trans_fat" = "Trans fat";
 "sodium" = "Sodium";
+"alcohol" = "Alcohol";
 
 "accurate" = "Accurate";
 "guess" = "Guess";
