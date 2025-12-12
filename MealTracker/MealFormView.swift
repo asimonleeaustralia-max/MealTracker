@@ -33,6 +33,9 @@ struct MealFormView: View {
     @State private var protein: String = ""
     @State private var sodium: String = ""          // renamed from salt for UI
     @State private var fat: String = ""
+    // Alcohol (grams)
+    @State private var alcohol: String = ""
+
     // Added missing nutrient fields
     @State private var starch: String = ""
     @State private var sugars: String = ""
@@ -66,6 +69,7 @@ struct MealFormView: View {
     @State private var proteinIsGuess = true
     @State private var sodiumIsGuess = true
     @State private var fatIsGuess = true
+    @State private var alcoholIsGuess = true
     @State private var starchIsGuess = true
     @State private var sugarsIsGuess = true
     @State private var fibreIsGuess = true
@@ -217,14 +221,18 @@ struct MealFormView: View {
     var isEditing: Bool { meal != nil }
 
     var body: some View {
-        let l = LocalizationManager(languageCode: appLanguageCode)
+        // Keep local constants lightly typed to help the solver
+        let l: LocalizationManager = LocalizationManager(languageCode: appLanguageCode)
+        let fullHeight: CGFloat = UIScreen.main.bounds.height * 0.45
+        let collapsedHeight: CGFloat = fullHeight * 0.5
 
-        // Heights for header image
-        let fullHeight = UIScreen.main.bounds.height * 0.45
-        let collapsedHeight = fullHeight * 0.5
+        return mainContent(l: l, fullHeight: fullHeight, collapsedHeight: collapsedHeight)
+    }
 
+    // Split the large body into a smaller builder
+    @ViewBuilder
+    private func mainContent(l: LocalizationManager, fullHeight: CGFloat, collapsedHeight: CGFloat) -> some View {
         VStack(spacing: 0) {
-            // Main gallery + thumbnails
             GalleryHeader(
                 items: galleryItems,
                 selectedIndex: $selectedIndex,
@@ -243,386 +251,13 @@ struct MealFormView: View {
                 }
             )
 
-            Form {
-                // Title field should ONLY be visible when explicitly editing from gallery/list
-                if explicitEditMode {
-                    Section {
-                        TextField("Meal title", text: $mealDescription, prompt: Text("Enter a title"))
-                            .textInputAutocapitalization(.sentences)
-                            .disableAutocorrection(false)
-                    }
-                    .padding(.vertical, 2)
-                }
-
-                // Energy (no header)
-                Section {
-                    MetricField(
-                        titleKey: "calories",
-                        text: numericBindingInt($calories),
-                        isGuess: $caloriesIsGuess,
-                        keyboard: .numberPad,
-                        manager: l,
-                        unitSuffix: energyUnit.displaySuffix(manager: l),
-                        isPrelocalizedTitle: false,
-                        validator: { value in
-                            let kcal = (energyUnit == .calories) ? value : Int(Double(value) / 4.184)
-                            if kcal <= 0 { return .stupid }
-                            return ValidationThresholds.calories.severity(for: kcal)
-                        },
-                        focusedField: $focused,
-                        thisField: .calories,
-                        onSubmit: { handleFocusLeaveIfNeeded(leaving: .calories) }
-                    )
-                    .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 2, trailing: 16))
-                }
-                .padding(.vertical, 2)
-
-                // Carbohydrates (no header)
-                Section {
-                    MetricField(
-                        titleKey: "carbohydrates",
-                        text: numericBindingInt($carbohydrates),
-                        isGuess: $carbohydratesIsGuess,
-                        keyboard: .numberPad,
-                        manager: l,
-                        unitSuffix: "g",
-                        validator: { ValidationThresholds.grams.severity(for: $0) },
-                        leadingAccessory: {
-                            AnyView(
-                                CompactChevronToggle(isExpanded: $expandedCarbs,
-                                                     labelCollapsed: l.localized("show_details"),
-                                                     labelExpanded: l.localized("hide_details"))
-                            )
-                        },
-                        trailingAccessory: {
-                            if carbsHelperVisible, !carbohydrates.isEmpty {
-                                return AnyView(
-                                    Text("(\(carbsHelperText))")
-                                        .font(.caption)
-                                        .foregroundColor(.red)
-                                        .transition(.opacity)
-                                )
-                            } else {
-                                return AnyView(EmptyView())
-                            }
-                        },
-                        highlight: carbsMismatch ? .error
-                            : (carbsRedBlink ? .error
-                               : (carbsBlink ? .successBlink(active: true) : .none)),
-                        focusedField: $focused,
-                        thisField: .carbsTotal,
-                        onSubmit: { handleFocusLeaveIfNeeded(leaving: .carbsTotal) }
-                    )
-                    .onChange(of: carbohydrates, perform: { _ in
-                        recomputeConsistency()
-                        if let last = carbsLastAutoSum, Int(carbohydrates) != last {
-                            carbsLastAutoSum = nil
-                        }
-                    })
-                    .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 2, trailing: 16))
-
-                    if expandedCarbs {
-                        CarbsSubFields(manager: l,
-                                       sugarsText: numericBindingInt($sugars), sugarsIsGuess: $sugarsIsGuess,
-                                       starchText: numericBindingInt($starch), starchIsGuess: $starchIsGuess,
-                                       fibreText: numericBindingInt($fibre), fibreIsGuess: $fibreIsGuess)
-                            .onAppear { handleTopFromCarbSubs() }
-                            .onChange(of: sugars, perform: { _ in
-                                sugarsTouched = true
-                                handleTopFromCarbSubs()
-                                handleHelperForCarbs()
-                                recomputeConsistencyAndBlinkIfFixed()
-                            })
-                            .onChange(of: starch, perform: { _ in
-                                starchTouched = true
-                                handleTopFromCarbSubs()
-                                handleHelperForCarbs()
-                                recomputeConsistencyAndBlinkIfFixed()
-                            })
-                            .onChange(of: fibre, perform: { _ in
-                                fibreTouched = true
-                                handleTopFromCarbSubs()
-                                handleHelperForCarbs()
-                                recomputeConsistencyAndBlinkIfFixed()
-                            })
-                            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-                    }
-                }
-                .padding(.vertical, 2)
-                .onChange(of: expandedCarbs, perform: { expanded in
-                    if expanded { handleTopFromCarbSubs() }
-                })
-
-                // Protein (no header)
-                Section {
-                    MetricField(
-                        titleKey: "protein",
-                        text: numericBindingInt($protein),
-                        isGuess: $proteinIsGuess,
-                        keyboard: .numberPad,
-                        manager: l,
-                        unitSuffix: "g",
-                        validator: { ValidationThresholds.grams.severity(for: $0) },
-                        leadingAccessory: {
-                            AnyView(
-                                CompactChevronToggle(isExpanded: $expandedProtein,
-                                                     labelCollapsed: l.localized("show_details"),
-                                                     labelExpanded: l.localized("hide_details"))
-                            )
-                        },
-                        trailingAccessory: {
-                            if proteinHelperVisible, !protein.isEmpty {
-                                return AnyView(
-                                    Text("(\(proteinHelperText))")
-                                        .font(.caption)
-                                        .foregroundColor(.red)
-                                        .transition(.opacity)
-                                )
-                            } else {
-                                return AnyView(EmptyView())
-                            }
-                        },
-                        highlight: proteinMismatch ? .error
-                            : (proteinRedBlink ? .error
-                               : (proteinBlink ? .successBlink(active: true) : .none)),
-                        focusedField: $focused,
-                        thisField: .proteinTotal,
-                        onSubmit: { handleFocusLeaveIfNeeded(leaving: .proteinTotal) }
-                    )
-                    .onChange(of: protein, perform: { _ in
-                        recomputeConsistency()
-                        if let last = proteinLastAutoSum, Int(protein) != last {
-                            proteinLastAutoSum = nil
-                        }
-                    })
-                    .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 2, trailing: 16))
-
-                    if expandedProtein {
-                        ProteinSubFields(manager: l,
-                                         animalText: numericBindingInt($animalProtein), animalIsGuess: $animalProteinIsGuess,
-                                         plantText: numericBindingInt($plantProtein), plantIsGuess: $plantProteinIsGuess,
-                                         supplementsText: numericBindingInt($proteinSupplements), supplementsIsGuess: $proteinSupplementsIsGuess)
-                            .onAppear { handleTopFromProteinSubs() }
-                            .onChange(of: animalProtein, perform: { _ in
-                                animalTouched = true
-                                handleTopFromProteinSubs()
-                                handleHelperForProtein()
-                                recomputeConsistencyAndBlinkIfFixed()
-                            })
-                            .onChange(of: plantProtein, perform: { _ in
-                                plantTouched = true
-                                handleTopFromProteinSubs()
-                                handleHelperForProtein()
-                                recomputeConsistencyAndBlinkIfFixed()
-                            })
-                            .onChange(of: proteinSupplements, perform: { _ in
-                                supplementsTouched = true
-                                handleTopFromProteinSubs()
-                                handleHelperForProtein()
-                                recomputeConsistencyAndBlinkIfFixed()
-                            })
-                            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-                    }
-                }
-                .padding(.vertical, 2)
-                .onChange(of: expandedProtein, perform: { expanded in
-                    if expanded { handleTopFromProteinSubs() }
-                })
-
-                // Fat (no header) — moved above Sodium
-                Section {
-                    MetricField(
-                        titleKey: "fat",
-                        text: numericBindingInt($fat),
-                        isGuess: $fatIsGuess,
-                        keyboard: .numberPad,
-                        manager: l,
-                        unitSuffix: "g",
-                        validator: { ValidationThresholds.grams.severity(for: $0) },
-                        leadingAccessory: {
-                            AnyView(
-                                CompactChevronToggle(isExpanded: $expandedFat,
-                                                     labelCollapsed: l.localized("show_details"),
-                                                     labelExpanded: l.localized("hide_details"))
-                            )
-                        },
-                        trailingAccessory: {
-                            if fatHelperVisible, !fat.isEmpty {
-                                return AnyView(
-                                    Text("(\(fatHelperText))")
-                                        .font(.caption)
-                                        .foregroundColor(.red)
-                                        .transition(.opacity)
-                                )
-                            } else {
-                                return AnyView(EmptyView())
-                            }
-                        },
-                        highlight: fatMismatch ? .error
-                            : (fatRedBlink ? .error
-                               : (fatBlink ? .successBlink(active: true) : .none)),
-                        focusedField: $focused,
-                        thisField: .fatTotal,
-                        onSubmit: { handleFocusLeaveIfNeeded(leaving: .fatTotal) }
-                    )
-                    .onChange(of: fat, perform: { _ in
-                        recomputeConsistency()
-                        if let last = fatLastAutoSum, Int(fat) != last {
-                            fatLastAutoSum = nil
-                        }
-                    })
-                    .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 2, trailing: 16))
-
-                    if expandedFat {
-                        FatSubFields(manager: l,
-                                     monoText: numericBindingInt($monounsaturatedFat), monoIsGuess: $monounsaturatedFatIsGuess,
-                                     polyText: numericBindingInt($polyunsaturatedFat), polyIsGuess: $polyunsaturatedFatIsGuess,
-                                     satText: numericBindingInt($saturatedFat), satIsGuess: $saturatedFatIsGuess,
-                                     transText: numericBindingInt($transFat), transIsGuess: $transFatIsGuess)
-                            .onAppear { handleTopFromFatSubs() }
-                            .onChange(of: monounsaturatedFat, perform: { _ in
-                                monoTouched = true
-                                handleTopFromFatSubs()
-                                handleHelperForFat()
-                                recomputeConsistencyAndBlinkIfFixed()
-                            })
-                            .onChange(of: polyunsaturatedFat, perform: { _ in
-                                polyTouched = true
-                                handleTopFromFatSubs()
-                                handleHelperForFat()
-                                recomputeConsistencyAndBlinkIfFixed()
-                            })
-                            .onChange(of: saturatedFat, perform: { _ in
-                                satTouched = true
-                                handleTopFromFatSubs()
-                                handleHelperForFat()
-                                recomputeConsistencyAndBlinkIfFixed()
-                            })
-                            .onChange(of: transFat, perform: { _ in
-                                transTouched = true
-                                handleTopFromFatSubs()
-                                handleHelperForFat()
-                                recomputeConsistencyAndBlinkIfFixed()
-                            })
-                            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-                    }
-                }
-                .padding(.vertical, 2)
-                .onChange(of: expandedFat, perform: { expanded in
-                    if expanded { handleTopFromFatSubs() }
-                })
-
-                // Sodium (no header) — moved below Fat
-                Section {
-                    MetricField(titleKey: "Sodium",
-                                text: numericBindingInt($sodium),
-                                isGuess: $sodiumIsGuess,
-                                keyboard: .numberPad,
-                                manager: l,
-                                unitSuffix: sodiumUnit.displaySuffix,
-                                isPrelocalizedTitle: true,
-                                validator: {
-                                    switch sodiumUnit {
-                                    case .milligrams:
-                                        return ValidationThresholds.sodiumMg.severity(for: $0)
-                                    case .grams:
-                                        return ValidationThresholds.sodiumG.severity(for: $0)
-                                    }
-                                },
-                                focusedField: $focused,
-                                thisField: .sodium,
-                                onSubmit: { handleFocusLeaveIfNeeded(leaving: .sodium) })
-                    .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 2, trailing: 16))
-                }
-                .padding(.vertical, 2)
-
-                if showVitamins {
-                    // Vitamins (no header)
-                    Section {
-                        ToggleDetailsButton(isExpanded: $expandedVitamins, titleCollapsed: l.localized("show_vitamins"), titleExpanded: l.localized("hide_vitamins"))
-
-                        if expandedVitamins {
-                            VitaminsGroupView(
-                                manager: l,
-                                unitSuffix: vitaminsUnit.displaySuffix,
-                                aText: numericBindingInt($vitaminA), aIsGuess: $vitaminAIsGuess,
-                                bText: numericBindingInt($vitaminB), bIsGuess: $vitaminBIsGuess,
-                                cText: numericBindingInt($vitaminC), cIsGuess: $vitaminCIsGuess,
-                                dText: numericBindingInt($vitaminD), dIsGuess: $vitaminDIsGuess,
-                                eText: numericBindingInt($vitaminE), eIsGuess: $vitaminEIsGuess,
-                                kText: numericBindingInt($vitaminK), kIsGuess: $vitaminKIsGuess
-                            )
-                            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-                        }
-                    }
-                    .padding(.vertical, 2)
-                }
-
-                if showMinerals {
-                    // Minerals (no header)
-                    Section {
-                        ToggleDetailsButton(isExpanded: $expandedMinerals, titleCollapsed: l.localized("show_minerals"), titleExpanded: l.localized("hide_minerals"))
-
-                        if expandedMinerals {
-                            MineralsGroupView(
-                                manager: l,
-                                unitSuffix: vitaminsUnit.displaySuffix, // reuse vitamins unit toggle (mg/µg)
-                                calciumText: numericBindingInt($calcium), calciumIsGuess: $calciumIsGuess,
-                                ironText: numericBindingInt($iron), ironIsGuess: $ironIsGuess,
-                                potassiumText: numericBindingInt($potassium), potassiumIsGuess: $potassiumIsGuess,
-                                zincText: numericBindingInt($zinc), zincIsGuess: $zincIsGuess,
-                                magnesiumText: numericBindingInt($magnesium), magnesiumIsGuess: $magnesiumIsGuess
-                            )
-                            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-                        }
-                    }
-                    .padding(.vertical, 2)
-                }
-            }
-            .modifier(CompactSectionSpacing())
+            formContent(l: l)
+                .modifier(CompactSectionSpacing())
         }
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button(l.localized("save")) {
-                    save()
-                }
-                .disabled(!isValid && !forceEnableSave)
-                .accessibilityIdentifier("saveMealButton")
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showingSettings = true
-                } label: {
-                    Image(systemName: "gearshape")
-                }
-                .accessibilityLabel(l.localized("settings"))
-            }
-            // New: open gallery of saved meals
-            ToolbarItem(placement: .topBarLeading) {
-                NavigationLink {
-                    MealsGalleryView()
-                } label: {
-                    Image(systemName: "photo.on.rectangle")
-                }
-                .accessibilityLabel("Open Meal Gallery")
-            }
-            // New: Delete button when editing (avoid iOS 16-only buildIf in ToolbarContent)
-            ToolbarItem(placement: .bottomBar) {
-                if explicitEditMode {
-                    Button(role: .destructive) {
-                        showingDeleteConfirm = true
-                    } label: {
-                        Label(l.localized("delete"), systemImage: "trash")
-                    }
-                    .accessibilityIdentifier("deleteMealButton")
-                } else {
-                    EmptyView()
-                }
-            }
-        }
+        .toolbar { toolbarContent(l: l) }
         .sheet(isPresented: $showingSettings) {
             SettingsView()
-                .environmentObject(session) // Ensure SessionManager is available in SettingsView
+                .environmentObject(session)
         }
         .sheet(isPresented: $showingCamera) {
             CameraCaptureView { result in
@@ -660,7 +295,6 @@ struct MealFormView: View {
                 dismissButton: .default(Text("OK"))
             )
         }
-        // Camera permission alert with Settings deep link
         .alert("Camera Access Needed", isPresented: $showingCameraPermissionAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Open Settings") {
@@ -671,7 +305,6 @@ struct MealFormView: View {
         } message: {
             Text(cameraPermissionMessage ?? "Please enable camera access in Settings to take meal photos.")
         }
-        // Delete confirmation
         .confirmationDialog(
             LocalizationManager(languageCode: appLanguageCode).localized("confirm_delete_title"),
             isPresented: $showingDeleteConfirm,
@@ -692,143 +325,8 @@ struct MealFormView: View {
             }
             lastFocused = newFocus
         })
-        .onAppear {
-            // Mark this home screen visible
-            isHomeVisible = true
-
-            // Build gallery items from Core Data or dev fallback
-            reloadGalleryItems()
-
-            if let meal = meal {
-                // Initialize editable title from existing meal
-                mealDescription = meal.title
-
-                calories = Int(meal.calories).description
-                carbohydrates = Int(meal.carbohydrates).description
-                protein = Int(meal.protein).description
-                sodium = Int(meal.sodium).description
-                fat = Int(meal.fat).description
-                starch = Int(meal.starch).description
-                sugars = Int(meal.sugars).description
-                fibre = Int(meal.fibre).description
-                monounsaturatedFat = Int(meal.monounsaturatedFat).description
-                polyunsaturatedFat = Int(meal.polyunsaturatedFat).description
-                saturatedFat = Int(meal.saturatedFat).description
-                transFat = Int(meal.transFat).description
-                animalProtein = Int(meal.animalProtein).description
-                plantProtein = Int(meal.plantProtein).description
-                proteinSupplements = Int(meal.proteinSupplements).description
-
-                vitaminA = Int(vitaminsUnit.fromStorageMG(meal.vitaminA)).description
-                vitaminB = Int(vitaminsUnit.fromStorageMG(meal.vitaminB)).description
-                vitaminC = Int(vitaminsUnit.fromStorageMG(meal.vitaminC)).description
-                vitaminD = Int(vitaminsUnit.fromStorageMG(meal.vitaminD)).description
-                vitaminE = Int(vitaminsUnit.fromStorageMG(meal.vitaminE)).description
-                vitaminK = Int(vitaminsUnit.fromStorageMG(meal.vitaminK)).description
-
-                calcium = Int(vitaminsUnit.fromStorageMG(meal.calcium)).description
-                iron = Int(vitaminsUnit.fromStorageMG(meal.iron)).description
-                potassium = Int(vitaminsUnit.fromStorageMG(meal.potassium)).description
-                zinc = Int(vitaminsUnit.fromStorageMG(meal.zinc)).description
-                magnesium = Int(vitaminsUnit.fromStorageMG(meal.magnesium)).description
-
-                date = meal.date
-
-                caloriesIsGuess = meal.caloriesIsGuess
-                carbohydratesIsGuess = meal.carbohydratesIsGuess
-                proteinIsGuess = meal.proteinIsGuess
-                sodiumIsGuess = meal.sodiumIsGuess
-                fatIsGuess = meal.fatIsGuess
-                starchIsGuess = meal.starchIsGuess
-                sugarsIsGuess = meal.sugarsIsGuess
-                fibreIsGuess = meal.fibreIsGuess
-                monounsaturatedFatIsGuess = meal.monounsaturatedFatIsGuess
-                polyunsaturatedFatIsGuess = meal.polyunsaturatedFatIsGuess
-                saturatedFatIsGuess = meal.saturatedFatIsGuess
-                transFatIsGuess = meal.transFatIsGuess
-
-                animalProteinIsGuess = meal.animalProteinIsGuess
-                plantProteinIsGuess = meal.plantProteinIsGuess
-                proteinSupplementsIsGuess = meal.proteinSupplementsIsGuess
-
-                vitaminAIsGuess = meal.vitaminAIsGuess
-                vitaminBIsGuess = meal.vitaminBIsGuess
-                vitaminCIsGuess = meal.vitaminCIsGuess
-                vitaminDIsGuess = meal.vitaminDIsGuess
-                vitaminEIsGuess = meal.vitaminEIsGuess
-                vitaminKIsGuess = meal.vitaminKIsGuess
-
-                calciumIsGuess = meal.calciumIsGuess
-                ironIsGuess = meal.ironIsGuess
-                potassiumIsGuess = meal.potassiumIsGuess
-                zincIsGuess = meal.zincIsGuess
-                magnesiumIsGuess = meal.magnesiumIsGuess
-
-                sugarsTouched = !sugars.isEmpty
-                starchTouched = !starch.isEmpty
-                fibreTouched = !fibre.isEmpty
-                monoTouched = !monounsaturatedFat.isEmpty
-                polyTouched = !polyunsaturatedFat.isEmpty
-                satTouched = !saturatedFat.isEmpty
-                transTouched = !transFat.isEmpty
-                animalTouched = !animalProtein.isEmpty
-                plantTouched = !plantProtein.isEmpty
-                supplementsTouched = !proteinSupplements.isEmpty
-
-                // Normalize: convert "0" to "" for non-calorie fields to avoid blocking Save
-                func zeroToEmpty(_ s: String) -> String { s == "0" ? "" : s }
-
-                carbohydrates = zeroToEmpty(carbohydrates)
-                protein = zeroToEmpty(protein)
-                sodium = zeroToEmpty(sodium)
-                fat = zeroToEmpty(fat)
-
-                starch = zeroToEmpty(starch)
-                sugars = zeroToEmpty(sugars)
-                fibre = zeroToEmpty(fibre)
-
-                monounsaturatedFat = zeroToEmpty(monounsaturatedFat)
-                polyunsaturatedFat = zeroToEmpty(polyunsaturatedFat)
-                saturatedFat = zeroToEmpty(saturatedFat)
-                transFat = zeroToEmpty(transFat)
-
-                animalProtein = zeroToEmpty(animalProtein)
-                plantProtein = zeroToEmpty(plantProtein)
-                proteinSupplements = zeroToEmpty(proteinSupplements)
-
-                vitaminA = zeroToEmpty(vitaminA)
-                vitaminB = zeroToEmpty(vitaminB)
-                vitaminC = zeroToEmpty(vitaminC)
-                vitaminD = zeroToEmpty(vitaminD)
-                vitaminE = zeroToEmpty(vitaminE)
-                vitaminK = zeroToEmpty(vitaminK)
-
-                calcium = zeroToEmpty(calcium)
-                iron = zeroToEmpty(iron)
-                potassium = zeroToEmpty(potassium)
-                zinc = zeroToEmpty(zinc)
-                magnesium = zeroToEmpty(magnesium)
-
-            } else {
-                // For new meals, prefill with an auto title based on current date/time (invisible to user)
-                mealDescription = Meal.autoTitle(for: date)
-            }
-
-            locationManager.requestAuthorization()
-            locationManager.startUpdating()
-
-            recomputeConsistency(resetPrevMismatch: true)
-
-            // Auto-open camera if we're on the home screen and the app is active
-            if scenePhase == .active {
-                scheduleAutoOpenCameraIfNeeded()
-            }
-        }
-        // Keep isHomeVisible in sync when navigating away (e.g., into gallery)
-        .onDisappear {
-            isHomeVisible = false
-        }
-        // Also auto-open when app becomes active from background; reset gate when leaving active
+        .onAppear { onAppearSetup(l: l) }
+        .onDisappear { isHomeVisible = false }
         .onChange(of: scenePhase) { phase in
             switch phase {
             case .active:
@@ -841,20 +339,560 @@ struct MealFormView: View {
         }
     }
 
+    @ToolbarContentBuilder
+    private func toolbarContent(l: LocalizationManager) -> some ToolbarContent {
+        ToolbarItem(placement: .confirmationAction) {
+            Button(l.localized("save")) {
+                save()
+            }
+            .disabled(!isValid && !forceEnableSave)
+            .accessibilityIdentifier("saveMealButton")
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            Button {
+                showingSettings = true
+            } label: {
+                Image(systemName: "gearshape")
+            }
+            .accessibilityLabel(l.localized("settings"))
+        }
+        ToolbarItem(placement: .topBarLeading) {
+            NavigationLink {
+                MealsGalleryView()
+            } label: {
+                Image(systemName: "photo.on.rectangle")
+            }
+            .accessibilityLabel("Open Meal Gallery")
+        }
+        ToolbarItem(placement: .bottomBar) {
+            if explicitEditMode {
+                Button(role: .destructive) {
+                    showingDeleteConfirm = true
+                } label: {
+                    Label(l.localized("delete"), systemImage: "trash")
+                }
+                .accessibilityIdentifier("deleteMealButton")
+            } else {
+                EmptyView()
+            }
+        }
+    }
+
+    private func formContent(l: LocalizationManager) -> some View {
+        Form {
+            titleSection(l: l)
+            caloriesSection(l: l)
+            carbsSection(l: l)
+            proteinSection(l: l)
+            fatSection(l: l)
+            sodiumSection(l: l)
+            alcoholSection(l: l)
+            if showVitamins { vitaminsSection(l: l) }
+            if showMinerals { mineralsSection(l: l) }
+        }
+    }
+
+    @ViewBuilder
+    private func titleSection(l: LocalizationManager) -> some View {
+        if explicitEditMode {
+            Section {
+                TextField("Meal title", text: $mealDescription, prompt: Text("Enter a title"))
+                    .textInputAutocapitalization(.sentences)
+                    .disableAutocorrection(false)
+            }
+            .padding(.vertical, 2)
+        }
+    }
+
+    private func caloriesSection(l: LocalizationManager) -> some View {
+        Section {
+            MetricField(
+                titleKey: "calories",
+                text: numericBindingInt($calories),
+                isGuess: $caloriesIsGuess,
+                keyboard: .numberPad,
+                manager: l,
+                unitSuffix: energyUnit.displaySuffix(manager: l),
+                isPrelocalizedTitle: false,
+                validator: { value in
+                    let kcal = (energyUnit == .calories) ? value : Int(Double(value) / 4.184)
+                    if kcal <= 0 { return .stupid }
+                    return ValidationThresholds.calories.severity(for: kcal)
+                },
+                focusedField: $focused,
+                thisField: .calories,
+                onSubmit: { handleFocusLeaveIfNeeded(leaving: .calories) }
+            )
+            .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 2, trailing: 16))
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func carbsSection(l: LocalizationManager) -> some View {
+        Section {
+            MetricField(
+                titleKey: "carbohydrates",
+                text: numericBindingInt($carbohydrates),
+                isGuess: $carbohydratesIsGuess,
+                keyboard: .numberPad,
+                manager: l,
+                unitSuffix: "g",
+                validator: { ValidationThresholds.grams.severity(for: $0) },
+                leadingAccessory: {
+                    AnyView(
+                        CompactChevronToggle(isExpanded: $expandedCarbs,
+                                             labelCollapsed: l.localized("show_details"),
+                                             labelExpanded: l.localized("hide_details"))
+                    )
+                },
+                trailingAccessory: {
+                    if carbsHelperVisible, !carbohydrates.isEmpty {
+                        return AnyView(
+                            Text("(\(carbsHelperText))")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                                .transition(.opacity)
+                        )
+                    } else {
+                        return AnyView(EmptyView())
+                    }
+                },
+                highlight: carbsMismatch ? .error
+                    : (carbsRedBlink ? .error
+                       : (carbsBlink ? .successBlink(active: true) : .none)),
+                focusedField: $focused,
+                thisField: .carbsTotal,
+                onSubmit: { handleFocusLeaveIfNeeded(leaving: .carbsTotal) }
+            )
+            .onChange(of: carbohydrates, perform: { _ in
+                recomputeConsistency()
+                if let last = carbsLastAutoSum, Int(carbohydrates) != last {
+                    carbsLastAutoSum = nil
+                }
+            })
+            .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 2, trailing: 16))
+
+            if expandedCarbs {
+                CarbsSubFields(manager: l,
+                               sugarsText: numericBindingInt($sugars), sugarsIsGuess: $sugarsIsGuess,
+                               starchText: numericBindingInt($starch), starchIsGuess: $starchIsGuess,
+                               fibreText: numericBindingInt($fibre), fibreIsGuess: $fibreIsGuess)
+                .onAppear { handleTopFromCarbSubs() }
+                .onChange(of: sugars, perform: { _ in
+                    sugarsTouched = true
+                    handleTopFromCarbSubs()
+                    handleHelperForCarbs()
+                    recomputeConsistencyAndBlinkIfFixed()
+                })
+                .onChange(of: starch, perform: { _ in
+                    starchTouched = true
+                    handleTopFromCarbSubs()
+                    handleHelperForCarbs()
+                    recomputeConsistencyAndBlinkIfFixed()
+                })
+                .onChange(of: fibre, perform: { _ in
+                    fibreTouched = true
+                    handleTopFromCarbSubs()
+                    handleHelperForCarbs()
+                    recomputeConsistencyAndBlinkIfFixed()
+                })
+                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+            }
+        }
+        .padding(.vertical, 2)
+        .onChange(of: expandedCarbs, perform: { expanded in
+            if expanded { handleTopFromCarbSubs() }
+        })
+    }
+
+    private func proteinSection(l: LocalizationManager) -> some View {
+        Section {
+            MetricField(
+                titleKey: "protein",
+                text: numericBindingInt($protein),
+                isGuess: $proteinIsGuess,
+                keyboard: .numberPad,
+                manager: l,
+                unitSuffix: "g",
+                validator: { ValidationThresholds.grams.severity(for: $0) },
+                leadingAccessory: {
+                    AnyView(
+                        CompactChevronToggle(isExpanded: $expandedProtein,
+                                             labelCollapsed: l.localized("show_details"),
+                                             labelExpanded: l.localized("hide_details"))
+                    )
+                },
+                trailingAccessory: {
+                    if proteinHelperVisible, !protein.isEmpty {
+                        return AnyView(
+                            Text("(\(proteinHelperText))")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                                .transition(.opacity)
+                        )
+                    } else {
+                        return AnyView(EmptyView())
+                    }
+                },
+                highlight: proteinMismatch ? .error
+                    : (proteinRedBlink ? .error
+                       : (proteinBlink ? .successBlink(active: true) : .none)),
+                focusedField: $focused,
+                thisField: .proteinTotal,
+                onSubmit: { handleFocusLeaveIfNeeded(leaving: .proteinTotal) }
+            )
+            .onChange(of: protein, perform: { _ in
+                recomputeConsistency()
+                if let last = proteinLastAutoSum, Int(protein) != last {
+                    proteinLastAutoSum = nil
+                }
+            })
+            .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 2, trailing: 16))
+
+            if expandedProtein {
+                ProteinSubFields(manager: l,
+                                 animalText: numericBindingInt($animalProtein), animalIsGuess: $animalProteinIsGuess,
+                                 plantText: numericBindingInt($plantProtein), plantIsGuess: $plantProteinIsGuess,
+                                 supplementsText: numericBindingInt($proteinSupplements), supplementsIsGuess: $proteinSupplementsIsGuess)
+                .onAppear { handleTopFromProteinSubs() }
+                .onChange(of: animalProtein, perform: { _ in
+                    animalTouched = true
+                    handleTopFromProteinSubs()
+                    handleHelperForProtein()
+                    recomputeConsistencyAndBlinkIfFixed()
+                })
+                .onChange(of: plantProtein, perform: { _ in
+                    plantTouched = true
+                    handleTopFromProteinSubs()
+                    handleHelperForProtein()
+                    recomputeConsistencyAndBlinkIfFixed()
+                })
+                .onChange(of: proteinSupplements, perform: { _ in
+                    supplementsTouched = true
+                    handleTopFromProteinSubs()
+                    handleHelperForProtein()
+                    recomputeConsistencyAndBlinkIfFixed()
+                })
+                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+            }
+        }
+        .padding(.vertical, 2)
+        .onChange(of: expandedProtein, perform: { expanded in
+            if expanded { handleTopFromProteinSubs() }
+        })
+    }
+
+    private func fatSection(l: LocalizationManager) -> some View {
+        Section {
+            MetricField(
+                titleKey: "fat",
+                text: numericBindingInt($fat),
+                isGuess: $fatIsGuess,
+                keyboard: .numberPad,
+                manager: l,
+                unitSuffix: "g",
+                validator: { ValidationThresholds.grams.severity(for: $0) },
+                leadingAccessory: {
+                    AnyView(
+                        CompactChevronToggle(isExpanded: $expandedFat,
+                                             labelCollapsed: l.localized("show_details"),
+                                             labelExpanded: l.localized("hide_details"))
+                    )
+                },
+                trailingAccessory: {
+                    if fatHelperVisible, !fat.isEmpty {
+                        return AnyView(
+                            Text("(\(fatHelperText))")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                                .transition(.opacity)
+                        )
+                    } else {
+                        return AnyView(EmptyView())
+                    }
+                },
+                highlight: fatMismatch ? .error
+                    : (fatRedBlink ? .error
+                       : (fatBlink ? .successBlink(active: true) : .none)),
+                focusedField: $focused,
+                thisField: .fatTotal,
+                onSubmit: { handleFocusLeaveIfNeeded(leaving: .fatTotal) }
+            )
+            .onChange(of: fat, perform: { _ in
+                recomputeConsistency()
+                if let last = fatLastAutoSum, Int(fat) != last {
+                    fatLastAutoSum = nil
+                }
+            })
+            .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 2, trailing: 16))
+
+            if expandedFat {
+                FatSubFields(manager: l,
+                             monoText: numericBindingInt($monounsaturatedFat), monoIsGuess: $monounsaturatedFatIsGuess,
+                             polyText: numericBindingInt($polyunsaturatedFat), polyIsGuess: $polyunsaturatedFatIsGuess,
+                             satText: numericBindingInt($saturatedFat), satIsGuess: $saturatedFatIsGuess,
+                             transText: numericBindingInt($transFat), transIsGuess: $transFatIsGuess)
+                .onAppear { handleTopFromFatSubs() }
+                .onChange(of: monounsaturatedFat, perform: { _ in
+                    monoTouched = true
+                    handleTopFromFatSubs()
+                    handleHelperForFat()
+                    recomputeConsistencyAndBlinkIfFixed()
+                })
+                .onChange(of: polyunsaturatedFat, perform: { _ in
+                    polyTouched = true
+                    handleTopFromFatSubs()
+                    handleHelperForFat()
+                    recomputeConsistencyAndBlinkIfFixed()
+                })
+                .onChange(of: saturatedFat, perform: { _ in
+                    satTouched = true
+                    handleTopFromFatSubs()
+                    handleHelperForFat()
+                    recomputeConsistencyAndBlinkIfFixed()
+                })
+                .onChange(of: transFat, perform: { _ in
+                    transTouched = true
+                    handleTopFromFatSubs()
+                    handleHelperForFat()
+                    recomputeConsistencyAndBlinkIfFixed()
+                })
+                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+            }
+        }
+        .padding(.vertical, 2)
+        .onChange(of: expandedFat, perform: { expanded in
+            if expanded { handleTopFromFatSubs() }
+        })
+    }
+
+    private func sodiumSection(l: LocalizationManager) -> some View {
+        Section {
+            MetricField(titleKey: "Sodium",
+                        text: numericBindingInt($sodium),
+                        isGuess: $sodiumIsGuess,
+                        keyboard: .numberPad,
+                        manager: l,
+                        unitSuffix: sodiumUnit.displaySuffix,
+                        isPrelocalizedTitle: true,
+                        validator: {
+                            switch sodiumUnit {
+                            case .milligrams:
+                                return ValidationThresholds.sodiumMg.severity(for: $0)
+                            case .grams:
+                                return ValidationThresholds.sodiumG.severity(for: $0)
+                            }
+                        },
+                        focusedField: $focused,
+                        thisField: .sodium,
+                        onSubmit: { handleFocusLeaveIfNeeded(leaving: .sodium) })
+            .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 2, trailing: 16))
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func alcoholSection(l: LocalizationManager) -> some View {
+        Section {
+            MetricField(
+                titleKey: "Alcohol",
+                text: numericBindingInt($alcohol),
+                isGuess: $alcoholIsGuess,
+                keyboard: .numberPad,
+                manager: l,
+                unitSuffix: "g",
+                isPrelocalizedTitle: true,
+                validator: { ValidationThresholds.grams.severity(for: $0) }
+            )
+            .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 2, trailing: 16))
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func vitaminsSection(l: LocalizationManager) -> some View {
+        Section {
+            ToggleDetailsButton(isExpanded: $expandedVitamins, titleCollapsed: l.localized("show_vitamins"), titleExpanded: l.localized("hide_vitamins"))
+
+            if expandedVitamins {
+                VitaminsGroupView(
+                    manager: l,
+                    unitSuffix: vitaminsUnit.displaySuffix,
+                    aText: numericBindingInt($vitaminA), aIsGuess: $vitaminAIsGuess,
+                    bText: numericBindingInt($vitaminB), bIsGuess: $vitaminBIsGuess,
+                    cText: numericBindingInt($vitaminC), cIsGuess: $vitaminCIsGuess,
+                    dText: numericBindingInt($vitaminD), dIsGuess: $vitaminDIsGuess,
+                    eText: numericBindingInt($vitaminE), eIsGuess: $vitaminEIsGuess,
+                    kText: numericBindingInt($vitaminK), kIsGuess: $vitaminKIsGuess
+                )
+                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func mineralsSection(l: LocalizationManager) -> some View {
+        Section {
+            ToggleDetailsButton(isExpanded: $expandedMinerals, titleCollapsed: l.localized("show_minerals"), titleExpanded: l.localized("hide_minerals"))
+
+            if expandedMinerals {
+                MineralsGroupView(
+                    manager: l,
+                    unitSuffix: vitaminsUnit.displaySuffix,
+                    calciumText: numericBindingInt($calcium), calciumIsGuess: $calciumIsGuess,
+                    ironText: numericBindingInt($iron), ironIsGuess: $ironIsGuess,
+                    potassiumText: numericBindingInt($potassium), potassiumIsGuess: $potassiumIsGuess,
+                    zincText: numericBindingInt($zinc), zincIsGuess: $zincIsGuess,
+                    magnesiumText: numericBindingInt($magnesium), magnesiumIsGuess: $magnesiumIsGuess
+                )
+                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func onAppearSetup(l: LocalizationManager) {
+        // Mark this home screen visible
+        isHomeVisible = true
+
+        // Build gallery items from Core Data or dev fallback
+        reloadGalleryItems()
+
+        if let meal = meal {
+            // Initialize editable title from existing meal
+            mealDescription = meal.title
+
+            calories = Int(meal.calories).description
+            carbohydrates = Int(meal.carbohydrates).description
+            protein = Int(meal.protein).description
+            sodium = Int(meal.sodium).description
+            fat = Int(meal.fat).description
+            alcohol = Int(meal.alcohol).description
+            starch = Int(meal.starch).description
+            sugars = Int(meal.sugars).description
+            fibre = Int(meal.fibre).description
+            monounsaturatedFat = Int(meal.monounsaturatedFat).description
+            polyunsaturatedFat = Int(meal.polyunsaturatedFat).description
+            saturatedFat = Int(meal.saturatedFat).description
+            transFat = Int(meal.transFat).description
+            animalProtein = Int(meal.animalProtein).description
+            plantProtein = Int(meal.plantProtein).description
+            proteinSupplements = Int(meal.proteinSupplements).description
+
+            vitaminA = Int(vitaminsUnit.fromStorageMG(meal.vitaminA)).description
+            vitaminB = Int(vitaminsUnit.fromStorageMG(meal.vitaminB)).description
+            vitaminC = Int(vitaminsUnit.fromStorageMG(meal.vitaminC)).description
+            vitaminD = Int(vitaminsUnit.fromStorageMG(meal.vitaminD)).description
+            vitaminE = Int(vitaminsUnit.fromStorageMG(meal.vitaminE)).description
+            vitaminK = Int(vitaminsUnit.fromStorageMG(meal.vitaminK)).description
+
+            calcium = Int(vitaminsUnit.fromStorageMG(meal.calcium)).description
+            iron = Int(vitaminsUnit.fromStorageMG(meal.iron)).description
+            potassium = Int(vitaminsUnit.fromStorageMG(meal.potassium)).description
+            zinc = Int(vitaminsUnit.fromStorageMG(meal.zinc)).description
+            magnesium = Int(vitaminsUnit.fromStorageMG(meal.magnesium)).description
+
+            date = meal.date
+
+            caloriesIsGuess = meal.caloriesIsGuess
+            carbohydratesIsGuess = meal.carbohydratesIsGuess
+            proteinIsGuess = meal.proteinIsGuess
+            sodiumIsGuess = meal.sodiumIsGuess
+            fatIsGuess = meal.fatIsGuess
+            alcoholIsGuess = meal.alcoholIsGuess
+            starchIsGuess = meal.starchIsGuess
+            sugarsIsGuess = meal.sugarsIsGuess
+            fibreIsGuess = meal.fibreIsGuess
+            monounsaturatedFatIsGuess = meal.monounsaturatedFatIsGuess
+            polyunsaturatedFatIsGuess = meal.polyunsaturatedFatIsGuess
+            saturatedFatIsGuess = meal.saturatedFatIsGuess
+            transFatIsGuess = meal.transFatIsGuess
+
+            animalProteinIsGuess = meal.animalProteinIsGuess
+            plantProteinIsGuess = meal.plantProteinIsGuess
+            proteinSupplementsIsGuess = meal.proteinSupplementsIsGuess
+
+            vitaminAIsGuess = meal.vitaminAIsGuess
+            vitaminBIsGuess = meal.vitaminBIsGuess
+            vitaminCIsGuess = meal.vitaminCIsGuess
+            vitaminDIsGuess = meal.vitaminDIsGuess
+            vitaminEIsGuess = meal.vitaminEIsGuess
+            vitaminKIsGuess = meal.vitaminKIsGuess
+
+            calciumIsGuess = meal.calciumIsGuess
+            ironIsGuess = meal.ironIsGuess
+            potassiumIsGuess = meal.potassiumIsGuess
+            zincIsGuess = meal.zincIsGuess
+            magnesiumIsGuess = meal.magnesiumIsGuess
+
+            sugarsTouched = !sugars.isEmpty
+            starchTouched = !starch.isEmpty
+            fibreTouched = !fibre.isEmpty
+            monoTouched = !monounsaturatedFat.isEmpty
+            polyTouched = !polyunsaturatedFat.isEmpty
+            satTouched = !saturatedFat.isEmpty
+            transTouched = !transFat.isEmpty
+            animalTouched = !animalProtein.isEmpty
+            plantTouched = !plantProtein.isEmpty
+            supplementsTouched = !proteinSupplements.isEmpty
+
+            func zeroToEmpty(_ s: String) -> String { s == "0" ? "" : s }
+
+            carbohydrates = zeroToEmpty(carbohydrates)
+            protein = zeroToEmpty(protein)
+            sodium = zeroToEmpty(sodium)
+            fat = zeroToEmpty(fat)
+            alcohol = zeroToEmpty(alcohol)
+
+            starch = zeroToEmpty(starch)
+            sugars = zeroToEmpty(sugars)
+            fibre = zeroToEmpty(fibre)
+
+            monounsaturatedFat = zeroToEmpty(monounsaturatedFat)
+            polyunsaturatedFat = zeroToEmpty(polyunsaturatedFat)
+            saturatedFat = zeroToEmpty(saturatedFat)
+            transFat = zeroToEmpty(transFat)
+
+            animalProtein = zeroToEmpty(animalProtein)
+            plantProtein = zeroToEmpty(plantProtein)
+            proteinSupplements = zeroToEmpty(proteinSupplements)
+
+            vitaminA = zeroToEmpty(vitaminA)
+            vitaminB = zeroToEmpty(vitaminB)
+            vitaminC = zeroToEmpty(vitaminC)
+            vitaminD = zeroToEmpty(vitaminD)
+            vitaminE = zeroToEmpty(vitaminE)
+            vitaminK = zeroToEmpty(vitaminK)
+
+            calcium = zeroToEmpty(calcium)
+            iron = zeroToEmpty(iron)
+            potassium = zeroToEmpty(potassium)
+            zinc = zeroToEmpty(zinc)
+            magnesium = zeroToEmpty(magnesium)
+
+        } else {
+            mealDescription = Meal.autoTitle(for: date)
+        }
+
+        locationManager.requestAuthorization()
+        locationManager.startUpdating()
+
+        recomputeConsistency(resetPrevMismatch: true)
+
+        if scenePhase == .active {
+            scheduleAutoOpenCameraIfNeeded()
+        }
+    }
+
     // MARK: - Camera handling
 
     private func ensureMealForPhoto() -> Meal {
         if let m = meal {
             return m
         }
-        // Create a new Meal immediately to attach the photo, with minimal defaults
         let new = Meal(context: context)
         new.id = UUID()
         new.date = Date()
         new.title = Meal.autoTitle(for: new.date)
-        // Persist minimal record so relation exists
         try? context.save()
-        // Update local state so subsequent saves edit this object
         self.meal = new
         return new
     }
@@ -863,7 +901,6 @@ struct MealFormView: View {
         let targetMeal = ensureMealForPhoto()
         let location = await MainActor.run { locationManager.lastLocation }
         do {
-            // Ensure we call Core Data main-context work on the main actor
             let newPhoto = try await MainActor.run { () throws -> MealPhoto in
                 try PhotoService.addPhoto(
                     from: data,
@@ -875,13 +912,11 @@ struct MealFormView: View {
                 )
             }
 
-            // Warm up the upload file to avoid racing the first thumbnail read
             await MainActor.run {
                 if let url = PhotoService.urlForUpload(newPhoto) ?? PhotoService.urlForOriginal(newPhoto) {
                     _ = warmUpFileRead(url: url, retries: 2, delay: 0.08)
                 }
                 reloadGalleryItems()
-                // Select the last (newest) item
                 selectedIndex = max(0, galleryItems.count - 1)
             }
         } catch PhotoServiceError.freeTierPhotoLimitReached(let max) {
@@ -897,7 +932,6 @@ struct MealFormView: View {
         }
     }
 
-    // Attempt to read the file; optionally retry quickly if first attempt fails.
     private func warmUpFileRead(url: URL, retries: Int, delay: TimeInterval) -> Bool {
         if (try? Data(contentsOf: url)) != nil { return true }
         var remaining = retries
@@ -909,9 +943,7 @@ struct MealFormView: View {
         return false
     }
 
-    // Auto-open camera scheduling and permission
     private func scheduleAutoOpenCameraIfNeeded() {
-        // Only once per activation, only on the home screen (new-meal mode), and not if another modal is showing
         guard !didAutoOpenThisActivation else { return }
         guard isHomeVisible else { return }
         guard !explicitEditMode else { return }
@@ -920,7 +952,6 @@ struct MealFormView: View {
 
         didAutoOpenThisActivation = true
         Task { @MainActor in
-            // Small delay so the view hierarchy is ready for presentation
             try? await Task.sleep(nanoseconds: 250_000_000)
             await presentCameraAfterPermission()
         }
@@ -961,14 +992,12 @@ struct MealFormView: View {
     private func deleteMeal() {
         guard let meal = meal else { return }
 
-        // Remove photos and their files first
         if let set = meal.value(forKey: "photos") as? Set<MealPhoto>, !set.isEmpty {
             for photo in set {
                 PhotoService.removePhoto(photo, in: context)
             }
         }
 
-        // Delete the meal itself
         context.delete(meal)
 
         do {
@@ -985,7 +1014,6 @@ struct MealFormView: View {
         var items: [GalleryItem] = []
 
         if let meal = meal {
-            // Use inverse relationship instead of a fetch with predicate
             if let set = meal.value(forKey: "photos") as? Set<MealPhoto>, !set.isEmpty {
                 let sorted = set.sorted { (a, b) in
                     let da = a.createdAt ?? .distantFuture
@@ -994,7 +1022,6 @@ struct MealFormView: View {
                 }
                 for p in sorted.prefix(maxPhotos) {
                     if let url = PhotoService.urlForUpload(p) ?? PhotoService.urlForOriginal(p) {
-                        // Cache-busting token: file modification date (or size as fallback)
                         let version = fileVersionToken(for: url)
                         items.append(.persistent(photo: p, url: url, version: version))
                     }
@@ -1013,7 +1040,7 @@ struct MealFormView: View {
             let size = (vals.fileSize ?? 0)
             return "\(ts)-\(size)"
         }
-        return UUID().uuidString // very unlikely, but guarantees different identity
+        return UUID().uuidString
     }
 
     // MARK: - Analyze button logic
@@ -1025,10 +1052,8 @@ struct MealFormView: View {
     }
 
     private func analyzePhoto() async {
-        // If already analyzing, ignore further taps
         if await MainActor.run(resultType: Bool.self, body: { isAnalyzing }) { return }
 
-        // Use the currently selected gallery image data if available; otherwise bail.
         let imageData: Data? = {
             guard selectedIndex < galleryItems.count else { return nil }
             switch galleryItems[selectedIndex] {
@@ -1046,9 +1071,7 @@ struct MealFormView: View {
 
         do {
             if let result = try await PhotoNutritionGuesser.guess(from: data, languageCode: appLanguageCode) {
-                // Apply only to empty fields; set guess flags
                 await MainActor.run {
-                    // Calories (convert guessed kcal to current UI unit)
                     if calories.isEmpty, let kcal = result.calories {
                         let uiVal: Int
                         switch energyUnit {
@@ -1063,7 +1086,6 @@ struct MealFormView: View {
 
                     applyIfEmpty(&carbohydrates, with: result.carbohydrates, markGuess: &carbohydratesIsGuess)
                     applyIfEmpty(&protein, with: result.protein, markGuess: &proteinIsGuess)
-                    // Sodium stored as mg in UI; convert to UI unit if needed
                     if sodium.isEmpty, let mg = result.sodiumMg {
                         let uiVal: Int
                         switch sodiumUnit {
@@ -1076,6 +1098,8 @@ struct MealFormView: View {
                         sodiumIsGuess = true
                     }
                     applyIfEmpty(&fat, with: result.fat, markGuess: &fatIsGuess)
+
+                    // Removed: result.alcohol (not provided by GuessResult)
 
                     applyIfEmpty(&sugars, with: result.sugars, markGuess: &sugarsIsGuess)
                     sugarsTouched = sugarsTouched || !sugars.isEmpty
@@ -1100,7 +1124,6 @@ struct MealFormView: View {
                     applyIfEmpty(&proteinSupplements, with: result.proteinSupplements, markGuess: &proteinSupplementsIsGuess)
                     supplementsTouched = supplementsTouched || !proteinSupplements.isEmpty
 
-                    // Vitamins/minerals (UI uses vitaminsUnit; storage is mg)
                     func applyVitaminMineral(_ field: inout String, _ guessFlag: inout Bool, mg: Int?) {
                         guard field.isEmpty, let mg else { return }
                         let uiVal: Int
@@ -1124,7 +1147,6 @@ struct MealFormView: View {
                     applyVitaminMineral(&zinc, &zincIsGuess, mg: result.zinc)
                     applyVitaminMineral(&magnesium, &magnesiumIsGuess, mg: result.magnesium)
 
-                    // If totals present but subfields empty, use your existing autofill helpers
                     if !(carbohydrates.isEmpty), sugars.isEmpty || starch.isEmpty || fibre.isEmpty {
                         autofillCarbSubfieldsIfNeeded()
                     }
@@ -1136,8 +1158,6 @@ struct MealFormView: View {
                     }
 
                     recomputeConsistencyAndBlinkIfFixed()
-
-                    // IMPORTANT: force-enable Save now that the wand finished applying values
                     forceEnableSave = true
                 }
             }
@@ -1149,7 +1169,7 @@ struct MealFormView: View {
     private var isValid: Bool {
         guard let cal = Int(calories), cal > 0 else { return false }
         let allNumericStrings = [
-            calories, carbohydrates, protein, sodium, fat,
+            calories, carbohydrates, protein, sodium, fat, alcohol,
             starch, sugars, fibre, monounsaturatedFat, polyunsaturatedFat, saturatedFat, transFat,
             animalProtein, plantProtein, proteinSupplements,
             vitaminA, vitaminB, vitaminC, vitaminD, vitaminE, vitaminK,
@@ -1182,7 +1202,6 @@ struct MealFormView: View {
     // MARK: - Saving
 
     private func save() {
-        // Enforce daily meal cap for new meals only (not editing)
         if meal == nil {
             let tier = Entitlements.tier(for: session)
             let maxPerDay = Entitlements.maxMealsPerDay(for: tier)
@@ -1198,39 +1217,33 @@ struct MealFormView: View {
 
         guard let calInt = Int(calories), calInt > 0 else { return }
 
-        // Create or update Meal
         let object: Meal = meal ?? Meal(context: context)
         if meal == nil {
             object.id = UUID()
             object.date = Date()
         }
 
-        // Title/description: use user input if provided; otherwise auto-generate for new or existing
         let trimmedTitle = mealDescription.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmedTitle.isEmpty {
-            // If empty, auto-generate from the object's date
             object.title = Meal.autoTitle(for: object.date)
         } else {
             object.title = trimmedTitle
         }
 
-        // Energy: store in kcal in model; if UI is kJ, convert to kcal
         let kcal: Double = {
             if energyUnit == .calories {
                 return Double(intOrZero(calories))
             } else {
-                // kJ -> kcal
                 return (Double(intOrZero(calories)) / 4.184).rounded()
             }
         }()
         object.calories = max(0, kcal)
 
-        // Macros (grams)
         object.carbohydrates = Double(intOrZero(carbohydrates))
         object.protein = Double(intOrZero(protein))
         object.fat = Double(intOrZero(fat))
+        object.alcohol = Double(intOrZero(alcohol))
 
-        // Sodium UI -> store as mg in Meal.sodium
         let sodiumMg: Double = {
             let val = Double(intOrZero(sodium))
             switch sodiumUnit {
@@ -1240,28 +1253,24 @@ struct MealFormView: View {
         }()
         object.sodium = max(0, sodiumMg)
 
-        // Carbs subs (grams)
         object.starch = Double(intOrZero(starch))
         object.sugars = Double(intOrZero(sugars))
         object.fibre = Double(intOrZero(fibre))
 
-        // Fat subs (grams)
         object.monounsaturatedFat = Double(intOrZero(monounsaturatedFat))
         object.polyunsaturatedFat = Double(intOrZero(polyunsaturatedFat))
         object.saturatedFat = Double(intOrZero(saturatedFat))
         object.transFat = Double(intOrZero(transFat))
 
-        // Protein subs (grams)
         object.animalProtein = Double(intOrZero(animalProtein))
         object.plantProtein = Double(intOrZero(plantProtein))
         object.proteinSupplements = Double(intOrZero(proteinSupplements))
 
-        // Vitamins & Minerals: UI unit -> mg storage
         func uiToMG(_ text: String) -> Double {
             let v = Double(intOrZero(text))
             switch vitaminsUnit {
-            case .milligrams: return v
-            case .micrograms: return v / 1000.0
+                case .milligrams: return v
+                case .micrograms: return v / 1000.0
             }
         }
         object.vitaminA = uiToMG(vitaminA)
@@ -1277,12 +1286,12 @@ struct MealFormView: View {
         object.zinc = uiToMG(zinc)
         object.magnesium = uiToMG(magnesium)
 
-        // Accuracy flags
         object.caloriesIsGuess = caloriesIsGuess
         object.carbohydratesIsGuess = carbohydratesIsGuess
         object.proteinIsGuess = proteinIsGuess
         object.sodiumIsGuess = sodiumIsGuess
         object.fatIsGuess = fatIsGuess
+        object.alcoholIsGuess = alcoholIsGuess
         object.starchIsGuess = starchIsGuess
         object.sugarsIsGuess = sugarsIsGuess
         object.fibreIsGuess = fibreIsGuess
@@ -1308,11 +1317,8 @@ struct MealFormView: View {
         object.zincIsGuess = zincIsGuess
         object.magnesiumIsGuess = magnesiumIsGuess
 
-        // Persist
         do {
             try context.save()
-
-            // Refresh header gallery (if editing) and dismiss
             reloadGalleryItems()
             dismiss()
         } catch {
@@ -1662,7 +1668,6 @@ private enum GalleryItem: Identifiable, Equatable {
     var id: String {
         switch self {
         case .persistent(let p, _, let version):
-            // Include a cache-busting version (file modification date or size)
             return p.objectID.uriRepresentation().absoluteString + "#\(version)"
         case .inMemory(let id, _, _, let idx, let version):
             return id.uuidString + "_\(idx)#\(version)"
@@ -1714,7 +1719,6 @@ private struct GalleryHeader: View {
                             }
                         }
                 } else {
-                    // Main swipeable pager
                     TabView(selection: $selectedIndex) {
                         ForEach(items.indices, id: \.self) { idx in
                             let image = items[idx].thumbnailImage
@@ -1744,7 +1748,6 @@ private struct GalleryHeader: View {
                 .padding(12)
             }
 
-            // Thumbnail strip
             if !items.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: thumbSpacing) {
@@ -1768,7 +1771,6 @@ private struct GalleryHeader: View {
                                                 .foregroundStyle(.secondary)
                                         )
                                 }
-                                // Selection ring
                                 RoundedRectangle(cornerRadius: 6)
                                     .stroke(selectedIndex == idx ? Color.accentColor : Color.clear, lineWidth: 2)
                             }
@@ -1828,7 +1830,6 @@ private struct AnalyzeButton: View {
                     .frame(width: 44, height: 44)
 
                 if isBusy {
-                    // Show a spinning SF Symbol wand while busy
                     Image(systemName: "wand.and.stars")
                         .foregroundColor(.white)
                         .imageScale(.medium)
@@ -1917,7 +1918,7 @@ private enum ValidationSeverity {
 
 private struct ValidationThresholds {
     static let calories = ValidationThresholds(unusual: 3000, stupid: 10000)
-    static let grams = ValidationThresholds(unusual: 300, stupid: 2000) // Note: keep your original values
+    static let grams = ValidationThresholds(unusual: 300, stupid: 2000)
     static let sodiumMg = ValidationThresholds(unusual: 5000, stupid: 20000)
     static let sodiumG = ValidationThresholds(unusual: 5, stupid: 20)
     static let vitaminMineralMg = ValidationThresholds(unusual: 500, stupid: 2000)
@@ -1974,7 +1975,6 @@ private struct MetricField: View {
     var isPrelocalizedTitle: Bool = false
     var validator: ((Int) -> ValidationSeverity)? = nil
 
-    // Type-erased accessory closures
     var leadingAccessory: (() -> AnyView)? = nil
     var trailingAccessory: (() -> AnyView)? = nil
 
@@ -1984,7 +1984,6 @@ private struct MetricField: View {
     var thisField: MealFormView.FocusedField? = nil
     var onSubmit: (() -> Void)? = nil
 
-    // New: handedness preference
     @AppStorage("handedness") private var handedness: Handedness = .right
 
     init(
@@ -2005,7 +2004,7 @@ private struct MetricField: View {
     ) {
         self.titleKey = titleKey
         self._text = text
-               self._isGuess = isGuess
+        self._isGuess = isGuess
         self.keyboard = keyboard
         self.manager = manager
         self.unitSuffix = unitSuffix
@@ -2087,7 +2086,6 @@ private struct MetricField: View {
     private func headerRow() -> some View {
         if handedness == .left {
             HStack(alignment: .firstTextBaseline) {
-                // Segmented first for left-handed users
                 Picker("", selection: $isGuess) {
                     Text(manager.localized("accurate")).tag(false)
                     Text(manager.localized("guess")).tag(true)
@@ -2130,8 +2128,7 @@ private struct MetricField: View {
     @ViewBuilder
     private func inputRow() -> some View {
         if handedness == .left {
-            // Mirror: put trailing accessory and unit closer to left, then text field
-        HStack(spacing: 6) {
+            HStack(spacing: 6) {
                 if let trailing = trailingAccessory {
                     trailing()
                 }

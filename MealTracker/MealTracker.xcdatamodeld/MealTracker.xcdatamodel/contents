@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="24411" systemVersion="25B78" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithSwiftData="YES" userDefinedModelVersionIdentifier="">
     <entity name="Meal" representedClassName="Meal" syncable="YES">
+        <attribute name="alchohol" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="alcoholIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="animalProtein" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="animalProteinIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="caffeine" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="caffeineIsGuess" optional="YES" attributeType="Boolean" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="calcium" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="calciumIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="calories" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
@@ -25,6 +29,8 @@
         <attribute name="mealDescription" optional="YES" attributeType="String"/>
         <attribute name="monounsaturatedFat" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="monounsaturatedFatIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="nicotine" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="nicotineIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="plantProtein" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="plantProteinIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="polyunsaturatedFat" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
@@ -43,6 +49,8 @@
         <attribute name="starchIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="sugars" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="sugarsIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="theobromine" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="theobromineIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="title" optional="YES" attributeType="String"/>
         <attribute name="transFat" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="transFatIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>

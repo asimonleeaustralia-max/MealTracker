@@ -23,6 +23,10 @@ public class Meal: NSManagedObject, Identifiable {
     @NSManaged public var latitude: Double
     @NSManaged public var longitude: Double
 
+    // Alcohol (grams) and accuracy flag
+    @NSManaged public var alcohol: Double
+    @NSManaged public var alcoholIsGuess: Bool
+
     // Existing attributes
     @NSManaged public var starch: Double
     @NSManaged public var sugars: Double
