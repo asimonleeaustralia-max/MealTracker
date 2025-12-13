@@ -40,6 +40,8 @@ struct SettingsView: View {
     @AppStorage("dataSharingPreference") private var dataSharing: DataSharingPreference = .public
     // New: Simulants group visibility (default disabled)
     @AppStorage("showSimulants") private var showSimulants: Bool = false
+    // New: open app to new meal on launch
+    @AppStorage("openToNewMealOnLaunch") private var openToNewMealOnLaunch: Bool = false
 
     @State private var syncedDateText: String = "—"
     @State private var isSyncing: Bool = false
@@ -175,6 +177,14 @@ struct SettingsView: View {
                 // New: Simulants section toggle (default off)
                 Section {
                     Toggle(l.localized("show_stimulants_entry"), isOn: $showSimulants)
+                }
+
+                // New: Open to new meal on launch
+                Section(header: Text(NSLocalizedString("setting_open_to_new_meal", comment: ""))) {
+                    Toggle(NSLocalizedString("setting_open_to_new_meal_toggle", comment: ""), isOn: $openToNewMealOnLaunch)
+                    Text(NSLocalizedString("setting_open_to_new_meal_desc", comment: ""))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
             .onAppear {
