@@ -43,6 +43,8 @@ struct MealFormView: View {
     @State private var theobromine: String = ""
     // Caffeine (milligrams) [NEW]
     @State private var caffeine: String = ""
+    // Taurine (milligrams) [NEW]
+    @State private var taurine: String = ""
 
     // Added missing nutrient fields
     @State private var starch: String = ""
@@ -82,6 +84,8 @@ struct MealFormView: View {
     @State private var theobromineIsGuess = true
     // Caffeine accuracy flag [NEW]
     @State private var caffeineIsGuess = true
+    // Taurine accuracy flag [NEW]
+    @State private var taurineIsGuess = true
     @State private var starchIsGuess = true
     @State private var sugarsIsGuess = true
     @State private var fibreIsGuess = true
@@ -706,7 +710,7 @@ struct MealFormView: View {
         .padding(.vertical, 2)
     }
 
-    // New: Stimulants group (Alcohol + Nicotine + Theobromine + Caffeine)
+    // New: Stimulants group (Alcohol + Nicotine + Theobromine + Caffeine + Taurine)
     private func stimulantsSection(l: LocalizationManager) -> some View {
         Section {
             ToggleDetailsButton(
@@ -747,11 +751,22 @@ struct MealFormView: View {
                         isPrelocalizedTitle: true,
                         validator: { ValidationThresholds.vitaminMineralMg.severity(for: $0) }
                     )
-                    // Caffeine (mg) [NEW]
+                    // Caffeine (mg)
                     MetricField(
                         titleKey: "Caffeine",
                         text: numericBindingInt($caffeine),
                         isGuess: $caffeineIsGuess,
+                        keyboard: .numberPad,
+                        manager: l,
+                        unitSuffix: "mg",
+                        isPrelocalizedTitle: true,
+                        validator: { ValidationThresholds.vitaminMineralMg.severity(for: $0) }
+                    )
+                    // Taurine (mg) [NEW]
+                    MetricField(
+                        titleKey: "Taurine",
+                        text: numericBindingInt($taurine),
+                        isGuess: $taurineIsGuess,
                         keyboard: .numberPad,
                         manager: l,
                         unitSuffix: "mg",
@@ -826,6 +841,7 @@ struct MealFormView: View {
             nicotine = Int(meal.nicotine).description
             theobromine = Int(meal.theobromine).description
             caffeine = Int(meal.caffeine).description
+            taurine = Int(meal.taurine).description
             starch = Int(meal.starch).description
             sugars = Int(meal.sugars).description
             fibre = Int(meal.fibre).description
@@ -861,6 +877,7 @@ struct MealFormView: View {
             nicotineIsGuess = meal.nicotineIsGuess
             theobromineIsGuess = meal.theobromineIsGuess
             caffeineIsGuess = meal.caffeineIsGuess
+            taurineIsGuess = meal.taurineIsGuess
             starchIsGuess = meal.starchIsGuess
             sugarsIsGuess = meal.sugarsIsGuess
             fibreIsGuess = meal.fibreIsGuess
@@ -907,6 +924,7 @@ struct MealFormView: View {
             nicotine = zeroToEmpty(nicotine)
             theobromine = zeroToEmpty(theobromine)
             caffeine = zeroToEmpty(caffeine)
+            taurine = zeroToEmpty(taurine)
 
             starch = zeroToEmpty(starch)
             sugars = zeroToEmpty(sugars)
@@ -1236,7 +1254,7 @@ struct MealFormView: View {
     private var isValid: Bool {
         guard let cal = Int(calories), cal > 0 else { return false }
         let allNumericStrings = [
-            calories, carbohydrates, protein, sodium, fat, alcohol, nicotine, theobromine, caffeine,
+            calories, carbohydrates, protein, sodium, fat, alcohol, nicotine, theobromine, caffeine, taurine,
             starch, sugars, fibre, monounsaturatedFat, polyunsaturatedFat, saturatedFat, transFat,
             animalProtein, plantProtein, proteinSupplements,
             vitaminA, vitaminB, vitaminC, vitaminD, vitaminE, vitaminK,
@@ -1313,6 +1331,7 @@ struct MealFormView: View {
         object.nicotine = Double(intOrZero(nicotine))
         object.theobromine = Double(intOrZero(theobromine))
         object.caffeine = Double(intOrZero(caffeine))
+        object.taurine = Double(intOrZero(taurine))
 
         let sodiumMg: Double = {
             let val = Double(intOrZero(sodium))
@@ -1365,6 +1384,7 @@ struct MealFormView: View {
         object.nicotineIsGuess = nicotineIsGuess
         object.theobromineIsGuess = theobromineIsGuess
         object.caffeineIsGuess = caffeineIsGuess
+        object.taurineIsGuess = taurineIsGuess
         object.starchIsGuess = starchIsGuess
         object.sugarsIsGuess = sugarsIsGuess
         object.fibreIsGuess = fibreIsGuess
@@ -2488,3 +2508,4 @@ private struct CompactSectionSpacing: ViewModifier {
         }
     }
 }
+

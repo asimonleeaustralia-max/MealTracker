@@ -39,6 +39,10 @@ public class Meal: NSManagedObject, Identifiable {
     @NSManaged public var caffeine: Double
     @NSManaged public var caffeineIsGuess: Bool
 
+    // Stimulant: Taurine (milligrams) and accuracy flag [ADDED]
+    @NSManaged public var taurine: Double
+    @NSManaged public var taurineIsGuess: Bool
+
     // Existing attributes
     @NSManaged public var starch: Double
     @NSManaged public var sugars: Double
