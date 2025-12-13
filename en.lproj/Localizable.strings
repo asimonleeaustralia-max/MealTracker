@@ -85,6 +85,7 @@
 "vitamins_unit.mg" = "mg";
 "vitamins_unit.ug" = "µg";
 "show_minerals_entry" = "Show Minerals Entry";
+"show_stimulants_entry" = "Show Stimulants Entry";
 
 "vitamin_a" = "Vitamin A";
 "vitamin_b" = "Vitamin B";
@@ -104,6 +105,8 @@
 "show_minerals" = "Show Minerals";
 "hide_minerals" = "Hide Minerals";
 "hide_vitamins" = "Hide Vitamins";
+"show_stimulants" = "Show Stimulants";
+"hide_stimulants" = "Hide Stimulants";
 
 "edit_meal" = "Edit Meal";
 "meal_details" = "Meal details";
@@ -145,3 +148,12 @@
 "write_failed_error" = "Failed to write photo to disk.";
 "coredata_save_failed_error_prefix" = "Failed to save photo:";
 "free_tier_photo_limit_reached" = "Free tier allows up to %d photos per meal.";
+
+
+"sodium" = "Sodium";
+"alcohol" = "Alcohol";
+"nicotine" = "Nicotine";
+"theobromine" = "Theobromine";
+"caffeine" = "Caffeine";
+"taurine" = "Taurine";
+

@@ -687,13 +687,13 @@ struct MealFormView: View {
 
     private func sodiumSection(l: LocalizationManager) -> some View {
         Section {
-            MetricField(titleKey: "Sodium",
+            MetricField(titleKey: "sodium",
                         text: numericBindingInt($sodium),
                         isGuess: $sodiumIsGuess,
                         keyboard: .numberPad,
                         manager: l,
                         unitSuffix: sodiumUnit.displaySuffix,
-                        isPrelocalizedTitle: true,
+                        isPrelocalizedTitle: false,
                         validator: {
                             switch sodiumUnit {
                             case .milligrams:
@@ -722,55 +722,55 @@ struct MealFormView: View {
             if expandedStimulants {
                 VStack(spacing: 0) {
                     MetricField(
-                        titleKey: "Alcohol",
+                        titleKey: "alcohol",
                         text: numericBindingInt($alcohol),
                         isGuess: $alcoholIsGuess,
                         keyboard: .numberPad,
                         manager: l,
                         unitSuffix: "g",
-                        isPrelocalizedTitle: true,
+                        isPrelocalizedTitle: false,
                         validator: { ValidationThresholds.grams.severity(for: $0) }
                     )
                     MetricField(
-                        titleKey: "Nicotine",
+                        titleKey: "nicotine",
                         text: numericBindingInt($nicotine),
                         isGuess: $nicotineIsGuess,
                         keyboard: .numberPad,
                         manager: l,
                         unitSuffix: "mg",
-                        isPrelocalizedTitle: true,
+                        isPrelocalizedTitle: false,
                         validator: { ValidationThresholds.vitaminMineralMg.severity(for: $0) }
                     )
                     MetricField(
-                        titleKey: "Theobromine",
+                        titleKey: "theobromine",
                         text: numericBindingInt($theobromine),
                         isGuess: $theobromineIsGuess,
                         keyboard: .numberPad,
                         manager: l,
                         unitSuffix: "mg",
-                        isPrelocalizedTitle: true,
+                        isPrelocalizedTitle: false,
                         validator: { ValidationThresholds.vitaminMineralMg.severity(for: $0) }
                     )
                     // Caffeine (mg)
                     MetricField(
-                        titleKey: "Caffeine",
+                        titleKey: "caffeine",
                         text: numericBindingInt($caffeine),
                         isGuess: $caffeineIsGuess,
                         keyboard: .numberPad,
                         manager: l,
                         unitSuffix: "mg",
-                        isPrelocalizedTitle: true,
+                        isPrelocalizedTitle: false,
                         validator: { ValidationThresholds.vitaminMineralMg.severity(for: $0) }
                     )
                     // Taurine (mg) [NEW]
                     MetricField(
-                        titleKey: "Taurine",
+                        titleKey: "taurine",
                         text: numericBindingInt($taurine),
                         isGuess: $taurineIsGuess,
                         keyboard: .numberPad,
                         manager: l,
                         unitSuffix: "mg",
-                        isPrelocalizedTitle: true,
+                        isPrelocalizedTitle: false,
                         validator: { ValidationThresholds.vitaminMineralMg.severity(for: $0) }
                     )
                 }
@@ -2401,6 +2401,7 @@ private struct FatSubFields: View {
     }
 }
 
+// New: MineralsGroupView to match usage in mineralsSection
 private struct MineralsGroupView: View {
     let manager: LocalizationManager
     let unitSuffix: String
@@ -2425,7 +2426,7 @@ private struct MineralsGroupView: View {
                 keyboard: .numberPad,
                 manager: manager,
                 unitSuffix: unitSuffix,
-                validator: { ValidationThresholds.mineralMg.severityForVitaminsUI($0, unit: .milligrams) }
+                validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .milligrams) }
             )
             MetricField(
                 titleKey: "iron",
@@ -2434,7 +2435,7 @@ private struct MineralsGroupView: View {
                 keyboard: .numberPad,
                 manager: manager,
                 unitSuffix: unitSuffix,
-                validator: { ValidationThresholds.mineralMg.severityForVitaminsUI($0, unit: .milligrams) }
+                validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .milligrams) }
             )
             MetricField(
                 titleKey: "potassium",
@@ -2443,7 +2444,7 @@ private struct MineralsGroupView: View {
                 keyboard: .numberPad,
                 manager: manager,
                 unitSuffix: unitSuffix,
-                validator: { ValidationThresholds.mineralMg.severityForVitaminsUI($0, unit: .milligrams) }
+                validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .milligrams) }
             )
             MetricField(
                 titleKey: "zinc",
@@ -2452,7 +2453,7 @@ private struct MineralsGroupView: View {
                 keyboard: .numberPad,
                 manager: manager,
                 unitSuffix: unitSuffix,
-                validator: { ValidationThresholds.mineralMg.severityForVitaminsUI($0, unit: .milligrams) }
+                validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .milligrams) }
             )
             MetricField(
                 titleKey: "magnesium",
@@ -2461,7 +2462,7 @@ private struct MineralsGroupView: View {
                 keyboard: .numberPad,
                 manager: manager,
                 unitSuffix: unitSuffix,
-                validator: { ValidationThresholds.mineralMg.severityForVitaminsUI($0, unit: .milligrams) }
+                validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .milligrams) }
             )
         }
     }
