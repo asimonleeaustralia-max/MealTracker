@@ -400,10 +400,10 @@ struct MealFormView: View {
             proteinSection(l: l)
             fatSection(l: l)
             sodiumSection(l: l)
-            // Alcohol, Nicotine, Theobromine are in Stimulants group, shown only when enabled in settings
-            if showSimulants { stimulantsSection(l: l) }
             if showVitamins { vitaminsSection(l: l) }
             if showMinerals { mineralsSection(l: l) }
+            // Move stimulants to the bottom, below minerals
+            if showSimulants { stimulantsSection(l: l) }
         }
     }
 
