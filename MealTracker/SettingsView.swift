@@ -174,7 +174,7 @@ struct SettingsView: View {
 
                 // New: Simulants section toggle (default off)
                 Section {
-                    Toggle(l.localized("show_simulants_entry"), isOn: $showSimulants)
+                    Toggle(l.localized("show_stimulants_entry"), isOn: $showSimulants)
                 }
             }
             .onAppear {
