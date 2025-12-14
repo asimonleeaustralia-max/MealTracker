@@ -24,6 +24,26 @@ enum DataSharingPreference: String, CaseIterable, Identifiable {
     }
 }
 
+// New: AI Feedback Severity (stub)
+enum AIFeedbackSeverity: String, CaseIterable, Identifiable {
+    case kind
+    case balanced
+    case bootCamp
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .kind:
+            return NSLocalizedString("ai_feedback_severity.kind", comment: "")
+        case .balanced:
+            return NSLocalizedString("ai_feedback_severity.balanced", comment: "")
+        case .bootCamp:
+            return NSLocalizedString("ai_feedback_severity.boot_camp", comment: "")
+        }
+    }
+}
+
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.managedObjectContext) private var context
@@ -42,6 +62,8 @@ struct SettingsView: View {
     @AppStorage("showSimulants") private var showSimulants: Bool = false
     // New: open app to new meal on launch
     @AppStorage("openToNewMealOnLaunch") private var openToNewMealOnLaunch: Bool = false
+    // New: AI feedback severity (stub; default = balanced)
+    @AppStorage("aiFeedbackSeverity") private var aiFeedbackSeverity: AIFeedbackSeverity = .balanced
 
     @State private var syncedDateText: String = "—"
     @State private var isSyncing: Bool = false
@@ -141,6 +163,16 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityLabel(dataSharing.explanation)
+                }
+
+                // New: AI Feedback Severity (stub)
+                Section(header: Text(LocalizedStringKey("ai_feedback_severity_section_title"))) {
+                    Picker(LocalizedStringKey("ai_feedback_severity_picker_title"), selection: $aiFeedbackSeverity) {
+                        ForEach(AIFeedbackSeverity.allCases) { option in
+                            Text(option.displayName).tag(option)
+                        }
+                    }
+                    .pickerStyle(.segmented)
                 }
 
                 // Handedness (no header)

@@ -165,3 +165,9 @@
 "intent_new_meal_title" = "New Meal";
 "intent_new_meal_description" = "Open the app directly to a new meal.";
 "intent_new_meal_disabled_error" = "The “New Meal” shortcut is disabled in Settings.";
+
+"ai_feedback_severity_section_title" = "AI feedback severity";
+"ai_feedback_severity_picker_title" = "AI feedback severity";
+"ai_feedback_severity.kind" = "Kind";
+"ai_feedback_severity.balanced" = "Balanced";
+"ai_feedback_severity.boot_camp" = "Boot Camp";
