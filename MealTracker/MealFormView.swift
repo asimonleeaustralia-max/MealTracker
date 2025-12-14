@@ -57,6 +57,8 @@ struct MealFormView: View {
     @State private var transFat: String = ""
     // New: Omega-3 (grams)
     @State private var omega3: String = ""
+    // New: Omega-6 (grams)
+    @State private var omega6: String = ""
 
     // New protein breakdown fields
     @State private var animalProtein: String = ""
@@ -98,6 +100,8 @@ struct MealFormView: View {
     @State private var transFatIsGuess = true
     // New: Omega-3 accuracy flag
     @State private var omega3IsGuess = true
+    // New: Omega-6 accuracy flag
+    @State private var omega6IsGuess = true
 
     // Protein breakdown flags
     @State private var animalProteinIsGuess = true
@@ -127,6 +131,7 @@ struct MealFormView: View {
     @State private var satTouched = false
     @State private var transTouched = false
     @State private var omega3Touched = false
+    @State private var omega6Touched = false
 
     @State private var animalTouched = false
     @State private var plantTouched = false
@@ -658,7 +663,8 @@ struct MealFormView: View {
                              polyText: numericBindingInt($polyunsaturatedFat), polyIsGuess: $polyunsaturatedFatIsGuess,
                              satText: numericBindingInt($saturatedFat), satIsGuess: $saturatedFatIsGuess,
                              transText: numericBindingInt($transFat), transIsGuess: $transFatIsGuess,
-                             omega3Text: numericBindingInt($omega3), omega3IsGuess: $omega3IsGuess)
+                             omega3Text: numericBindingInt($omega3), omega3IsGuess: $omega3IsGuess,
+                             omega6Text: numericBindingInt($omega6), omega6IsGuess: $omega6IsGuess)
                 .onAppear { handleTopFromFatSubs() }
                 .onChange(of: monounsaturatedFat, perform: { _ in
                     monoTouched = true
@@ -686,6 +692,10 @@ struct MealFormView: View {
                 })
                 .onChange(of: omega3, perform: { _ in
                     omega3Touched = true
+                    // Not included in total consistency for now
+                })
+                .onChange(of: omega6, perform: { _ in
+                    omega6Touched = true
                     // Not included in total consistency for now
                 })
                 .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
@@ -862,6 +872,7 @@ struct MealFormView: View {
             saturatedFat = Int(meal.saturatedFat).description
             transFat = Int(meal.transFat).description
             omega3 = Int(meal.omega3).description
+            omega6 = Int(meal.omega6).description
             animalProtein = Int(meal.animalProtein).description
             plantProtein = Int(meal.plantProtein).description
             proteinSupplements = Int(meal.proteinSupplements).description
@@ -899,6 +910,7 @@ struct MealFormView: View {
             saturatedFatIsGuess = meal.saturatedFatIsGuess
             transFatIsGuess = meal.transFatIsGuess
             omega3IsGuess = meal.omega3IsGuess
+            omega6IsGuess = meal.omega6IsGuess
 
             animalProteinIsGuess = meal.animalProteinIsGuess
             plantProteinIsGuess = meal.plantProteinIsGuess
@@ -925,6 +937,7 @@ struct MealFormView: View {
             satTouched = !saturatedFat.isEmpty
             transTouched = !transFat.isEmpty
             omega3Touched = !omega3.isEmpty
+            omega6Touched = !omega6.isEmpty
             animalTouched = !animalProtein.isEmpty
             plantTouched = !plantProtein.isEmpty
             supplementsTouched = !proteinSupplements.isEmpty
@@ -950,6 +963,7 @@ struct MealFormView: View {
             saturatedFat = zeroToEmpty(saturatedFat)
             transFat = zeroToEmpty(transFat)
             omega3 = zeroToEmpty(omega3)
+            omega6 = zeroToEmpty(omega6)
 
             animalProtein = zeroToEmpty(animalProtein)
             plantProtein = zeroToEmpty(plantProtein)
@@ -1271,7 +1285,7 @@ struct MealFormView: View {
         guard let cal = Int(calories), cal > 0 else { return false }
         let allNumericStrings = [
             calories, carbohydrates, protein, sodium, fat, alcohol, nicotine, theobromine, caffeine, taurine,
-            starch, sugars, fibre, monounsaturatedFat, polyunsaturatedFat, saturatedFat, transFat, omega3,
+            starch, sugars, fibre, monounsaturatedFat, polyunsaturatedFat, saturatedFat, transFat, omega3, omega6,
             animalProtein, plantProtein, proteinSupplements,
             vitaminA, vitaminB, vitaminC, vitaminD, vitaminE, vitaminK,
             calcium, iron, potassium, zinc, magnesium
@@ -1367,6 +1381,7 @@ struct MealFormView: View {
         object.saturatedFat = Double(intOrZero(saturatedFat))
         object.transFat = Double(intOrZero(transFat))
         object.omega3 = Double(intOrZero(omega3))
+        object.omega6 = Double(intOrZero(omega6))
 
         object.animalProtein = Double(intOrZero(animalProtein))
         object.plantProtein = Double(intOrZero(plantProtein))
@@ -1410,6 +1425,7 @@ struct MealFormView: View {
         object.saturatedFatIsGuess = saturatedFatIsGuess
         object.transFatIsGuess = transFatIsGuess
         object.omega3IsGuess = omega3IsGuess
+        object.omega6IsGuess = omega6IsGuess
 
         object.animalProteinIsGuess = animalProteinIsGuess
         object.plantProteinIsGuess = plantProteinIsGuess
@@ -2411,6 +2427,9 @@ private struct FatSubFields: View {
     // New: Omega-3
     @Binding var omega3Text: String
     @Binding var omega3IsGuess: Bool
+    // New: Omega-6
+    @Binding var omega6Text: String
+    @Binding var omega6IsGuess: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -2420,6 +2439,8 @@ private struct FatSubFields: View {
             MetricField(titleKey: "trans_fat", text: $transText, isGuess: $transIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
             // Omega-3 (grams)
             MetricField(titleKey: "omega3", text: $omega3Text, isGuess: $omega3IsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
+            // Omega-6 (grams)
+            MetricField(titleKey: "omega6", text: $omega6Text, isGuess: $omega6IsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
         }
     }
 }

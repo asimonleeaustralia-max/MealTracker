@@ -55,6 +55,8 @@ public class Meal: NSManagedObject, Identifiable {
     @NSManaged public var transFat: Double
     // Added: Omega-3 (grams)
     @NSManaged public var omega3: Double
+    // Added: Omega-6 (grams)
+    @NSManaged public var omega6: Double
 
     // New protein breakdown attributes
     @NSManaged public var animalProtein: Double
@@ -91,6 +93,8 @@ public class Meal: NSManagedObject, Identifiable {
     @NSManaged public var transFatIsGuess: Bool
     // Added: Omega-3 accuracy flag
     @NSManaged public var omega3IsGuess: Bool
+    // Added: Omega-6 accuracy flag
+    @NSManaged public var omega6IsGuess: Bool
 
     // New protein breakdown accuracy flags
     @NSManaged public var animalProteinIsGuess: Bool
