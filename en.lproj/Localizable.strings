@@ -149,7 +149,6 @@
 "coredata_save_failed_error_prefix" = "Failed to save photo:";
 "free_tier_photo_limit_reached" = "Free tier allows up to %d photos per meal.";
 
-
 "sodium" = "Sodium";
 "alcohol" = "Alcohol";
 "nicotine" = "Nicotine";
@@ -157,3 +156,12 @@
 "caffeine" = "Caffeine";
 "taurine" = "Taurine";
 
+/* New: Settings — Open to new meal on launch */
+"setting_open_to_new_meal" = "Shortcuts";
+"setting_open_to_new_meal_toggle" = "Enable “New Meal” shortcut";
+"setting_open_to_new_meal_desc" = "When enabled, you can add a Shortcut to open the app directly to a new meal.";
+
+/* New: App Intent strings */
+"intent_new_meal_title" = "New Meal";
+"intent_new_meal_description" = "Open the app directly to a new meal.";
+"intent_new_meal_disabled_error" = "The “New Meal” shortcut is disabled in Settings.";

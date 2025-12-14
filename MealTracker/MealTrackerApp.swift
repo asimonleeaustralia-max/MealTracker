@@ -124,9 +124,9 @@ struct MealTrackerApp: App {
 }
 
 // A simple root to keep the main stack clean.
-// Today we just show MealFormView (existing behavior), but we can evolve this.
+// Updated: use a neutral root (ContentView) so MealFormView is only shown via the sheet.
 private struct MealsRootView: View {
     var body: some View {
-        MealFormView()
+        ContentView()
     }
 }
