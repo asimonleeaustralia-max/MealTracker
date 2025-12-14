@@ -55,6 +55,24 @@ final class SessionManager: ObservableObject {
     }
 
     func login(email: String, password: String) async throws {
+        // DEV bypass: accept specific credentials in DEBUG builds
+        #if DEBUG
+        if email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "test@test.com",
+           password == "password" {
+            let userID = currentUserID ?? UUID()
+            do {
+                try KeychainService.saveEmail(email, for: userID)
+                try KeychainService.savePassword(password, for: userID)
+            } catch {
+                throw LoginError.keychain(error)
+            }
+            currentUserID = userID
+            displayEmail = email
+            isLoggedIn = true
+            return
+        }
+        #endif
+
         // Basic validation (client-side)
         guard isValidEmail(email) else { throw LoginError.invalidEmail }
         guard password.count >= 8 else { throw LoginError.invalidPassword }
@@ -110,3 +128,4 @@ final class SessionManager: ObservableObject {
         return email.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
     }
 }
+
