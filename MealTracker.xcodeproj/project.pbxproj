@@ -19,6 +19,8 @@
 		C38106602ED29E5A00C796E0 /* PhotoNutritionGuesser.swift in Sources */ = {isa = PBXBuildFile; fileRef = C381065F2ED29E5A00C796E0 /* PhotoNutritionGuesser.swift */; };
 		C38106622ED29E6100C796E0 /* LocalBarcodeDB.json in Resources */ = {isa = PBXBuildFile; fileRef = C38106612ED29E6100C796E0 /* LocalBarcodeDB.json */; };
 		C393070B2EEE62F80017E7A0 /* MealTrackerAppShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = C393070A2EEE62F70017E7A0 /* MealTrackerAppShortcuts.swift */; };
+		C393070D2EEF5F5A0017E7A0 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C393070C2EEF5F5A0017E7A0 /* KeychainService.swift */; };
+		C393070F2EEF5F6B0017E7A0 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C393070E2EEF5F6B0017E7A0 /* LoginView.swift */; };
 		C3BC02E82EDDACE8004C1779 /* CameraCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3BC02E72EDDACE8004C1779 /* CameraCaptureView.swift */; };
 		C3C2B9712ED44E7000E9D4F4 /* FeaturePrintClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3C2B9702ED44E7000E9D4F4 /* FeaturePrintClassifier.swift */; };
 		C3C2B9732ED44E8500E9D4F4 /* FoodClassPriors.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3C2B9722ED44E8500E9D4F4 /* FoodClassPriors.swift */; };
@@ -40,6 +42,8 @@
 		C381065F2ED29E5A00C796E0 /* PhotoNutritionGuesser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoNutritionGuesser.swift; sourceTree = "<group>"; };
 		C38106612ED29E6100C796E0 /* LocalBarcodeDB.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = LocalBarcodeDB.json; sourceTree = "<group>"; };
 		C393070A2EEE62F70017E7A0 /* MealTrackerAppShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MealTrackerAppShortcuts.swift; sourceTree = "<group>"; };
+		C393070C2EEF5F5A0017E7A0 /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
+		C393070E2EEF5F6B0017E7A0 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		C3BC02E72EDDACE8004C1779 /* CameraCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCaptureView.swift; sourceTree = "<group>"; };
 		C3C2B9702ED44E7000E9D4F4 /* FeaturePrintClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeaturePrintClassifier.swift; sourceTree = "<group>"; };
 		C3C2B9722ED44E8500E9D4F4 /* FoodClassPriors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodClassPriors.swift; sourceTree = "<group>"; };
@@ -94,6 +98,8 @@
 				C35F5E7C2EDEFAA400DD2844 /* PhotoLibraryPickerView.swift */,
 				C376B3532EE98CFC0003C83B /* DateSyncService.swift */,
 				C393070A2EEE62F70017E7A0 /* MealTrackerAppShortcuts.swift */,
+				C393070C2EEF5F5A0017E7A0 /* KeychainService.swift */,
+				C393070E2EEF5F6B0017E7A0 /* LoginView.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -183,6 +189,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				C381065E2ED29E5500C796E0 /* LocalBarcodeDB.swift in Sources */,
+				C393070F2EEF5F6B0017E7A0 /* LoginView.swift in Sources */,
 				C38106602ED29E5A00C796E0 /* PhotoNutritionGuesser.swift in Sources */,
 				C34176E22ED2795200C73645 /* PhotoService.swift in Sources */,
 				C35F5E7D2EDEFAA400DD2844 /* PhotoLibraryPickerView.swift in Sources */,
@@ -195,6 +202,7 @@
 				C34176DE2ED2794A00C73645 /* ImageResizer.swift in Sources */,
 				C393070B2EEE62F80017E7A0 /* MealTrackerAppShortcuts.swift in Sources */,
 				C3BC02E82EDDACE8004C1779 /* CameraCaptureView.swift in Sources */,
+				C393070D2EEF5F5A0017E7A0 /* KeychainService.swift in Sources */,
 				C3F0A6FA2ED59B32003949B8 /* SessionManager.swift in Sources */,
 				C3C2B9712ED44E7000E9D4F4 /* FeaturePrintClassifier.swift in Sources */,
 			);

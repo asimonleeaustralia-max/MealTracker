@@ -69,6 +69,9 @@ struct SettingsView: View {
     @State private var isSyncing: Bool = false
     @State private var syncError: String?
 
+    // Login sheet
+    @State private var showingLogin = false
+
     private var availableLanguages: [String] {
         let codes = Bundle.main.localizations.filter { $0.lowercased() != "base" }
         let list = codes.isEmpty ? Bundle.main.preferredLocalizations : codes
@@ -100,7 +103,7 @@ struct SettingsView: View {
                     }
                 }
 
-                // Tier & limits section
+                // Account & Cloud section
                 Section(header: Text(LocalizedStringKey("account_plan_section_title"))) {
                     HStack {
                         Text(LocalizedStringKey("access_tier"))
@@ -108,6 +111,48 @@ struct SettingsView: View {
                         Text(tier == .paid ? NSLocalizedString("access_tier.paid", comment: "") : NSLocalizedString("access_tier.free", comment: ""))
                             .foregroundStyle(.secondary)
                     }
+
+                    // Logged-in state
+                    HStack {
+                        Text(LocalizedStringKey("account_status"))
+                        Spacer()
+                        if session.isLoggedIn {
+                            Text(session.displayEmail ?? NSLocalizedString("logged_in", comment: ""))
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text(NSLocalizedString("logged_out", comment: ""))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    // Login / Logout actions
+                    if session.isLoggedIn {
+                        Button(role: .destructive) {
+                            Task { await session.logout() }
+                        } label: {
+                            Text(LocalizedStringKey("log_out"))
+                        }
+                    } else {
+                        Button {
+                            showingLogin = true
+                        } label: {
+                            Text(LocalizedStringKey("log_in"))
+                        }
+                        .sheet(isPresented: $showingLogin) {
+                            LoginView { email, password in
+                                Task {
+                                    do {
+                                        try await session.login(email: email, password: password)
+                                        showingLogin = false
+                                    } catch {
+                                        // You can present an alert from LoginView instead; here we dismiss and rely on its own error UI.
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Limits
                     HStack {
                         Text(LocalizedStringKey("meals_left_today"))
                         Spacer()
@@ -120,9 +165,6 @@ struct SettingsView: View {
                         Text(maxPhotos >= 9000 ? NSLocalizedString("unlimited", comment: "") : "\(maxPhotos)")
                             .foregroundStyle(.secondary)
                     }
-
-                    Toggle(LocalizedStringKey("logged_in_cloud_stub"), isOn: $session.isLoggedIn)
-                        .tint(.accentColor)
 
                     // Date Synced (Cloud Stub)
                     Section {
@@ -140,7 +182,7 @@ struct SettingsView: View {
                                 Text(LocalizedStringKey("sync_now"))
                             }
                         }
-                        .disabled(isSyncing)
+                        .disabled(isSyncing || !session.isLoggedIn)
                         if let syncError {
                             Text(syncError)
                                 .font(.footnote)
@@ -252,6 +294,10 @@ struct SettingsView: View {
         syncError = nil
         defer { isSyncing = false }
         do {
+            guard session.isLoggedIn else {
+                syncError = NSLocalizedString("must_be_logged_in_to_sync", comment: "Must be logged in")
+                return
+            }
             // For demo: set "now" as the synced date, then read back to display
             let now = Date()
             try await session.dateSync.setSyncedDate(now)
