@@ -132,6 +132,27 @@
 "sync_now" = "Sync now";
 "synced_date_not_set" = "Not set";
 
+/* Credentials: account status and actions */
+"account_status" = "Account";
+"logged_in" = "Logged In";
+"logged_out" = "Logged Out";
+"log_in" = "Log In";
+"log_out" = "Log Out";
+
+/* Credentials: Login view */
+"login.title" = "Sign In";
+"login.email.placeholder" = "Email";
+"login.password.placeholder" = "Password";
+"login.submit" = "Sign In";
+"login.cancel" = "Cancel";
+
+/* Credentials: validation (used in SessionManager) */
+"invalid_email_error" = "Enter a valid email address.";
+"invalid_password_error" = "Password must be at least 8 characters.";
+
+/* Optional: must be logged in to sync message */
+"must_be_logged_in_to_sync" = "You must be logged in to sync.";
+
 "data_sharing_section_title" = "Data Sharing";
 "data_sharing_picker_title" = "Sharing";
 "data_sharing.public" = "Public";
@@ -171,3 +192,9 @@
 "ai_feedback_severity.kind" = "Kind";
 "ai_feedback_severity.balanced" = "Balanced";
 "ai_feedback_severity.boot_camp" = "Boot Camp";
+
+/* Optional: Keychain error localization (enable if you changed KeychainService) */
+"keychain.item_not_found" = "Keychain item not found.";
+"keychain.duplicate_item" = "Keychain item already exists.";
+"keychain.unexpected_data" = "Unexpected keychain data format.";
+"keychain.unexpected_status_fmt" = "Keychain error: %d";

@@ -56,9 +56,7 @@ struct LoginView: View {
         guard !isSubmitting else { return }
         isSubmitting = true
         errorMessage = nil
-        // Delegate to parent; allow it to set session and dismiss
         onSubmit(email, password)
-        // If parent needs to report an error, you can pass a completion handler; for simplicity we stop spinner after a short delay
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             isSubmitting = false
         }

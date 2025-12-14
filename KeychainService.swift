@@ -9,10 +9,15 @@ enum KeychainError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .itemNotFound: return "Keychain item not found."
-        case .duplicateItem: return "Keychain item already exists."
-        case .unexpectedData: return "Unexpected keychain data format."
-        case .unexpectedStatus(let status): return "Keychain error: \(status)"
+        case .itemNotFound:
+            return NSLocalizedString("keychain.item_not_found", comment: "Keychain item not found")
+        case .duplicateItem:
+            return NSLocalizedString("keychain.duplicate_item", comment: "Keychain item already exists")
+        case .unexpectedData:
+            return NSLocalizedString("keychain.unexpected_data", comment: "Unexpected keychain data format")
+        case .unexpectedStatus(let status):
+            let fmt = NSLocalizedString("keychain.unexpected_status_fmt", comment: "Keychain error format")
+            return String(format: fmt, status)
         }
     }
 }
@@ -146,3 +151,4 @@ extension KeychainService {
         return s
     }
 }
+

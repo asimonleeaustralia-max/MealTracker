@@ -103,7 +103,7 @@ struct SettingsView: View {
                     }
                 }
 
-                // Account & Cloud section
+                // Account & Plan section (use existing key from Localizable.strings)
                 Section(header: Text(LocalizedStringKey("account_plan_section_title"))) {
                     HStack {
                         Text(LocalizedStringKey("access_tier"))
@@ -145,7 +145,7 @@ struct SettingsView: View {
                                         try await session.login(email: email, password: password)
                                         showingLogin = false
                                     } catch {
-                                        // You can present an alert from LoginView instead; here we dismiss and rely on its own error UI.
+                                        // Keep inline error UI within LoginView if needed
                                     }
                                 }
                             }
@@ -315,3 +315,4 @@ struct SettingsView: View {
         .environment(\.managedObjectContext, controller.container.viewContext)
         .environmentObject(SessionManager())
 }
+
