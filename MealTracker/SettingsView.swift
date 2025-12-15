@@ -72,6 +72,10 @@ struct SettingsView: View {
     // Login sheet
     @State private var showingLogin = false
 
+    // People (Core Data)
+    @FetchRequest(fetchRequest: Person.fetchAllRequest())
+    private var people: FetchedResults<Person>
+
     private var availableLanguages: [String] {
         let codes = Bundle.main.localizations.filter { $0.lowercased() != "base" }
         let list = codes.isEmpty ? Bundle.main.preferredLocalizations : codes
@@ -191,6 +195,45 @@ struct SettingsView: View {
                     }
                 }
 
+                // People management
+                Section(header: Text("People")) {
+                    // Default person dropdown
+                    Picker("Default person",
+                           selection: Binding<UUID?>(
+                            get: {
+                                people.first(where: { $0.isDefault })?.id
+                            },
+                            set: { newID in
+                                setDefaultPerson(by: newID)
+                            })) {
+                        ForEach(people) { person in
+                            Text(person.name).tag(Optional.some(person.id))
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .disabled(people.isEmpty)
+
+                    // List of people with delete
+                    ForEach(people) { person in
+                        HStack {
+                            Text(person.name)
+                            if person.isDefault {
+                                Spacer()
+                                Image(systemName: "star.fill")
+                                    .foregroundStyle(.yellow)
+                                    .accessibilityLabel(Text("Default"))
+                            }
+                        }
+                    }
+                    .onDelete(perform: deletePeople)
+
+                    Button {
+                        addPerson()
+                    } label: {
+                        Label("Add Person", systemImage: "plus")
+                    }
+                }
+
                 // Data sharing preference
                 Section(header: Text(LocalizedStringKey("data_sharing_section_title"))) {
                     Picker(LocalizedStringKey("data_sharing_picker_title"), selection: $dataSharing) {
@@ -272,6 +315,71 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - People actions
+
+    private func addPerson() {
+        let p = Person(context: context)
+        let defaultName = NSLocalizedString("new_person_default_name", comment: "Default new person name")
+        p.name = (defaultName == "new_person_default_name") ? "New Person" : defaultName
+
+        // If no default person exists yet, make this one default
+        if people.first(where: { $0.isDefault }) == nil {
+            p.isDefault = true
+        }
+
+        do {
+            try context.save()
+        } catch {
+            // Handle save error as needed (e.g., show an alert)
+        }
+    }
+
+    private func deletePeople(at offsets: IndexSet) {
+        let toDelete = offsets.map { people[$0] }
+
+        // Prevent deleting the last remaining person
+        guard people.count - toDelete.count >= 1 else {
+            return
+        }
+
+        toDelete.forEach { context.delete($0) }
+
+        do {
+            try context.save()
+        } catch {
+            // Handle save error
+        }
+
+        // Ensure exactly one default remains
+        do {
+            let remaining = try context.fetch(Person.fetchAllRequest())
+            let defaults = remaining.filter { $0.isDefault }
+            if defaults.count == 0, let first = remaining.first {
+                first.isDefault = true
+                try context.save()
+            } else if defaults.count > 1 {
+                for p in defaults.dropFirst() { p.isDefault = false }
+                try context.save()
+            }
+        } catch {
+            // Handle fetch/save error
+        }
+    }
+
+    private func setDefaultPerson(by id: UUID?) {
+        guard let id else { return }
+        for p in people {
+            p.isDefault = (p.id == id)
+        }
+        do {
+            try context.save()
+        } catch {
+            // Handle save error
+        }
+    }
+
+    // MARK: - Sync stubs
+
     @MainActor
     private func loadSyncedDate() async {
         isSyncing = true
@@ -315,4 +423,3 @@ struct SettingsView: View {
         .environment(\.managedObjectContext, controller.container.viewContext)
         .environmentObject(SessionManager())
 }
-
