@@ -76,6 +76,11 @@ struct SettingsView: View {
     @FetchRequest(fetchRequest: Person.fetchAllRequest())
     private var people: FetchedResults<Person>
 
+    // Add Person sheet state
+    @State private var showingAddPersonSheet: Bool = false
+    @State private var newPersonName: String = ""
+    @State private var addPersonError: String?
+
     private var availableLanguages: [String] {
         let codes = Bundle.main.localizations.filter { $0.lowercased() != "base" }
         let list = codes.isEmpty ? Bundle.main.preferredLocalizations : codes
@@ -243,81 +248,14 @@ struct SettingsView: View {
                     Button {
                         // Prevent adding on free tier
                         guard !isFreeTier else { return }
-                        addPerson()
+                        // Start add-person flow: present sheet
+                        newPersonName = ""
+                        addPersonError = nil
+                        showingAddPersonSheet = true
                     } label: {
                         Label(NSLocalizedString("add_person_button_title", comment: "Add Person"), systemImage: "plus")
                     }
                     .disabled(isFreeTier)
-                }
-
-                // Data sharing preference
-                Section(header: Text(LocalizedStringKey("data_sharing_section_title"))) {
-                    Picker(LocalizedStringKey("data_sharing_picker_title"), selection: $dataSharing) {
-                        ForEach(DataSharingPreference.allCases) { option in
-                            Text(option.displayName).tag(option)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-
-                    Text(dataSharing.explanation)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityLabel(dataSharing.explanation)
-                }
-
-                // New: AI Feedback Severity (stub)
-                Section(header: Text(LocalizedStringKey("ai_feedback_severity_section_title"))) {
-                    Picker(LocalizedStringKey("ai_feedback_severity_picker_title"), selection: $aiFeedbackSeverity) {
-                        ForEach(AIFeedbackSeverity.allCases) { option in
-                            Text(option.displayName).tag(option)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
-
-                // Handedness (no header)
-                Section {
-                    Picker(l.localized("handedness"), selection: $handedness) {
-                        Text(l.localized("left_handed")).tag(Handedness.left)
-                        Text(l.localized("right_handed")).tag(Handedness.right)
-                    }
-                    .pickerStyle(.segmented)
-                }
-
-                // Energy unit (no header)
-                Section {
-                    Picker("", selection: $energyUnit) {
-                        Text(l.localized("calories")).tag(EnergyUnit.calories)
-                        Text(l.localized("kilojoules")).tag(EnergyUnit.kilojoules)
-                    }
-                    .pickerStyle(.segmented)
-                }
-
-                Section {
-                    Toggle(l.localized("show_vitamins_entry"), isOn: $showVitamins)
-                    Picker(l.localized("vitamins_unit"), selection: $vitaminsUnit) {
-                        Text("mg").tag(VitaminsUnit.milligrams)
-                        Text("µg").tag(VitaminsUnit.micrograms)
-                    }
-                    .pickerStyle(.segmented)
-                }
-
-                Section {
-                    Toggle(l.localized("show_minerals_entry"), isOn: $showMinerals)
-                }
-
-                // New: Simulants section toggle (default off)
-                Section {
-                    Toggle(l.localized("show_stimulants_entry"), isOn: $showSimulants)
-                }
-
-                // New: Open to new meal on launch
-                Section(header: Text(NSLocalizedString("setting_open_to_new_meal", comment: ""))) {
-                    Toggle(NSLocalizedString("setting_open_to_new_meal_toggle", comment: ""), isOn: $openToNewMealOnLaunch)
-                    Text(NSLocalizedString("setting_open_to_new_meal_desc", comment: ""))
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
                 }
             }
             .onAppear {
@@ -334,16 +272,88 @@ struct SettingsView: View {
                     Button(l.localized("done")) { dismiss() }
                 }
             }
+            // Move the Add Person sheet to the top-level NavigationView to avoid immediate close
+            .sheet(isPresented: $showingAddPersonSheet) {
+                NavigationView {
+                    Form {
+                        Section(header: Text(NSLocalizedString("add_person_name_header", comment: "Name"))) {
+                            TextField(NSLocalizedString("add_person_name_placeholder", comment: "Name"),
+                                      text: Binding(
+                                        get: { newPersonName },
+                                        set: { value in
+                                            newPersonName = value
+                                            // Live-validate as user types
+                                            addPersonError = validationError(for: value)
+                                        }
+                                      ))
+                                .textInputAutocapitalization(.words)
+                                .disableAutocorrection(true)
+
+                            if let error = addPersonError, !error.isEmpty {
+                                Text(error)
+                                    .font(.footnote)
+                                    .foregroundStyle(.red)
+                            }
+                        }
+                    }
+                    .navigationTitle(NSLocalizedString("add_person_nav_title", comment: "Add Person"))
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button(NSLocalizedString("cancel", comment: "Cancel")) {
+                                showingAddPersonSheet = false
+                            }
+                        }
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button(NSLocalizedString("save", comment: "Save")) {
+                                attemptSaveNewPerson()
+                            }
+                            .disabled(validationError(for: newPersonName) != nil)
+                        }
+                    }
+                }
+            }
         }
     }
 
-    // MARK: - People actions (soft delete aware)
+    // MARK: - Add Person flow
 
-    private func addPerson() {
+    private func normalizedName(_ s: String) -> String {
+        s.trimmingCharacters(in: .whitespacesAndNewlines)
+         .folding(options: [.diacriticInsensitive, .caseInsensitive, .widthInsensitive], locale: .current)
+         .lowercased()
+    }
+
+    private func nameAlreadyExists(_ name: String) -> Bool {
+        let target = normalizedName(name)
+        // people excludes removed already
+        return people.contains { normalizedName($0.name) == target }
+    }
+
+    private func validationError(for raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            return NSLocalizedString("add_person_error_empty", comment: "Name cannot be empty")
+        }
+        if nameAlreadyExists(trimmed) {
+            return NSLocalizedString("add_person_error_duplicate", comment: "That name already exists")
+        }
+        return nil
+    }
+
+    private func attemptSaveNewPerson() {
+        // Guard free tier (should be unreachable since button is disabled)
+        let isFreeTier = Entitlements.tier(for: session) == .free
+        guard !isFreeTier else { return }
+
+        let trimmed = newPersonName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let error = validationError(for: trimmed) {
+            addPersonError = error
+            return
+        }
+
+        // Passed validation — insert and save
         let p = Person(context: context)
-        // Default name; localize if you add the key, otherwise fallback
-        let defaultName = NSLocalizedString("new_person_default_name", comment: "Default new person name")
-        p.name = (defaultName == "new_person_default_name") ? "New Person" : defaultName
+        p.name = trimmed
         p.isRemoved = false
 
         // If no default person exists yet (among active), make this one default
@@ -353,10 +363,13 @@ struct SettingsView: View {
 
         do {
             try context.save()
+            showingAddPersonSheet = false
         } catch {
-            // Handle save error as needed
+            addPersonError = error.localizedDescription
         }
     }
+
+    // MARK: - People actions (soft delete aware)
 
     private func softDeletePeople(at offsets: IndexSet) {
         let toDelete = offsets.map { people[$0] }
