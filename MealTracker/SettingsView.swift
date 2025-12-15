@@ -87,6 +87,8 @@ struct SettingsView: View {
 
         // Read environment-dependent values here (safe)
         let tier = Entitlements.tier(for: session)
+        let isFreeTier = (tier == .free)
+
         let mealsRemainingText: String = {
             if let remaining = Entitlements.mealsRemainingToday(for: tier, in: context) {
                 return "\(remaining)"
@@ -204,6 +206,8 @@ struct SettingsView: View {
                                 people.first(where: { $0.isDefault })?.id
                             },
                             set: { newID in
+                                // Prevent changes on free tier
+                                guard !isFreeTier else { return }
                                 setDefaultPerson(by: newID)
                             })) {
                         ForEach(people) { person in
@@ -211,7 +215,16 @@ struct SettingsView: View {
                         }
                     }
                     .pickerStyle(.menu)
-                    .disabled(people.isEmpty)
+                    .disabled(people.isEmpty || isFreeTier) // greyed out on free
+
+                    // Informational notice for free tier (localized key)
+                    if isFreeTier {
+                        Text(LocalizedStringKey("pro_people_notice"))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 4)
+                    }
 
                     // List of people with soft delete
                     ForEach(people) { person in
@@ -228,10 +241,13 @@ struct SettingsView: View {
                     .onDelete(perform: softDeletePeople)
 
                     Button {
+                        // Prevent adding on free tier
+                        guard !isFreeTier else { return }
                         addPerson()
                     } label: {
                         Label(NSLocalizedString("add_person_button_title", comment: "Add Person"), systemImage: "plus")
                     }
+                    .disabled(isFreeTier)
                 }
 
                 // Data sharing preference
@@ -306,6 +322,12 @@ struct SettingsView: View {
             }
             .onAppear {
                 Task { await loadSyncedDate() }
+                enforceFreeTierPeopleIfNeeded(isFreeTier: isFreeTier)
+            }
+            .onChange(of: session.isLoggedIn) { _ in
+                // When login state changes, re-evaluate and enforce
+                let newTier = Entitlements.tier(for: session)
+                enforceFreeTierPeopleIfNeeded(isFreeTier: newTier == .free)
             }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -385,6 +407,53 @@ struct SettingsView: View {
         }
     }
 
+    // Enforce free plan behavior: single default person named "Me", no changes allowed.
+    private func enforceFreeTierPeopleIfNeeded(isFreeTier: Bool) {
+        guard isFreeTier else { return }
+
+        // Ensure one default person exists among active and is named "Me"
+        // If none exist, create one.
+        let activePeople = Array(people)
+        if activePeople.isEmpty {
+            let p = Person(context: context)
+            let defaultName = NSLocalizedString("default_person_name_me", comment: "Default person name for device owner")
+            p.name = (defaultName == "default_person_name_me") ? "Me" : defaultName
+            p.isDefault = true
+            p.isRemoved = false
+            try? context.save()
+            return
+        }
+
+        // Ensure exactly one default
+        var foundDefault: Person?
+        for p in activePeople {
+            if p.isDefault {
+                if foundDefault == nil {
+                    foundDefault = p
+                } else {
+                    p.isDefault = false
+                }
+            }
+        }
+        if foundDefault == nil, let first = activePeople.first {
+            first.isDefault = true
+            foundDefault = first
+        }
+
+        // Ensure default person's name is "Me"
+        if let d = foundDefault {
+            let desiredName = NSLocalizedString("default_person_name_me", comment: "Default person name for device owner")
+            let target = (desiredName == "default_person_name_me") ? "Me" : desiredName
+            if d.name != target {
+                d.name = target
+            }
+        }
+
+        if context.hasChanges {
+            try? context.save()
+        }
+    }
+
     // MARK: - Sync stubs
 
     @MainActor
@@ -430,4 +499,3 @@ struct SettingsView: View {
         .environment(\.managedObjectContext, controller.container.viewContext)
         .environmentObject(SessionManager())
 }
-
