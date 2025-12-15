@@ -53,9 +53,10 @@ public class Person: NSManagedObject, Identifiable {
 // MARK: - Fetch helpers
 
 extension Person {
-    // Fetch all persons, default-first then by name
+    // Fetch all active (non-removed) persons, default-first then by name
     static func fetchAllRequest() -> NSFetchRequest<Person> {
         let request = NSFetchRequest<Person>(entityName: "Person")
+        request.predicate = NSPredicate(format: "isRemoved == NO")
         request.sortDescriptors = [
             NSSortDescriptor(key: "isDefault", ascending: false),
             NSSortDescriptor(key: "name", ascending: true, selector: #selector(NSString.localizedStandardCompare(_:)))
@@ -64,10 +65,10 @@ extension Person {
         return request
     }
 
-    // Fetch the single default person (if any)
+    // Fetch the single default person among active (non-removed)
     static func fetchDefaultRequest() -> NSFetchRequest<Person> {
         let request = NSFetchRequest<Person>(entityName: "Person")
-        request.predicate = NSPredicate(format: "isDefault == YES")
+        request.predicate = NSPredicate(format: "isDefault == YES AND isRemoved == NO")
         request.fetchLimit = 1
         request.includesSubentities = false
         return request
@@ -89,3 +90,4 @@ extension Person {
     @objc(removeMeal:)
     @NSManaged public func removeFromMeal(_ values: Set<Meal>)
 }
+

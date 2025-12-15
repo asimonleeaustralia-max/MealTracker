@@ -72,7 +72,7 @@ struct SettingsView: View {
     // Login sheet
     @State private var showingLogin = false
 
-    // People (Core Data)
+    // People (Core Data) — fetch only active (non-removed)
     @FetchRequest(fetchRequest: Person.fetchAllRequest())
     private var people: FetchedResults<Person>
 
@@ -196,9 +196,9 @@ struct SettingsView: View {
                 }
 
                 // People management
-                Section(header: Text("People")) {
-                    // Default person dropdown
-                    Picker("Default person",
+                Section(header: Text(NSLocalizedString("people_section_title", comment: "People")) ) {
+                    // Default person dropdown (only active people)
+                    Picker(NSLocalizedString("default_person_picker_title", comment: "Default person"),
                            selection: Binding<UUID?>(
                             get: {
                                 people.first(where: { $0.isDefault })?.id
@@ -213,7 +213,7 @@ struct SettingsView: View {
                     .pickerStyle(.menu)
                     .disabled(people.isEmpty)
 
-                    // List of people with delete
+                    // List of people with soft delete
                     ForEach(people) { person in
                         HStack {
                             Text(person.name)
@@ -221,16 +221,16 @@ struct SettingsView: View {
                                 Spacer()
                                 Image(systemName: "star.fill")
                                     .foregroundStyle(.yellow)
-                                    .accessibilityLabel(Text("Default"))
+                                    .accessibilityLabel(Text(NSLocalizedString("default_person_accessibility_label", comment: "Default")))
                             }
                         }
                     }
-                    .onDelete(perform: deletePeople)
+                    .onDelete(perform: softDeletePeople)
 
                     Button {
                         addPerson()
                     } label: {
-                        Label("Add Person", systemImage: "plus")
+                        Label(NSLocalizedString("add_person_button_title", comment: "Add Person"), systemImage: "plus")
                     }
                 }
 
@@ -315,14 +315,16 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - People actions
+    // MARK: - People actions (soft delete aware)
 
     private func addPerson() {
         let p = Person(context: context)
+        // Default name; localize if you add the key, otherwise fallback
         let defaultName = NSLocalizedString("new_person_default_name", comment: "Default new person name")
         p.name = (defaultName == "new_person_default_name") ? "New Person" : defaultName
+        p.isRemoved = false
 
-        // If no default person exists yet, make this one default
+        // If no default person exists yet (among active), make this one default
         if people.first(where: { $0.isDefault }) == nil {
             p.isDefault = true
         }
@@ -330,19 +332,24 @@ struct SettingsView: View {
         do {
             try context.save()
         } catch {
-            // Handle save error as needed (e.g., show an alert)
+            // Handle save error as needed
         }
     }
 
-    private func deletePeople(at offsets: IndexSet) {
+    private func softDeletePeople(at offsets: IndexSet) {
         let toDelete = offsets.map { people[$0] }
 
-        // Prevent deleting the last remaining person
+        // Prevent deleting the last remaining active person
         guard people.count - toDelete.count >= 1 else {
             return
         }
 
-        toDelete.forEach { context.delete($0) }
+        var deletedDefault = false
+        for p in toDelete {
+            if p.isDefault { deletedDefault = true }
+            p.isDefault = false
+            p.isRemoved = true
+        }
 
         do {
             try context.save()
@@ -350,24 +357,24 @@ struct SettingsView: View {
             // Handle save error
         }
 
-        // Ensure exactly one default remains
-        do {
-            let remaining = try context.fetch(Person.fetchAllRequest())
-            let defaults = remaining.filter { $0.isDefault }
-            if defaults.count == 0, let first = remaining.first {
-                first.isDefault = true
-                try context.save()
-            } else if defaults.count > 1 {
-                for p in defaults.dropFirst() { p.isDefault = false }
-                try context.save()
+        // If we removed the default, ensure one active default exists
+        if deletedDefault {
+            do {
+                let remaining = try context.fetch(Person.fetchAllRequest()) // active only
+                if let first = remaining.first {
+                    // Set exactly one default among active
+                    for p in remaining { p.isDefault = (p == first) }
+                    try context.save()
+                }
+            } catch {
+                // Handle fetch/save error
             }
-        } catch {
-            // Handle fetch/save error
         }
     }
 
     private func setDefaultPerson(by id: UUID?) {
         guard let id else { return }
+        // Toggle default among active people only
         for p in people {
             p.isDefault = (p.id == id)
         }
@@ -423,3 +430,4 @@ struct SettingsView: View {
         .environment(\.managedObjectContext, controller.container.viewContext)
         .environmentObject(SessionManager())
 }
+

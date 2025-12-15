@@ -92,7 +92,7 @@ struct PersistenceController {
 
 private func ensureDefaultPersonExistsAndIsUnique(on context: NSManagedObjectContext) {
     context.perform {
-        // 1) Fetch all Person rows
+        // Fetch all Person rows (both active and removed) to reconcile state
         let fetch = NSFetchRequest<NSManagedObject>(entityName: "Person")
         fetch.includesPendingChanges = true
         fetch.includesSubentities = false
@@ -107,8 +107,20 @@ private func ensureDefaultPersonExistsAndIsUnique(on context: NSManagedObjectCon
 
         var didChange = false
 
-        if persons.isEmpty {
-            // 2) Seed default Person if none exist
+        // Partition into active (non-removed) and removed
+        let active = persons.filter { ($0.value(forKey: "isRemoved") as? Bool) != true }
+        let removed = persons.filter { ($0.value(forKey: "isRemoved") as? Bool) == true }
+
+        // Ensure removed persons are never marked as default
+        for obj in removed {
+            if (obj.value(forKey: "isDefault") as? Bool) == true {
+                obj.setValue(false, forKey: "isDefault")
+                didChange = true
+            }
+        }
+
+        if active.isEmpty {
+            // Seed a new default Person if none active exist
             guard let entity = NSEntityDescription.entity(forEntityName: "Person", in: context) else {
                 return
             }
@@ -118,20 +130,18 @@ private func ensureDefaultPersonExistsAndIsUnique(on context: NSManagedObjectCon
             let defaultName = NSLocalizedString("default_person_name_me", comment: "Default person name for device owner")
             obj.setValue(defaultName == "default_person_name_me" ? "Me" : defaultName, forKey: "name")
             obj.setValue(true, forKey: "isDefault")
+            obj.setValue(false, forKey: "isRemoved")
             didChange = true
         } else {
-            // 3) Enforce exactly one default person
-            //    - If none marked default, set the first as default.
-            //    - If multiple marked default, keep the first and clear others.
-            let defaults = persons.filter { ($0.value(forKey: "isDefault") as? Bool) == true }
-            if defaults.isEmpty {
-                if let first = persons.first {
+            // Enforce exactly one default among active persons
+            let defaultsActive = active.filter { ($0.value(forKey: "isDefault") as? Bool) == true }
+            if defaultsActive.isEmpty {
+                if let first = active.first {
                     first.setValue(true, forKey: "isDefault")
                     didChange = true
                 }
-            } else if defaults.count > 1 {
-                // Keep the first as default, clear the rest
-                for obj in defaults.dropFirst() {
+            } else if defaultsActive.count > 1 {
+                for obj in defaultsActive.dropFirst() {
                     obj.setValue(false, forKey: "isDefault")
                     didChange = true
                 }
@@ -143,3 +153,4 @@ private func ensureDefaultPersonExistsAndIsUnique(on context: NSManagedObjectCon
         }
     }
 }
+
