@@ -42,7 +42,7 @@ struct ContentView: View {
                     .listStyle(InsetGroupedListStyle())
                 }
             }
-            .navigationTitle(LocalizedStringKey("meals_title"))
+            .navigationBarHidden(true)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
