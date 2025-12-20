@@ -59,11 +59,10 @@ struct MealTrackerApp: App {
                                 .accessibilityIdentifier("newMealSheet")
                             }
                             .onAppear {
-                                // Handle cold start: respect user setting
-                                if openToNewMealOnLaunch {
-                                    presentNewMealSheet = true
-                                }
-                                // Handle pending AppIntent flag (e.g., tapped from Shortcuts)
+                                // Always open entry screen immediately on launch
+                                presentNewMealSheet = true
+
+                                // Still respect AppIntent flag if present
                                 if launchAction == "newMeal" {
                                     presentNewMealSheet = true
                                     launchAction = nil
@@ -93,9 +92,10 @@ struct MealTrackerApp: App {
                                     .environmentObject(session)
                             }
                             .onAppear {
-                                if openToNewMealOnLaunch {
-                                    presentNewMealSheet = true
-                                }
+                                // Always open entry screen immediately on launch
+                                presentNewMealSheet = true
+
+                                // Still respect AppIntent flag if present
                                 if launchAction == "newMeal" {
                                     presentNewMealSheet = true
                                     launchAction = nil
