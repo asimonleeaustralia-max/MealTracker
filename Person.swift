@@ -11,25 +11,25 @@ import Foundation
 import CoreData
 
 @objc(Person)
-public class Person: NSManagedObject, Identifiable {
+class Person: NSManagedObject, Identifiable {
 
     // MARK: - Attributes
 
-    @NSManaged public var id: UUID
-    @NSManaged public var name: String
-    @NSManaged public var isDefault: Bool
-    @NSManaged public var isRemoved: Bool
+    @NSManaged var id: UUID
+    @NSManaged var name: String
+    @NSManaged var isDefault: Bool
+    @NSManaged var isRemoved: Bool
 
     // MARK: - Relationships
 
     // The model shows a relationship named "meal" to the Meal entity, with no inverse.
     // Implemented here as to-many. If your model is to-one, change this to:
-    // @NSManaged public var meal: Meal?
-    @NSManaged public var meal: Set<Meal>
+    // @NSManaged var meal: Meal?
+    @NSManaged var meal: Set<Meal>
 
     // MARK: - Lifecycle
 
-    public override func awakeFromInsert() {
+    override func awakeFromInsert() {
         super.awakeFromInsert()
         // Ensure a UUID is assigned on creation
         if value(forKey: "id") == nil {
@@ -79,15 +79,14 @@ extension Person {
 
 extension Person {
     @objc(addMealObject:)
-    @NSManaged public func addToMeal(_ value: Meal)
+    @NSManaged func addToMeal(_ value: Meal)
 
     @objc(removeMealObject:)
-    @NSManaged public func removeFromMeal(_ value: Meal)
+    @NSManaged func removeFromMeal(_ value: Meal)
 
     @objc(addMeal:)
-    @NSManaged public func addToMeal(_ values: Set<Meal>)
+    @NSManaged func addToMeal(_ values: Set<Meal>)
 
     @objc(removeMeal:)
-    @NSManaged public func removeFromMeal(_ values: Set<Meal>)
+    @NSManaged func removeFromMeal(_ values: Set<Meal>)
 }
-

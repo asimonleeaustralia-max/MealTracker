@@ -71,4 +71,3 @@ struct Entitlements {
         return max(0, maxPerDay - used)
     }
 }
-

@@ -418,10 +418,3 @@ private struct MacroCircle: View {
         .accessibilityLabel("\(shortLabel) \(value) \(unit)")
     }
 }
-
-private extension Double {
-    var cleanString: String {
-        truncatingRemainder(dividingBy: 1) == 0 ? String(Int(self)) : String(self)
-    }
-}
-

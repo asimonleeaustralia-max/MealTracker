@@ -42,7 +42,7 @@ struct ContentView: View {
                     .listStyle(InsetGroupedListStyle())
                 }
             }
-            .navigationBarHidden(true)
+            .navigationBarHidden(false)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
@@ -129,10 +129,3 @@ struct NutrientBadge: View {
         .clipShape(Capsule())
     }
 }
-
-private extension Double {
-    var cleanString: String {
-        truncatingRemainder(dividingBy: 1) == 0 ? String(Int(self)) : String(self)
-    }
-}
-
