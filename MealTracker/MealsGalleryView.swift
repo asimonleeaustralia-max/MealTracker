@@ -62,6 +62,19 @@ struct MealsGalleryView: View {
                 .background(Color(.systemBackground))
             }
         }
+        .navigationTitle(Text(LocalizedStringKey("meals_gallery_title")))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            // Only the Add button on the right
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showingAdd = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel(Text(LocalizedStringKey("add_meal")))
+            }
+        }
         .sheet(isPresented: $showingAdd) {
             NavigationView {
                 MealFormView()
