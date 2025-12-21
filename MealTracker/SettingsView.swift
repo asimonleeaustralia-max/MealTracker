@@ -90,6 +90,10 @@ struct SettingsView: View {
         return Array(Set(list)).sorted()
     }
 
+    // People cap
+    private let maxActivePeople = 15
+    private var isAtPeopleCap: Bool { people.count >= maxActivePeople }
+
     var body: some View {
         let l = LocalizationManager(languageCode: appLanguageCode)
 
@@ -246,6 +250,15 @@ struct SettingsView: View {
                                   systemImage: "plus.circle.fill")
                         }
                         .buttonStyle(.borderless)
+                        .disabled(isAtPeopleCap)
+                        .opacity(isAtPeopleCap ? 0.6 : 1.0)
+
+                        if isAtPeopleCap {
+                            let fmt = NSLocalizedString("add_person_error_max_reached", comment: "Shown when reaching max active people")
+                            Text(String(format: fmt, maxActivePeople))
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
                     // List of people with in-row soft delete (no swipe)
@@ -369,6 +382,10 @@ struct SettingsView: View {
         if nameAlreadyExists(trimmed) {
             return NSLocalizedString("add_person_error_duplicate", comment: "That name already exists")
         }
+        if people.count >= maxActivePeople {
+            let fmt = NSLocalizedString("add_person_error_max_reached", comment: "Max active people reached")
+            return String(format: fmt, maxActivePeople)
+        }
         return nil
     }
 
@@ -376,6 +393,13 @@ struct SettingsView: View {
         // Guard free tier (should be unreachable since button is hidden)
         let isFreeTier = Entitlements.tier(for: session) == .free
         guard !isFreeTier else { return }
+
+        // Enforce hard cap before proceeding
+        if people.count >= maxActivePeople {
+            let fmt = NSLocalizedString("add_person_error_max_reached", comment: "Max active people reached")
+            addPersonError = String(format: fmt, maxActivePeople)
+            return
+        }
 
         let trimmed = newPersonName.trimmingCharacters(in: .whitespacesAndNewlines)
         if let error = validationError(for: trimmed) {
