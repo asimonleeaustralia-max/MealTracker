@@ -81,6 +81,9 @@ struct SettingsView: View {
     @State private var newPersonName: String = ""
     @State private var addPersonError: String?
 
+    // Delete confirmation state
+    @State private var personPendingDeletion: Person?
+
     private var availableLanguages: [String] {
         let codes = Bundle.main.localizations.filter { $0.lowercased() != "base" }
         let list = codes.isEmpty ? Bundle.main.preferredLocalizations : codes
@@ -234,29 +237,26 @@ struct SettingsView: View {
                             .padding(.top, 4)
                     }
 
-                    // List of people with soft delete
+                    // List of people with in-row soft delete (no swipe)
                     ForEach(people) { person in
                         HStack {
+                            if handedness == .left {
+                                deleteButton(for: person)
+                            }
+
                             Text(person.name)
+
+                            Spacer()
+
                             if person.isDefault {
-                                Spacer()
                                 Image(systemName: "star.fill")
                                     .foregroundStyle(.yellow)
                                     .accessibilityLabel(Text(NSLocalizedString("default_person_accessibility_label", comment: "Default")))
                             }
-                        }
-                    }
-                    .onDelete(perform: softDeletePeople)
 
-                    // Show Add Person ONLY for paid (pro) users
-                    if tier == .paid {
-                        Button {
-                            // Start add-person flow: present sheet
-                            newPersonName = ""
-                            addPersonError = nil
-                            showingAddPersonSheet = true
-                        } label: {
-                            Label(NSLocalizedString("add_person_button_title", comment: "Add Person"), systemImage: "plus")
+                            if handedness == .right {
+                                deleteButton(for: person)
+                            }
                         }
                     }
                 }
@@ -274,6 +274,19 @@ struct SettingsView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(l.localized("done")) { dismiss() }
                 }
+            }
+            .alert(item: $personPendingDeletion) { person in
+                Alert(
+                    title: Text(NSLocalizedString("confirm_delete_person_title", comment: "Delete person?")),
+                    message: Text(String(format: NSLocalizedString("confirm_delete_person_message", comment: "Are you sure you want to remove %@?"), person.name)),
+                    primaryButton: .destructive(Text(NSLocalizedString("delete", comment: "Delete"))) {
+                        softDeletePerson(person)
+                        personPendingDeletion = nil
+                    },
+                    secondaryButton: .cancel {
+                        personPendingDeletion = nil
+                    }
+                )
             }
             // Move the Add Person sheet to the top-level NavigationView to avoid immediate close
             .sheet(isPresented: $showingAddPersonSheet) {
@@ -374,7 +387,53 @@ struct SettingsView: View {
 
     // MARK: - People actions (soft delete aware)
 
+    private func deleteButton(for person: Person) -> some View {
+        Button {
+            // Prevent deleting the last remaining active person
+            guard people.count >= 2 else { return }
+            personPendingDeletion = person
+        } label: {
+            Image(systemName: "trash")
+                .foregroundStyle(.red)
+                .imageScale(.medium)
+                .accessibilityLabel(
+                    Text(String(format: NSLocalizedString("delete_person_accessibility_label", comment: "Delete %@"), person.name))
+                )
+        }
+        .buttonStyle(.borderless)
+        .disabled(people.count <= 1)
+    }
+
+    private func softDeletePerson(_ person: Person) {
+        // Prevent deleting the last remaining active person
+        guard people.count >= 2 else { return }
+
+        let deletedDefault = person.isDefault
+        person.isDefault = false
+        person.isRemoved = true
+
+        do {
+            try context.save()
+        } catch {
+            // Handle save error
+        }
+
+        // Reassign default if we removed the default person
+        if deletedDefault {
+            do {
+                let remaining = try context.fetch(Person.fetchAllRequest()) // active only
+                if let first = remaining.first {
+                    for p in remaining { p.isDefault = (p == first) }
+                    try context.save()
+                }
+            } catch {
+                // Handle fetch/save error
+            }
+        }
+    }
+
     private func softDeletePeople(at offsets: IndexSet) {
+        // Retained for potential reuse; no longer wired to swipe.
         let toDelete = offsets.map { people[$0] }
 
         // Prevent deleting the last remaining active person
