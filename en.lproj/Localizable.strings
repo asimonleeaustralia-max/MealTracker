@@ -198,3 +198,17 @@
 "keychain.duplicate_item" = "Keychain item already exists.";
 "keychain.unexpected_data" = "Unexpected keychain data format.";
 "keychain.unexpected_status_fmt" = "Keychain error: %d";
+
+"people_section_title" = "People";
+"default_person_picker_title" = "Default person";
+"pro_people_notice" = "Managing multiple people is a Pro feature. Upgrade to add, select, or remove people.";
+"default_person_accessibility_label" = "Default";
+"add_person_button_title" = "Add Person";
+"add_person_name_header" = "Name";
+"add_person_name_placeholder" = "Name";
+"add_person_nav_title" = "Add Person";
+"cancel" = "Cancel";
+"save" = "Save";
+"add_person_error_empty" = "Please enter a name.";
+"add_person_error_duplicate" = "That name already exists.";
+"default_person_name_me" = "Me";

@@ -245,17 +245,17 @@ struct SettingsView: View {
                     }
                     .onDelete(perform: softDeletePeople)
 
-                    Button {
-                        // Prevent adding on free tier
-                        guard !isFreeTier else { return }
-                        // Start add-person flow: present sheet
-                        newPersonName = ""
-                        addPersonError = nil
-                        showingAddPersonSheet = true
-                    } label: {
-                        Label(NSLocalizedString("add_person_button_title", comment: "Add Person"), systemImage: "plus")
+                    // Show Add Person ONLY for paid (pro) users
+                    if tier == .paid {
+                        Button {
+                            // Start add-person flow: present sheet
+                            newPersonName = ""
+                            addPersonError = nil
+                            showingAddPersonSheet = true
+                        } label: {
+                            Label(NSLocalizedString("add_person_button_title", comment: "Add Person"), systemImage: "plus")
+                        }
                     }
-                    .disabled(isFreeTier)
                 }
             }
             .onAppear {
@@ -341,7 +341,7 @@ struct SettingsView: View {
     }
 
     private func attemptSaveNewPerson() {
-        // Guard free tier (should be unreachable since button is disabled)
+        // Guard free tier (should be unreachable since button is hidden)
         let isFreeTier = Entitlements.tier(for: session) == .free
         guard !isFreeTier else { return }
 
