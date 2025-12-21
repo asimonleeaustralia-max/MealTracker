@@ -78,6 +78,15 @@ struct SettingsView: View {
                     }
                 }
 
+                // Handedness (localized)
+                Section(header: Text(LocalizedStringKey("handedness_section_title"))) {
+                    Picker("", selection: $handedness) {
+                        Text(LocalizedStringKey("left_handed")).tag(Handedness.left)
+                        Text(LocalizedStringKey("right_handed")).tag(Handedness.right)
+                    }
+                    .pickerStyle(.segmented)
+                }
+
                 // Account & Plan section (use existing key from Localizable.strings)
                 Section(header: Text(LocalizedStringKey("account_plan_section_title"))) {
                     HStack {
@@ -584,4 +593,3 @@ struct SettingsView: View {
         .environment(\.managedObjectContext, controller.container.viewContext)
         .environmentObject(SessionManager())
 }
-
