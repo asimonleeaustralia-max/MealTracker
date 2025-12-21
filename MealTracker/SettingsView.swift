@@ -216,11 +216,14 @@ struct SettingsView: View {
                                 setDefaultPerson(by: newID)
                             })) {
                         ForEach(people) { person in
-                            Text(person.name).tag(Optional.some(person.id))
+                            Text(person.name)
+                                .foregroundStyle(isFreeTier ? .secondary : .primary)
+                                .tag(Optional.some(person.id))
                         }
                     }
                     .pickerStyle(.menu)
                     .disabled(people.isEmpty || isFreeTier) // greyed out on free
+                    .opacity(isFreeTier ? 0.85 : 1.0) // slightly more grey when not pro
 
                     // Informational notice for free tier (localized key)
                     if isFreeTier {
