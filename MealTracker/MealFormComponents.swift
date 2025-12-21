@@ -49,6 +49,9 @@ struct GalleryHeader: View {
     let onCameraTap: () -> Void
     let onPhotosTap: () -> Void
 
+    // New: optional trailing accessory button (e.g., person selector) to render next to the wand
+    var trailingAccessoryButton: AnyView? = nil
+
     // Thumbnail sizing and spacing (10% smaller than 64; tighter spacing)
     private let thumbSize: CGFloat = 58
     private let thumbSpacing: CGFloat = 6
@@ -94,6 +97,9 @@ struct GalleryHeader: View {
                     PhotosButton { onPhotosTap() }
                     if !items.isEmpty {
                         AnalyzeButton(isBusy: isBusy) { onAnalyzeTap() }
+                        if let trailing = trailingAccessoryButton {
+                            trailing
+                        }
                     }
                 }
                 .padding(12)
@@ -238,6 +244,27 @@ struct PhotosButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Choose from Photos")
+    }
+}
+
+// New: compact circular person button styled to match other header controls
+struct PersonPickerButton: View {
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(Color.black.opacity(0.6))
+                    .frame(width: 44, height: 44)
+                Image(systemName: "person.crop.circle")
+                    .foregroundColor(.white)
+                    .imageScale(.medium)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
     }
 }
 
@@ -757,3 +784,4 @@ struct CompactSectionSpacing: ViewModifier {
         }
     }
 }
+

@@ -27,6 +27,16 @@ struct MealFormView: View {
     // New: stimulants group visibility (key matches SettingsView)
     @AppStorage("showSimulants") var showSimulants: Bool = false
 
+    // Fetch active people (non-soft-deleted)
+    @FetchRequest(fetchRequest: Person.fetchAllRequest())
+    private var people: FetchedResults<Person>
+
+    // Selected person for this meal (Pro only)
+    @State private var selectedPerson: Person?
+
+    // Person picker presentation
+    @State private var showingPersonPicker: Bool = false
+
     // Hidden title/date inputs removed from UI; we still keep local state for default title logic
     @State var mealDescription: String = "" // not shown in UI for new meals
     // Numeric inputs (now integers only)
@@ -278,7 +288,8 @@ struct MealFormView: View {
                 },
                 onPhotosTap: {
                     showingPhotoPicker = true
-                }
+                },
+                trailingAccessoryButton: personSelectorAccessoryIfEligible()
             )
 
             formContent(l: l)
@@ -355,7 +366,7 @@ struct MealFormView: View {
             }
             lastFocused = newFocus
         })
-        .onAppear { onAppearSetup(l: l) }
+        .onAppear { onAppearSetup(l: l); initializeSelectedPersonIfNeeded() }
         .onDisappear { isHomeVisible = false }
         .onChange(of: scenePhase) { phase in
             switch phase {
@@ -366,6 +377,73 @@ struct MealFormView: View {
             default:
                 break
             }
+        }
+        // Person picker sheet
+        .actionSheet(isPresented: $showingPersonPicker) {
+            ActionSheet(
+                title: Text("Select Person"),
+                buttons: personActionSheetButtons()
+            )
+        }
+    }
+
+    // Build the trailing accessory button if user is eligible to assign person
+    private func personSelectorAccessoryIfEligible() -> AnyView? {
+        let tier = Entitlements.tier(for: session)
+        guard session.isLoggedIn && tier == .paid && !people.isEmpty && !galleryItems.isEmpty else {
+            return nil
+        }
+        let title = "Select Person"
+        return AnyView(
+            PersonPickerButton(title: title) {
+                showingPersonPicker = true
+            }
+        )
+    }
+
+    // ActionSheet buttons for person selection
+    private func personActionSheetButtons() -> [ActionSheet.Button] {
+        var buttons: [ActionSheet.Button] = people.map { person in
+            .default(Text(person.name)) {
+                selectedPerson = person
+                // If a meal already exists, attach it immediately for consistency
+                if let m = meal {
+                    attach(meal: m, to: person)
+                }
+            }
+        }
+        buttons.append(.cancel())
+        return buttons
+    }
+
+    // Attach meal to exactly one person (remove from others)
+    private func attach(meal: Meal, to person: Person) {
+        // Remove from any other active person's set
+        for p in people {
+            if p != person, p.meal.contains(meal) {
+                p.removeFromMeal(meal)
+            }
+        }
+        // Add to chosen person's set if not present
+        if !person.meal.contains(meal) {
+            person.addToMeal(meal)
+        }
+        try? context.save()
+    }
+
+    // Initialize selectedPerson from existing meal or default person
+    private func initializeSelectedPersonIfNeeded() {
+        guard selectedPerson == nil else { return }
+        // If editing, find the person who already owns this meal
+        if let m = meal {
+            if let owner = people.first(where: { $0.meal.contains(m) }) {
+                selectedPerson = owner
+                return
+            }
+        }
+        // Otherwise use default person if any
+        if let def = people.first(where: { $0.isDefault }) ?? people.first {
+            selectedPerson = def
         }
     }
 
@@ -842,23 +920,24 @@ struct MealFormView: View {
         }
         .padding(.vertical, 2)
     }
-}
 
-#Preview {
-    let controller = PersistenceController(inMemory: true)
-    let context = controller.container.viewContext
+    #Preview {
+        let controller = PersistenceController(inMemory: true)
+        let context = controller.container.viewContext
 
-    if #available(iOS 16.0, *) {
-        return NavigationStack {
-            MealFormView()
-                .environment(\.managedObjectContext, context)
-                .environmentObject(SessionManager())
-        }
-    } else {
-        return NavigationView {
-            MealFormView()
-                .environment(\.managedObjectContext, context)
-                .environmentObject(SessionManager())
+        if #available(iOS 16.0, *) {
+            return NavigationStack {
+                MealFormView()
+                    .environment(\.managedObjectContext, context)
+                    .environmentObject(SessionManager())
+            }
+        } else {
+            return NavigationView {
+                MealFormView()
+                    .environment(\.managedObjectContext, context)
+                    .environmentObject(SessionManager())
+            }
         }
     }
 }
+
