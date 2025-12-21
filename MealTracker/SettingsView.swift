@@ -87,6 +87,29 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                 }
 
+                // Nutrition options: Vitamins, Minerals, Stimulants
+                Section(header: Text(l.localized("nutrition_options_section_title"))) {
+                    Toggle(isOn: $showVitamins) {
+                        Text(l.localized("show_vitamins"))
+                    }
+                    if showVitamins {
+                        Picker(l.localized("vitamin_units"), selection: $vitaminsUnit) {
+                            ForEach(VitaminsUnit.allCases, id: \.self) { unit in
+                                Text(unit.displaySuffix).tag(unit)
+                            }
+                        }
+                    }
+
+                    Toggle(isOn: $showMinerals) {
+                        Text(l.localized("show_minerals"))
+                    }
+
+                    // Note: stored key is "showSimulants" (spelling), label shows "Stimulants"
+                    Toggle(isOn: $showSimulants) {
+                        Text(l.localized("show_stimulants"))
+                    }
+                }
+
                 // Account & Plan section (use existing key from Localizable.strings)
                 Section(header: Text(LocalizedStringKey("account_plan_section_title"))) {
                     HStack {
