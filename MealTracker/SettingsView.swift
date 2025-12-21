@@ -1,49 +1,6 @@
 import SwiftUI
 import CoreData
 
-enum DataSharingPreference: String, CaseIterable, Identifiable {
-    case `public`
-    case `private`
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .public: return NSLocalizedString("data_sharing.public", comment: "")
-        case .private: return NSLocalizedString("data_sharing.private", comment: "")
-        }
-    }
-
-    var explanation: String {
-        switch self {
-        case .public:
-            return NSLocalizedString("data_sharing.public_explanation", comment: "")
-        case .private:
-            return NSLocalizedString("data_sharing.private_explanation", comment: "")
-        }
-    }
-}
-
-// New: AI Feedback Severity (stub)
-enum AIFeedbackSeverity: String, CaseIterable, Identifiable {
-    case kind
-    case balanced
-    case bootCamp
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .kind:
-            return NSLocalizedString("ai_feedback_severity.kind", comment: "")
-        case .balanced:
-            return NSLocalizedString("ai_feedback_severity.balanced", comment: "")
-        case .bootCamp:
-            return NSLocalizedString("ai_feedback_severity.boot_camp", comment: "")
-        }
-    }
-}
-
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.managedObjectContext) private var context
@@ -342,6 +299,7 @@ struct SettingsView: View {
                         }
                     }
                     .navigationTitle(NSLocalizedString("add_person_nav_title", comment: "Add Person"))
+                    .navigationBarTitleDisplayMode(.inline) // smaller title again
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
                             Button(NSLocalizedString("cancel", comment: "Cancel")) {
@@ -626,3 +584,4 @@ struct SettingsView: View {
         .environment(\.managedObjectContext, controller.container.viewContext)
         .environmentObject(SessionManager())
 }
+

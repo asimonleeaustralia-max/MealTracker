@@ -14,6 +14,7 @@
 		C34176E22ED2795200C73645 /* PhotoService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34176E12ED2795200C73645 /* PhotoService.swift */; };
 		C34176E42ED288BC00C73645 /* MealPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34176E32ED288BC00C73645 /* MealPhoto.swift */; };
 		C35F5E7D2EDEFAA400DD2844 /* PhotoLibraryPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C35F5E7C2EDEFAA400DD2844 /* PhotoLibraryPickerView.swift */; };
+		C37001F92EF7AA680085904C /* SettingsTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = C37001F82EF7AA680085904C /* SettingsTypes.swift */; };
 		C376B3542EE98CFC0003C83B /* DateSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C376B3532EE98CFC0003C83B /* DateSyncService.swift */; };
 		C381065E2ED29E5500C796E0 /* LocalBarcodeDB.swift in Sources */ = {isa = PBXBuildFile; fileRef = C381065D2ED29E5500C796E0 /* LocalBarcodeDB.swift */; };
 		C38106602ED29E5A00C796E0 /* PhotoNutritionGuesser.swift in Sources */ = {isa = PBXBuildFile; fileRef = C381065F2ED29E5A00C796E0 /* PhotoNutritionGuesser.swift */; };
@@ -37,6 +38,7 @@
 		C34176E12ED2795200C73645 /* PhotoService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoService.swift; sourceTree = "<group>"; };
 		C34176E32ED288BC00C73645 /* MealPhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MealPhoto.swift; sourceTree = "<group>"; };
 		C35F5E7C2EDEFAA400DD2844 /* PhotoLibraryPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoLibraryPickerView.swift; sourceTree = "<group>"; };
+		C37001F82EF7AA680085904C /* SettingsTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTypes.swift; sourceTree = "<group>"; };
 		C376B3532EE98CFC0003C83B /* DateSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateSyncService.swift; sourceTree = "<group>"; };
 		C3798F872ECA75BE00945BBF /* MealTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MealTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C381065D2ED29E5500C796E0 /* LocalBarcodeDB.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalBarcodeDB.swift; sourceTree = "<group>"; };
@@ -103,6 +105,7 @@
 				C393070C2EEF5F5A0017E7A0 /* KeychainService.swift */,
 				C393070E2EEF5F6B0017E7A0 /* LoginView.swift */,
 				C393072D2EEF8BF80017E7A0 /* Person.swift */,
+				C37001F82EF7AA680085904C /* SettingsTypes.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -192,6 +195,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				C393072E2EEF8BF80017E7A0 /* Person.swift in Sources */,
+				C37001F92EF7AA680085904C /* SettingsTypes.swift in Sources */,
 				C381065E2ED29E5500C796E0 /* LocalBarcodeDB.swift in Sources */,
 				C393070F2EEF5F6B0017E7A0 /* LoginView.swift in Sources */,
 				C38106602ED29E5A00C796E0 /* PhotoNutritionGuesser.swift in Sources */,
