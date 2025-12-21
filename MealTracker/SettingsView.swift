@@ -220,7 +220,7 @@ struct SettingsView: View {
                             })) {
                         ForEach(people) { person in
                             Text(person.name)
-                                .foregroundStyle(isFreeTier ? .secondary : .primary)
+                                .foregroundStyle(isFreeTier ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
                                 .tag(Optional.some(person.id))
                         }
                     }
@@ -235,6 +235,17 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.top, 4)
+                    } else {
+                        // Add Person button (paid tiers)
+                        Button {
+                            newPersonName = ""
+                            addPersonError = nil
+                            showingAddPersonSheet = true
+                        } label: {
+                            Label(NSLocalizedString("add_person_nav_title", comment: "Add Person"),
+                                  systemImage: "plus.circle.fill")
+                        }
+                        .buttonStyle(.borderless)
                     }
 
                     // List of people with in-row soft delete (no swipe)
@@ -280,6 +291,11 @@ struct SettingsView: View {
                     title: Text(NSLocalizedString("confirm_delete_person_title", comment: "Delete person?")),
                     message: Text(String(format: NSLocalizedString("confirm_delete_person_message", comment: "Are you sure you want to remove %@?"), person.name)),
                     primaryButton: .destructive(Text(NSLocalizedString("delete", comment: "Delete"))) {
+                        // Block deleting the default ("Me") person at action time too
+                        guard !person.isDefault else {
+                            personPendingDeletion = nil
+                            return
+                        }
                         softDeletePerson(person)
                         personPendingDeletion = nil
                     },
@@ -388,25 +404,32 @@ struct SettingsView: View {
     // MARK: - People actions (soft delete aware)
 
     private func deleteButton(for person: Person) -> some View {
-        Button {
+        // Do not allow deleting the default ("Me") person
+        let isProtected = person.isDefault
+        return Button {
             // Prevent deleting the last remaining active person
             guard people.count >= 2 else { return }
+            // Block if protected
+            guard !isProtected else { return }
             personPendingDeletion = person
         } label: {
             Image(systemName: "trash")
-                .foregroundStyle(.red)
+                .foregroundStyle(isProtected ? AnyShapeStyle(.secondary) : AnyShapeStyle(.red))
                 .imageScale(.medium)
                 .accessibilityLabel(
                     Text(String(format: NSLocalizedString("delete_person_accessibility_label", comment: "Delete %@"), person.name))
                 )
         }
         .buttonStyle(.borderless)
-        .disabled(people.count <= 1)
+        .disabled(people.count <= 1 || isProtected)
+        .opacity(isProtected ? 0.4 : 1.0)
     }
 
     private func softDeletePerson(_ person: Person) {
         // Prevent deleting the last remaining active person
         guard people.count >= 2 else { return }
+        // Never delete the default ("Me") person
+        guard !person.isDefault else { return }
 
         let deletedDefault = person.isDefault
         person.isDefault = false
@@ -438,6 +461,11 @@ struct SettingsView: View {
 
         // Prevent deleting the last remaining active person
         guard people.count - toDelete.count >= 1 else {
+            return
+        }
+
+        // If any target is the default ("Me"), refuse the whole operation
+        guard !toDelete.contains(where: { $0.isDefault }) else {
             return
         }
 
