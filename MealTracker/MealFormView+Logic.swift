@@ -356,6 +356,72 @@ extension MealFormView {
         defer { Task { await MainActor.run { isAnalyzing = false } } }
 
         do {
+            // First: try barcode path with DB -> OFF, then return early if anything applied
+            if let image = UIImage(data: data) {
+                let variants = [image] + [PhotoNutritionGuesser.rotationVariants(of: image)].flatMap { $0 }
+                for img in variants {
+                    if let code = await PhotoNutritionGuesser.detectFirstBarcode(in: img) {
+                        let targetMeal = ensureMealForPhoto()
+                        await BarcodeRepository.shared.handleScannedBarcode(
+                            code,
+                            for: targetMeal,
+                            in: context,
+                            sodiumUnit: sodiumUnit,
+                            vitaminsUnit: vitaminsUnit
+                        )
+                        // We applied authoritative values; refresh the form fields from Core Data object to show them
+                        await MainActor.run {
+                            // Reload visible text fields for any newly populated values (fill empty-only)
+                            // Only update fields that remain empty in UI to avoid clobbering user edits-in-progress.
+                            if calories.isEmpty { calories = Int(targetMeal.calories).description }
+                            if carbohydrates.isEmpty { carbohydrates = Int(targetMeal.carbohydrates).description }
+                            if protein.isEmpty { protein = Int(targetMeal.protein).description }
+                            if fat.isEmpty { fat = Int(targetMeal.fat).description }
+
+                            if sodium.isEmpty {
+                                switch sodiumUnit {
+                                case .milligrams: sodium = Int(targetMeal.sodium).description
+                                case .grams: sodium = Int((targetMeal.sodium / 1000.0).rounded()).description
+                                }
+                            }
+
+                            func fillVM(_ field: inout String, from mg: Double) {
+                                guard field.isEmpty else { return }
+                                switch vitaminsUnit {
+                                case .milligrams: field = Int(mg).description
+                                case .micrograms: field = Int((mg * 1000.0).rounded()).description
+                                }
+                            }
+                            fillVM(&vitaminA, from: targetMeal.vitaminA)
+                            fillVM(&vitaminB, from: targetMeal.vitaminB)
+                            fillVM(&vitaminC, from: targetMeal.vitaminC)
+                            fillVM(&vitaminD, from: targetMeal.vitaminD)
+                            fillVM(&vitaminE, from: targetMeal.vitaminE)
+                            fillVM(&vitaminK, from: targetMeal.vitaminK)
+
+                            fillVM(&calcium, from: targetMeal.calcium)
+                            fillVM(&iron, from: targetMeal.iron)
+                            fillVM(&potassium, from: targetMeal.potassium)
+                            fillVM(&zinc, from: targetMeal.zinc)
+                            fillVM(&magnesium, from: targetMeal.magnesium)
+
+                            if sugars.isEmpty { sugars = Int(targetMeal.sugars).description }
+                            if starch.isEmpty { starch = Int(targetMeal.starch).description }
+                            if fibre.isEmpty { fibre = Int(targetMeal.fibre).description }
+
+                            if monounsaturatedFat.isEmpty { monounsaturatedFat = Int(targetMeal.monounsaturatedFat).description }
+                            if polyunsaturatedFat.isEmpty { polyunsaturatedFat = Int(targetMeal.polyunsaturatedFat).description }
+                            if saturatedFat.isEmpty { saturatedFat = Int(targetMeal.saturatedFat).description }
+                            if transFat.isEmpty { transFat = Int(targetMeal.transFat).description }
+                        }
+
+                        // After applying authoritative data, stop further analysis.
+                        return
+                    }
+                }
+            }
+
+            // If no barcode path succeeded, fall back to the original pipeline
             if let result = try await PhotoNutritionGuesser.guess(from: data, languageCode: appLanguageCode) {
                 await MainActor.run {
                     if calories.isEmpty, let kcal = result.calories {
@@ -384,9 +450,6 @@ extension MealFormView {
                         sodiumIsGuess = true
                     }
                     applyIfEmpty(&fat, with: result.fat, markGuess: &fatIsGuess)
-
-                    // Removed: result.alcohol (not provided by GuessResult)
-                    // Nicotine and Theobromine not provided by GuessResult either.
 
                     applyIfEmpty(&sugars, with: result.sugars, markGuess: &sugarsIsGuess)
                     sugarsTouched = sugarsTouched || !sugars.isEmpty
@@ -910,7 +973,9 @@ extension MealFormView {
         case .fatTotal:
             recomputeConsistencyAndBlinkIfFixed()
             handleHelperOnTopChangeForFat()
-        default:
+        case .sodium:
+            break
+        case .calories:
             break
         }
     }
@@ -971,3 +1036,4 @@ extension MealFormView {
         return parts
     }
 }
+

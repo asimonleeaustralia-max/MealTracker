@@ -152,7 +152,7 @@ struct PhotoNutritionGuesser {
     }
 
     // Create 0°, 90°, 180°, 270° rotation variants
-    private static func rotationVariants(of image: UIImage) -> [UIImage] {
+    static func rotationVariants(of image: UIImage) -> [UIImage] {
         var list: [UIImage] = [image]
         if let r90 = rotate90(image, times: 1) { list.append(r90) }
         if let r180 = rotate90(image, times: 2) { list.append(r180) }
@@ -225,7 +225,7 @@ struct PhotoNutritionGuesser {
     }
 
     // Fixed: ensure the continuation is resumed exactly once.
-    private static func detectFirstBarcode(in image: UIImage) async -> String? {
+    static func detectFirstBarcode(in image: UIImage) async -> String? {
         guard let cgImage = image.cgImage else { return nil }
 
         return await withCheckedContinuation { continuation in
@@ -639,7 +639,7 @@ struct PhotoNutritionGuesser {
             "насыщенные жирные кислоты","в т.ч. насыщенные",
             "دهون مشبعة",
             "שומן רווי",
-            "संतृप्त वसा","স্যাচুরेटेड ফ্যাট",
+            "संतृप्त वसा","স্যাচুরेटেড ফ্যাট",
             "ไขมันอิ่มตัว",
             "chất béo bão hòa",
             "lemak jenuh",
@@ -735,15 +735,15 @@ struct PhotoNutritionGuesser {
         let vitAKeys = ["vitamin a","vit a","retinol","retinyl","витамин a","retinolo","retinal","维生素a","維生素a","ビタミンa","비타민a","فيتامين a","ויטמין a","विटामिन a","ভিটামিন a"]
         let vitBKeys = ["vitamin b","vit b","b-complex","b complex","b group","b-group","витамин b","complexo b","grupo b","维生素b","維生素b","ビタミンb","비타민b","فيتامين b","ויטמין b","विटामिन b","ভিটামিন b"]
         let vitCKeys = ["vitamin c","vit c","ascorbic","ascorbate","ácido ascórbico","витамин c","维生素c","維生素c","ビタミンc","비타민c","فيتامين c","ויטמין c","विटामिन c","ভিটামিন c"]
-        let vitDKeys = ["vitamin d","vit d","cholecalciferol","витамин d","维生素d","維生素d","ビタミンd","비타민d","فيتامين d","ויטמין d","विटामिन d","ভिटामিন d"]
-        let vitEKeys = ["vitamin e","vit e","tocopherol","витамин e","维生素e","維生素e","ビタミンe","비타민e","فيتامين e","ויטמין e","विटामिन e","ভিটामিন e"]
+        let vitDKeys = ["vitamin d","vit d","cholecalciferol","витамин d","维生素d","維生素d","ビタミンd","비타민d","فيتامين d","ויטמין d","विटामिन d","ভিটামিন d"]
+        let vitEKeys = ["vitamin e","vit e","tocopherol","витамин e","维生素e","維生素e","ビタミンe","비타민e","فيتامين e","ויטמין e","विटामिन e","ভিটামিন e"]
         let vitKKeys = ["vitamin k","vit k","phylloquinone","menaquinone","витамин k","维生素k","維生素k","ビタミンk","비타민k","فيتامين k","ויטמין k","विटामिन k","ভিটামিন k"]
 
         let calciumKeys = ["calcium","ca","кальций","кальций (ca)","钙","鈣","カルシウム","칼슘","كالسيوم","סידן","कैल्शियम","ক্যালসিয়াম"]
         let ironKeys = ["iron","fe","железо","залізо","铁","鐵","鉄","철","حديد","ברזל","लोहा","আয়রন"]
         let potassiumKeys = ["potassium","kalium","k","калий","калій","钾","鉀","カリウム","칼륨","بوتاسيوم","אשלגן","पोटैशियम","পটাশিয়াম"]
         let zincKeys = ["zinc","zn","цинк","цинк (zn)","锌","鋅","亜鉛","아연","زنك","אבץ","जिंक","দস্তা"]
-        let magnesiumKeys = ["magnesium","mg","магний","магній","镁","鎂","マグネシウム","마그네슘","مغنيسيوم","מגנזיום","मैग्नीशियम","ম্যাগনেসিয়াম"]
+        let magnesiumKeys = ["magnesium","mg","магний","магній","镁","鎂","マグネシウム","마그네슘","مगنيسيوم","מגנזיום","मैग्नीशियम","ম্যাগনেসিয়াম"]
 
         // Sodium and salt
         let sodiumKeys = ["sodium","na","sodio","natrium","ナトリウム","나트륨","钠","鈉","натрий","натрій","صوديوم","נתרן","सोडियम","সোডিয়াম","natrium (na)"]
@@ -783,7 +783,7 @@ struct PhotoNutritionGuesser {
             "طاقة","كيلوجول","kJ",
             "אנרגיה","ק\"ג'","קג׳","kJ",
             "ऊर्जा","किलो जूल","kJ",
-            "শক্তি","কিলোজুল","kJ",
+            "শক্তি","কিলোজुल","kJ",
             "พลังงาน","กิโลจูล","kJ",
             "năng lượng","kJ",
             "tenaga","kilojoule","kJ",
@@ -1331,4 +1331,3 @@ private enum LocalizedUnits {
         words.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
     }
 }
-
