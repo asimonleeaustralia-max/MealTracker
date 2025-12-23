@@ -70,6 +70,7 @@ struct SettingsView: View {
         // Read environment-dependent values here (safe)
         let tier = Entitlements.tier(for: session)
         let isFreeTier = (tier == .free)
+        let isEligibleForOfflineDB = session.isLoggedIn && tier == .paid
 
         let mealsRemainingText: String = {
             if let remaining = Entitlements.mealsRemainingToday(for: tier, in: context) {
@@ -211,62 +212,69 @@ struct SettingsView: View {
                     }
                 }
 
-                // Pro-only: Offline Open Food Facts download
-                if session.isLoggedIn && tier == .paid {
-                    Section(header: Text("Open Food Facts (Offline)")) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Text("Status")
-                                Spacer()
-                                Text(offStatusText)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            if case .downloading = offCurrentStatus {
-                                ProgressView(value: offProgress)
-                                HStack {
-                                    Text(byteCountString(offReceivedBytes))
-                                    Spacer()
-                                    if offExpectedBytes > 0 {
-                                        Text(byteCountString(offExpectedBytes))
-                                    }
-                                }
-                                .font(.caption)
+                // Offline Barcode Database — always visible (Option A)
+                Section(header: Text(isEligibleForOfflineDB ? "Offline Barcode Database saved locally" : "Offline Barcode Database saved locally (Pro feature)")) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Status")
+                            Spacer()
+                            Text(offStatusText)
                                 .foregroundStyle(.secondary)
-                            }
-
-                            if let offError {
-                                Text(offError)
-                                    .font(.footnote)
-                                    .foregroundStyle(.red)
-                            }
-
-                            // Network warning
-                            if networkMonitor.isConnected && networkMonitor.isExpensive {
-                                Text("You are not on Wi‑Fi. Downloading may use cellular data.")
-                                    .font(.footnote)
-                                    .foregroundStyle(.orange)
-                            }
-
-                            // Free space hint
-                            let freeBytes = offFreeBytes
-                            HStack {
-                                Text("Free space available")
-                                Spacer()
-                                Text(byteCountString(freeBytes))
-                                    .foregroundStyle(.secondary)
-                            }
-                            .font(.footnote)
                         }
 
-                        // Action buttons
-                        actionButtons()
+                        if case .downloading = offCurrentStatus {
+                            ProgressView(value: offProgress)
+                            HStack {
+                                Text(byteCountString(offReceivedBytes))
+                                Spacer()
+                                if offExpectedBytes > 0 {
+                                    Text(byteCountString(offExpectedBytes))
+                                }
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        }
+
+                        if let offError {
+                            Text(offError)
+                                .font(.footnote)
+                                .foregroundStyle(.red)
+                        }
+
+                        // Network warning
+                        if networkMonitor.isConnected && networkMonitor.isExpensive {
+                            Text("You are not on Wi‑Fi. Downloading may use cellular data.")
+                                .font(.footnote)
+                                .foregroundStyle(.orange)
+                        }
+
+                        // Free space hint
+                        let freeBytes = offFreeBytes
+                        HStack {
+                            Text("Free space available")
+                            Spacer()
+                            Text(byteCountString(freeBytes))
+                                .foregroundStyle(.secondary)
+                        }
+                        .font(.footnote)
+
+                        if !isEligibleForOfflineDB {
+                            Text("Sign in to Pro to download and use the offline barcode database.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.top, 4)
+                        }
                     }
-                    .onAppear { Task { await refreshOFFStatus() } }
-                    .onReceive(timer) { _ in
-                        // Poll status while downloading to update UI
-                        Task { await refreshOFFStatus() }
-                    }
+
+                    // Action buttons (disabled when not eligible)
+                    actionButtons()
+                        .disabled(!isEligibleForOfflineDB)
+                        .opacity(isEligibleForOfflineDB ? 1.0 : 0.55)
+                }
+                .onAppear { Task { await refreshOFFStatus() } }
+                .onReceive(timer) { _ in
+                    Task { await refreshOFFStatus() }
                 }
 
                 // People management
