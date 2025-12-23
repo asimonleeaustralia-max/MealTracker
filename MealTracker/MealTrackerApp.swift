@@ -7,12 +7,16 @@
 
 import SwiftUI
 import CoreData
+import UIKit
 
 @main
 struct MealTrackerApp: App {
     let persistenceController = PersistenceController.shared
     @StateObject private var session = SessionManager()
     @Environment(\.scenePhase) private var scenePhase
+
+    // Install AppDelegate to receive background URLSession events
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     // New: user-configurable setting to open to a new meal on launch
     @AppStorage("openToNewMealOnLaunch") private var openToNewMealOnLaunch: Bool = false
@@ -130,3 +134,4 @@ private struct MealsRootView: View {
         MealsGalleryView()
     }
 }
+
