@@ -71,10 +71,11 @@ struct PhotoNutritionGuesser {
 
         // 1) Try barcode detection on each rotation (stop on first hit)
         for img in variants {
-            if let code = await detectFirstBarcode(in: img),
-               let entry = LocalBarcodeDB.lookup(code: code) {
-                // Packaged item: keep as-is (may imply multiple servings; do not force single-dish)
-                return map(entry: entry)
+            if let code = await detectFirstBarcode(in: img) {
+                // DuckDB first, then fallback JSON
+                if let entry = await BarcodeRepository.shared.lookup(code: code) ?? LocalBarcodeDB.lookup(code: code) {
+                    return map(entry: entry)
+                }
             }
         }
 
@@ -638,7 +639,7 @@ struct PhotoNutritionGuesser {
             "насыщенные жирные кислоты","в т.ч. насыщенные",
             "دهون مشبعة",
             "שומן רווי",
-            "संतृप्त वसा","স্যাচুরেটেড ফ্যাট",
+            "संतृप्त वसा","স্যাচুরेटेड ফ্যাট",
             "ไขมันอิ่มตัว",
             "chất béo bão hòa",
             "lemak jenuh",
@@ -734,8 +735,8 @@ struct PhotoNutritionGuesser {
         let vitAKeys = ["vitamin a","vit a","retinol","retinyl","витамин a","retinolo","retinal","维生素a","維生素a","ビタミンa","비타민a","فيتامين a","ויטמין a","विटामिन a","ভিটামিন a"]
         let vitBKeys = ["vitamin b","vit b","b-complex","b complex","b group","b-group","витамин b","complexo b","grupo b","维生素b","維生素b","ビタミンb","비타민b","فيتامين b","ויטמין b","विटामिन b","ভিটামিন b"]
         let vitCKeys = ["vitamin c","vit c","ascorbic","ascorbate","ácido ascórbico","витамин c","维生素c","維生素c","ビタミンc","비타민c","فيتامين c","ויטמין c","विटामिन c","ভিটামিন c"]
-        let vitDKeys = ["vitamin d","vit d","cholecalciferol","витамин d","维生素d","維生素d","ビタミンd","비타민d","فيتامين d","ויטמין d","विटामिन d","ভিটামিন d"]
-        let vitEKeys = ["vitamin e","vit e","tocopherol","витамин e","维生素e","維生素e","ビタミンe","비타민e","فيتامين e","ויטמין e","विटामिन e","ভিটামিন e"]
+        let vitDKeys = ["vitamin d","vit d","cholecalciferol","витамин d","维生素d","維生素d","ビタミンd","비타민d","فيتامين d","ויטמין d","विटामिन d","ভिटामিন d"]
+        let vitEKeys = ["vitamin e","vit e","tocopherol","витамин e","维生素e","維生素e","ビタミンe","비타민e","فيتامين e","ויטמין e","विटामिन e","ভিটामিন e"]
         let vitKKeys = ["vitamin k","vit k","phylloquinone","menaquinone","витамин k","维生素k","維生素k","ビタミンk","비타민k","فيتامين k","ויטמין k","विटामिन k","ভিটামিন k"]
 
         let calciumKeys = ["calcium","ca","кальций","кальций (ca)","钙","鈣","カルシウム","칼슘","كالسيوم","סידן","कैल्शियम","ক্যালসিয়াম"]
@@ -1330,3 +1331,4 @@ private enum LocalizedUnits {
         words.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
     }
 }
+

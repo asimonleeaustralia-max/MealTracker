@@ -15,6 +15,8 @@
 		C34176E42ED288BC00C73645 /* MealPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34176E32ED288BC00C73645 /* MealPhoto.swift */; };
 		C35F5E7D2EDEFAA400DD2844 /* PhotoLibraryPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C35F5E7C2EDEFAA400DD2844 /* PhotoLibraryPickerView.swift */; };
 		C37001F92EF7AA680085904C /* SettingsTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = C37001F82EF7AA680085904C /* SettingsTypes.swift */; };
+		C37001FC2EF936C90085904C /* DuckDBManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C37001FB2EF936C90085904C /* DuckDBManager.swift */; };
+		C37001FE2EF936CD0085904C /* BarcodeRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = C37001FD2EF936CD0085904C /* BarcodeRepository.swift */; };
 		C376B3542EE98CFC0003C83B /* DateSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C376B3532EE98CFC0003C83B /* DateSyncService.swift */; };
 		C381065E2ED29E5500C796E0 /* LocalBarcodeDB.swift in Sources */ = {isa = PBXBuildFile; fileRef = C381065D2ED29E5500C796E0 /* LocalBarcodeDB.swift */; };
 		C38106602ED29E5A00C796E0 /* PhotoNutritionGuesser.swift in Sources */ = {isa = PBXBuildFile; fileRef = C381065F2ED29E5A00C796E0 /* PhotoNutritionGuesser.swift */; };
@@ -39,6 +41,8 @@
 		C34176E32ED288BC00C73645 /* MealPhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MealPhoto.swift; sourceTree = "<group>"; };
 		C35F5E7C2EDEFAA400DD2844 /* PhotoLibraryPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoLibraryPickerView.swift; sourceTree = "<group>"; };
 		C37001F82EF7AA680085904C /* SettingsTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTypes.swift; sourceTree = "<group>"; };
+		C37001FB2EF936C90085904C /* DuckDBManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuckDBManager.swift; sourceTree = "<group>"; };
+		C37001FD2EF936CD0085904C /* BarcodeRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeRepository.swift; sourceTree = "<group>"; };
 		C376B3532EE98CFC0003C83B /* DateSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateSyncService.swift; sourceTree = "<group>"; };
 		C3798F872ECA75BE00945BBF /* MealTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MealTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C381065D2ED29E5500C796E0 /* LocalBarcodeDB.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalBarcodeDB.swift; sourceTree = "<group>"; };
@@ -106,6 +110,8 @@
 				C393070E2EEF5F6B0017E7A0 /* LoginView.swift */,
 				C393072D2EEF8BF80017E7A0 /* Person.swift */,
 				C37001F82EF7AA680085904C /* SettingsTypes.swift */,
+				C37001FB2EF936C90085904C /* DuckDBManager.swift */,
+				C37001FD2EF936CD0085904C /* BarcodeRepository.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -167,6 +173,9 @@
 			);
 			mainGroup = C3798F7E2ECA75BE00945BBF;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				C37001FA2EF935480085904C /* XCRemoteSwiftPackageReference "duckdb" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = C3798F882ECA75BE00945BBF /* Products */;
 			projectDirPath = "";
@@ -198,6 +207,7 @@
 				C37001F92EF7AA680085904C /* SettingsTypes.swift in Sources */,
 				C381065E2ED29E5500C796E0 /* LocalBarcodeDB.swift in Sources */,
 				C393070F2EEF5F6B0017E7A0 /* LoginView.swift in Sources */,
+				C37001FC2EF936C90085904C /* DuckDBManager.swift in Sources */,
 				C38106602ED29E5A00C796E0 /* PhotoNutritionGuesser.swift in Sources */,
 				C34176E22ED2795200C73645 /* PhotoService.swift in Sources */,
 				C35F5E7D2EDEFAA400DD2844 /* PhotoLibraryPickerView.swift in Sources */,
@@ -205,6 +215,7 @@
 				C3F0A6FC2ED59B34003949B8 /* Entitlements.swift in Sources */,
 				C34176E42ED288BC00C73645 /* MealPhoto.swift in Sources */,
 				C34176DC2ED2794700C73645 /* PhotoStore.swift in Sources */,
+				C37001FE2EF936CD0085904C /* BarcodeRepository.swift in Sources */,
 				C3C2B9732ED44E8500E9D4F4 /* FoodClassPriors.swift in Sources */,
 				C376B3542EE98CFC0003C83B /* DateSyncService.swift in Sources */,
 				C34176DE2ED2794A00C73645 /* ImageResizer.swift in Sources */,
@@ -441,6 +452,17 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		C37001FA2EF935480085904C /* XCRemoteSwiftPackageReference "duckdb" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/duckdb/duckdb";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
 	};
 	rootObject = C3798F7F2ECA75BE00945BBF /* Project object */;
 }

@@ -5,7 +5,7 @@
 //  Manual Core Data class for the Person entity.
 //  Matches attributes shown in the data model: id (UUID), name (String),
 //  isDefault (Bool), isRemoved (Bool), and a to-many relationship `meal` to Meal.
-//
+//swift.gi
 
 import Foundation
 import CoreData
