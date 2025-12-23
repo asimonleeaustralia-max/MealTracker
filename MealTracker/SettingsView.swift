@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreData
+import Combine
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -40,6 +41,18 @@ struct SettingsView: View {
 
     // Delete confirmation state
     @State private var personPendingDeletion: Person?
+
+    // OFF download UI state
+    @StateObject private var networkMonitor = NetworkMonitor.shared
+    @State private var offStatusText: String = "Not downloaded"
+    @State private var offProgress: Double = 0.0
+    @State private var offExpectedBytes: Int64 = -1
+    @State private var offReceivedBytes: Int64 = 0
+    @State private var showingOFFConfirm: Bool = false
+    @State private var offConfirmMessage: String = ""
+    @State private var offError: String?
+    // Cached free space (actor-fetched)
+    @State private var offFreeBytes: Int64 = 0
 
     private var availableLanguages: [String] {
         let codes = Bundle.main.localizations.filter { $0.lowercased() != "base" }
@@ -198,6 +211,64 @@ struct SettingsView: View {
                     }
                 }
 
+                // Pro-only: Offline Open Food Facts download
+                if session.isLoggedIn && tier == .paid {
+                    Section(header: Text("Open Food Facts (Offline)")) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text("Status")
+                                Spacer()
+                                Text(offStatusText)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            if case .downloading = offCurrentStatus {
+                                ProgressView(value: offProgress)
+                                HStack {
+                                    Text(byteCountString(offReceivedBytes))
+                                    Spacer()
+                                    if offExpectedBytes > 0 {
+                                        Text(byteCountString(offExpectedBytes))
+                                    }
+                                }
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            }
+
+                            if let offError {
+                                Text(offError)
+                                    .font(.footnote)
+                                    .foregroundStyle(.red)
+                            }
+
+                            // Network warning
+                            if networkMonitor.isConnected && networkMonitor.isExpensive {
+                                Text("You are not on Wi‑Fi. Downloading may use cellular data.")
+                                    .font(.footnote)
+                                    .foregroundStyle(.orange)
+                            }
+
+                            // Free space hint
+                            let freeBytes = offFreeBytes
+                            HStack {
+                                Text("Free space available")
+                                Spacer()
+                                Text(byteCountString(freeBytes))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .font(.footnote)
+                        }
+
+                        // Action buttons
+                        actionButtons()
+                    }
+                    .onAppear { Task { await refreshOFFStatus() } }
+                    .onReceive(timer) { _ in
+                        // Poll status while downloading to update UI
+                        Task { await refreshOFFStatus() }
+                    }
+                }
+
                 // People management
                 Section(header: Text(NSLocalizedString("people_section_title", comment: "People")) ) {
                     // Default person dropdown (only active people)
@@ -277,6 +348,7 @@ struct SettingsView: View {
             .onAppear {
                 Task { await loadSyncedDate() }
                 enforceFreeTierPeopleIfNeeded(isFreeTier: isFreeTier)
+                Task { await refreshOFFStatus() }
             }
             .onChange(of: session.isLoggedIn) { _ in
                 // When login state changes, re-evaluate and enforce
@@ -347,10 +419,158 @@ struct SettingsView: View {
                     }
                 }
             }
+            // OFF confirmation
+            .alert("Download Open Food Facts?", isPresented: $showingOFFConfirm) {
+                Button("Cancel", role: .cancel) { }
+                Button("Download") {
+                    Task { await ParquetDownloadManager.shared.startDownload() }
+                }
+            } message: {
+                Text(offConfirmMessage)
+            }
         }
     }
 
-    // MARK: - Add Person flow
+    // MARK: - OFF helpers
+
+    private var offCurrentStatus: ParquetDownloadManager.Status {
+        // We keep local mirror via refreshOFFStatus
+        if offStatusText.contains("Downloading") {
+            return .downloading(progress: offProgress, receivedBytes: offReceivedBytes, expectedBytes: offExpectedBytes)
+        }
+        if offStatusText.contains("Completed") || offStatusText.contains("Downloaded") {
+            return .completed(fileURL: (try? ParquetDownloadManager.shared.destinationURL()) ?? URL(fileURLWithPath: "/dev/null"), bytes: offExpectedBytes)
+        }
+        if offStatusText.contains("Failed") {
+            return .failed(error: offError ?? "Unknown error")
+        }
+        return .idle
+    }
+
+    private var timer: Publishers.Autoconnect<Timer.TimerPublisher> {
+        Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+    }
+
+    private func byteCountString(_ bytes: Int64) -> String {
+        let fmt = ByteCountFormatter()
+        fmt.countStyle = .file
+        return fmt.string(fromByteCount: bytes)
+    }
+
+    @MainActor
+    private func refreshOFFStatus() async {
+        let mgr = ParquetDownloadManager.shared
+        let status = await mgr.status
+        switch status {
+        case .idle:
+            let exists = await mgr.fileExists()
+            if exists {
+                let size = await mgr.existingFileSize()
+                offStatusText = "Downloaded (\(byteCountString(size)))"
+                offExpectedBytes = size
+                offReceivedBytes = size
+                offProgress = 1.0
+                // Update free space cache too
+                offFreeBytes = await mgr.bytesAvailableOnDisk()
+            } else {
+                offStatusText = "Not downloaded"
+                offProgress = 0
+                offExpectedBytes = -1
+                offReceivedBytes = 0
+                offFreeBytes = await mgr.bytesAvailableOnDisk()
+            }
+        case .checkingSize:
+            offStatusText = "Checking size…"
+            offError = nil
+            offFreeBytes = await mgr.bytesAvailableOnDisk()
+        case .readyToDownload(let expectedBytes):
+            offExpectedBytes = expectedBytes
+            let sizeText = expectedBytes > 0 ? byteCountString(expectedBytes) : "unknown size"
+            offStatusText = "Ready (\(sizeText))"
+            offError = nil
+            // Show confirm with Wi‑Fi/disk warning
+            let free = await ParquetDownloadManager.shared.bytesAvailableOnDisk()
+            offFreeBytes = free
+            var warnings: [String] = []
+            if expectedBytes > 0 {
+                if expectedBytes > free {
+                    warnings.append("Not enough free space. Requires \(byteCountString(expectedBytes)), available \(byteCountString(free)).")
+                } else if expectedBytes > (free / 2) {
+                    warnings.append("Large download: \(byteCountString(expectedBytes)).")
+                }
+            } else {
+                warnings.append("Large download.")
+            }
+            if networkMonitor.isExpensive || !networkMonitor.isOnWiFi {
+                warnings.append("You are not on Wi‑Fi. Downloading may use cellular data.")
+            }
+            let messageLines = ["This will download the Open Food Facts database for offline use.", "Estimated size: \(sizeText)"] + warnings
+            offConfirmMessage = messageLines.joined(separator: "\n\n")
+            showingOFFConfirm = true
+        case .downloading(let progress, let received, let expected):
+            offProgress = max(0, min(1, progress))
+            offReceivedBytes = received
+            offExpectedBytes = expected
+            offStatusText = expected > 0
+                ? String(format: "Downloading… %.0f%%", offProgress * 100.0)
+                : "Downloading…"
+            offError = nil
+            offFreeBytes = await mgr.bytesAvailableOnDisk()
+        case .completed(_, let bytes):
+            offStatusText = "Downloaded (\(byteCountString(bytes)))"
+            offProgress = 1.0
+            offError = nil
+            offFreeBytes = await mgr.bytesAvailableOnDisk()
+        case .failed(let error):
+            offStatusText = "Failed"
+            offError = error
+            offFreeBytes = await mgr.bytesAvailableOnDisk()
+        case .cancelled:
+            offStatusText = "Cancelled"
+            offError = nil
+            offProgress = 0
+            offFreeBytes = await mgr.bytesAvailableOnDisk()
+        }
+    }
+
+    @ViewBuilder
+    private func actionButtons() -> some View {
+        let mgr = ParquetDownloadManager.shared
+        let exists = (try? mgr.destinationURL()).map { FileManager.default.fileExists(atPath: $0.path) } ?? false
+
+        HStack {
+            if offStatusText.starts(with: "Downloading") {
+                Button(role: .destructive) {
+                    Task { await mgr.cancel() }
+                } label: {
+                    Text("Cancel Download")
+                }
+            } else {
+                Button {
+                    Task {
+                        await ParquetDownloadManager.shared.fetchExpectedSize()
+                        await refreshOFFStatus()
+                    }
+                } label: {
+                    Text(exists ? "Re-download" : "Download for offline use")
+                }
+            }
+
+            if exists {
+                Spacer()
+                Button(role: .destructive) {
+                    if let url = try? mgr.destinationURL() {
+                        try? FileManager.default.removeItem(at: url)
+                    }
+                    Task { await refreshOFFStatus() }
+                } label: {
+                    Text("Remove")
+                }
+            }
+        }
+    }
+
+    // MARK: - Add Person flow (unchanged below)
 
     private func normalizedName(_ s: String) -> String {
         s.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -414,8 +634,6 @@ struct SettingsView: View {
             addPersonError = error.localizedDescription
         }
     }
-
-    // MARK: - People actions (soft delete aware)
 
     private func deleteButton(for person: Person) -> some View {
         // Do not allow deleting the default ("Me") person
