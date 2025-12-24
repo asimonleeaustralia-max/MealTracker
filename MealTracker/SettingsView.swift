@@ -123,7 +123,7 @@ struct SettingsView: View {
 
                 // NEW: Local meals database (bulk downloader) — only when AI features enabled
                 if aiFeaturesEnabled {
-                    Section(header: Text("Local meals database")) {
+                    Section {
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
                                 Text("Status")
@@ -199,7 +199,7 @@ struct SettingsView: View {
                                     Task { await startSeeder() }
                                 }
                             } label: {
-                                Text("Start Bulk Download")
+                                Text("Download Meals for AI")
                             }
                             .disabled(isSeederRunningOrQueued)
 
@@ -213,7 +213,7 @@ struct SettingsView: View {
                             }
                         }
                     }
-                    .alert("Start Bulk Download?", isPresented: $showingSeederConfirm) {
+                    .alert("Download Meals for AI?", isPresented: $showingSeederConfirm) {
                         Button("Cancel", role: .cancel) { }
                         Button("Start") {
                             Task { await startSeeder() }
