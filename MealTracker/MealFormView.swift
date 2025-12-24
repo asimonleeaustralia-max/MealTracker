@@ -251,6 +251,10 @@ struct MealFormView: View {
     // New: distinguish explicit edit mode (opened from gallery) from auto-created meals for photos
     let explicitEditMode: Bool
 
+    // MARK: - Wizard undo state
+    @State var wizardUndoSnapshot: WizardSnapshot?
+    @State var wizardCanUndo: Bool = false
+
     init(meal: Meal? = nil) {
         self._meal = State(initialValue: meal)
         // If the caller provided a meal, we’re explicitly editing.
@@ -281,13 +285,18 @@ struct MealFormView: View {
                 collapsedHeight: collapsedHeight,
                 isBusy: $isAnalyzing.wrappedValue,
                 onAnalyzeTap: {
-                    Task { await analyzePhoto() }
+                    Task { await analyzePhotoWithSnapshot() }
                 },
                 onCameraTap: {
                     showingCamera = true
                 },
                 onPhotosTap: {
                     showingPhotoPicker = true
+                },
+                // New: pass undo state/handler
+                isUndoAvailable: wizardCanUndo,
+                onUndoTap: {
+                    undoWizard()
                 },
                 trailingAccessoryButton: personSelectorAccessoryIfEligible()
             )
@@ -940,4 +949,3 @@ struct MealFormView: View {
         }
     }
 }
-

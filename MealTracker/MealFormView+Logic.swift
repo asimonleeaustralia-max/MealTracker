@@ -13,6 +13,255 @@ import AVFoundation
 
 extension MealFormView {
 
+    // Snapshot of wizard-editable fields and flags for undo
+    struct WizardSnapshot {
+        let calories: String
+        let carbohydrates: String
+        let protein: String
+        let sodium: String
+        let fat: String
+
+        let alcohol: String
+        let nicotine: String
+        let theobromine: String
+        let caffeine: String
+        let taurine: String
+
+        let starch: String
+        let sugars: String
+        let fibre: String
+
+        let monounsaturatedFat: String
+        let polyunsaturatedFat: String
+        let saturatedFat: String
+        let transFat: String
+        let omega3: String
+        let omega6: String
+
+        let animalProtein: String
+        let plantProtein: String
+        let proteinSupplements: String
+
+        let vitaminA: String
+        let vitaminB: String
+        let vitaminC: String
+        let vitaminD: String
+        let vitaminE: String
+        let vitaminK: String
+
+        let calcium: String
+        let iron: String
+        let potassium: String
+        let zinc: String
+        let magnesium: String
+
+        // Guess flags
+        let caloriesIsGuess: Bool
+        let carbohydratesIsGuess: Bool
+        let proteinIsGuess: Bool
+        let sodiumIsGuess: Bool
+        let fatIsGuess: Bool
+
+        let alcoholIsGuess: Bool
+        let nicotineIsGuess: Bool
+        let theobromineIsGuess: Bool
+        let caffeineIsGuess: Bool
+        let taurineIsGuess: Bool
+
+        let starchIsGuess: Bool
+        let sugarsIsGuess: Bool
+        let fibreIsGuess: Bool
+
+        let monounsaturatedFatIsGuess: Bool
+        let polyunsaturatedFatIsGuess: Bool
+        let saturatedFatIsGuess: Bool
+        let transFatIsGuess: Bool
+        let omega3IsGuess: Bool
+        let omega6IsGuess: Bool
+
+        let animalProteinIsGuess: Bool
+        let plantProteinIsGuess: Bool
+        let proteinSupplementsIsGuess: Bool
+
+        let vitaminAIsGuess: Bool
+        let vitaminBIsGuess: Bool
+        let vitaminCIsGuess: Bool
+        let vitaminDIsGuess: Bool
+        let vitaminEIsGuess: Bool
+        let vitaminKIsGuess: Bool
+
+        let calciumIsGuess: Bool
+        let ironIsGuess: Bool
+        let potassiumIsGuess: Bool
+        let zincIsGuess: Bool
+        let magnesiumIsGuess: Bool
+    }
+
+    private func captureSnapshotForWizard() -> WizardSnapshot {
+        WizardSnapshot(
+            calories: calories,
+            carbohydrates: carbohydrates,
+            protein: protein,
+            sodium: sodium,
+            fat: fat,
+            alcohol: alcohol,
+            nicotine: nicotine,
+            theobromine: theobromine,
+            caffeine: caffeine,
+            taurine: taurine,
+            starch: starch,
+            sugars: sugars,
+            fibre: fibre,
+            monounsaturatedFat: monounsaturatedFat,
+            polyunsaturatedFat: polyunsaturatedFat,
+            saturatedFat: saturatedFat,
+            transFat: transFat,
+            omega3: omega3,
+            omega6: omega6,
+            animalProtein: animalProtein,
+            plantProtein: plantProtein,
+            proteinSupplements: proteinSupplements,
+            vitaminA: vitaminA,
+            vitaminB: vitaminB,
+            vitaminC: vitaminC,
+            vitaminD: vitaminD,
+            vitaminE: vitaminE,
+            vitaminK: vitaminK,
+            calcium: calcium,
+            iron: iron,
+            potassium: potassium,
+            zinc: zinc,
+            magnesium: magnesium,
+            caloriesIsGuess: caloriesIsGuess,
+            carbohydratesIsGuess: carbohydratesIsGuess,
+            proteinIsGuess: proteinIsGuess,
+            sodiumIsGuess: sodiumIsGuess,
+            fatIsGuess: fatIsGuess,
+            alcoholIsGuess: alcoholIsGuess,
+            nicotineIsGuess: nicotineIsGuess,
+            theobromineIsGuess: theobromineIsGuess,
+            caffeineIsGuess: caffeineIsGuess,
+            taurineIsGuess: taurineIsGuess,
+            starchIsGuess: starchIsGuess,
+            sugarsIsGuess: sugarsIsGuess,
+            fibreIsGuess: fibreIsGuess,
+            monounsaturatedFatIsGuess: monounsaturatedFatIsGuess,
+            polyunsaturatedFatIsGuess: polyunsaturatedFatIsGuess,
+            saturatedFatIsGuess: saturatedFatIsGuess,
+            transFatIsGuess: transFatIsGuess,
+            omega3IsGuess: omega3IsGuess,
+            omega6IsGuess: omega6IsGuess,
+            animalProteinIsGuess: animalProteinIsGuess,
+            plantProteinIsGuess: plantProteinIsGuess,
+            proteinSupplementsIsGuess: proteinSupplementsIsGuess,
+            vitaminAIsGuess: vitaminAIsGuess,
+            vitaminBIsGuess: vitaminBIsGuess,
+            vitaminCIsGuess: vitaminCIsGuess,
+            vitaminDIsGuess: vitaminDIsGuess,
+            vitaminEIsGuess: vitaminEIsGuess,
+            vitaminKIsGuess: vitaminKIsGuess,
+            calciumIsGuess: calciumIsGuess,
+            ironIsGuess: ironIsGuess,
+            potassiumIsGuess: potassiumIsGuess,
+            zincIsGuess: zincIsGuess,
+            magnesiumIsGuess: magnesiumIsGuess
+        )
+    }
+
+    private func restoreSnapshotForWizard(_ s: WizardSnapshot) {
+        calories = s.calories
+        carbohydrates = s.carbohydrates
+        protein = s.protein
+        sodium = s.sodium
+        fat = s.fat
+
+        alcohol = s.alcohol
+        nicotine = s.nicotine
+        theobromine = s.theobromine
+        caffeine = s.caffeine
+        taurine = s.taurine
+
+        starch = s.starch
+        sugars = s.sugars
+        fibre = s.fibre
+
+        monounsaturatedFat = s.monounsaturatedFat
+        polyunsaturatedFat = s.polyunsaturatedFat
+        saturatedFat = s.saturatedFat
+        transFat = s.transFat
+        omega3 = s.omega3
+        omega6 = s.omega6
+
+        animalProtein = s.animalProtein
+        plantProtein = s.plantProtein
+        proteinSupplements = s.proteinSupplements
+
+        vitaminA = s.vitaminA
+        vitaminB = s.vitaminB
+        vitaminC = s.vitaminC
+        vitaminD = s.vitaminD
+        vitaminE = s.vitaminE
+        vitaminK = s.vitaminK
+
+        calcium = s.calcium
+        iron = s.iron
+        potassium = s.potassium
+        zinc = s.zinc
+        magnesium = s.magnesium
+
+        caloriesIsGuess = s.caloriesIsGuess
+        carbohydratesIsGuess = s.carbohydratesIsGuess
+        proteinIsGuess = s.proteinIsGuess
+        sodiumIsGuess = s.sodiumIsGuess
+        fatIsGuess = s.fatIsGuess
+
+        alcoholIsGuess = s.alcoholIsGuess
+        nicotineIsGuess = s.nicotineIsGuess
+        theobromineIsGuess = s.theobromineIsGuess
+        caffeineIsGuess = s.caffeineIsGuess
+        taurineIsGuess = s.taurineIsGuess
+
+        starchIsGuess = s.starchIsGuess
+        sugarsIsGuess = s.sugarsIsGuess
+        fibreIsGuess = s.fibreIsGuess
+
+        monounsaturatedFatIsGuess = s.monounsaturatedFatIsGuess
+        polyunsaturatedFatIsGuess = s.polyunsaturatedFatIsGuess
+        saturatedFatIsGuess = s.saturatedFatIsGuess
+        transFatIsGuess = s.transFatIsGuess
+        omega3IsGuess = s.omega3IsGuess
+        omega6IsGuess = s.omega6IsGuess
+
+        animalProteinIsGuess = s.animalProteinIsGuess
+        plantProteinIsGuess = s.plantProteinIsGuess
+        proteinSupplementsIsGuess = s.proteinSupplementsIsGuess
+
+        vitaminAIsGuess = s.vitaminAIsGuess
+        vitaminBIsGuess = s.vitaminBIsGuess
+        vitaminCIsGuess = s.vitaminCIsGuess
+        vitaminDIsGuess = s.vitaminDIsGuess
+        vitaminEIsGuess = s.vitaminEIsGuess
+        vitaminKIsGuess = s.vitaminKIsGuess
+
+        calciumIsGuess = s.calciumIsGuess
+        ironIsGuess = s.ironIsGuess
+        potassiumIsGuess = s.potassiumIsGuess
+        zincIsGuess = s.zincIsGuess
+        magnesiumIsGuess = s.magnesiumIsGuess
+
+        // Recompute consistency after restore
+        recomputeConsistency(resetPrevMismatch: true)
+    }
+
+    func undoWizard() {
+        guard let snap = wizardUndoSnapshot else { return }
+        restoreSnapshotForWizard(snap)
+        wizardUndoSnapshot = nil
+        wizardCanUndo = false
+        analyzeError = nil
+        forceEnableSave = false
+    }
+
     // MARK: - Lifecycle wiring
 
     func onAppearSetup(l: LocalizationManager) {
@@ -335,6 +584,61 @@ extension MealFormView {
         guard let v = value, source.isEmpty else { return }
         source = String(max(0, v))
         markGuess = true
+    }
+
+    // Wrap analyzePhoto() to manage snapshot and undo state
+    func analyzePhotoWithSnapshot() async {
+        // If undo is active, ignore to avoid stacking
+        guard !wizardCanUndo else { return }
+        // Make sure we have a photo selected
+        guard selectedIndex < galleryItems.count else { return }
+
+        // Capture snapshot before we mutate any field
+        await MainActor.run {
+            wizardUndoSnapshot = captureSnapshotForWizard()
+        }
+
+        // Run analysis
+        await analyzePhoto()
+
+        // If there was an error or nothing changed, do not enable undo
+        let enableUndo: Bool = await MainActor.run {
+            // Heuristic: enable if at least one field differs from snapshot
+            guard let snap = wizardUndoSnapshot else { return false }
+            let changed =
+                calories != snap.calories ||
+                carbohydrates != snap.carbohydrates ||
+                protein != snap.protein ||
+                sodium != snap.sodium ||
+                fat != snap.fat ||
+                sugars != snap.sugars ||
+                starch != snap.starch ||
+                fibre != snap.fibre ||
+                monounsaturatedFat != snap.monounsaturatedFat ||
+                polyunsaturatedFat != snap.polyunsaturatedFat ||
+                saturatedFat != snap.saturatedFat ||
+                transFat != snap.transFat ||
+                vitaminA != snap.vitaminA ||
+                vitaminB != snap.vitaminB ||
+                vitaminC != snap.vitaminC ||
+                vitaminD != snap.vitaminD ||
+                vitaminE != snap.vitaminE ||
+                vitaminK != snap.vitaminK ||
+                calcium != snap.calcium ||
+                iron != snap.iron ||
+                potassium != snap.potassium ||
+                zinc != snap.zinc ||
+                magnesium != snap.magnesium
+            return changed && analyzeError == nil
+        }
+
+        await MainActor.run {
+            wizardCanUndo = enableUndo
+            if !enableUndo {
+                // Drop snapshot if nothing to undo
+                wizardUndoSnapshot = nil
+            }
+        }
     }
 
     func analyzePhoto() async {

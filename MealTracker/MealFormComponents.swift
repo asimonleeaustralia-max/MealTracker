@@ -49,6 +49,10 @@ struct GalleryHeader: View {
     let onCameraTap: () -> Void
     let onPhotosTap: () -> Void
 
+    // New: undo support
+    var isUndoAvailable: Bool = false
+    var onUndoTap: (() -> Void)? = nil
+
     // New: optional trailing accessory button (e.g., person selector) to render next to the wand
     var trailingAccessoryButton: AnyView? = nil
 
@@ -96,7 +100,17 @@ struct GalleryHeader: View {
                     CameraButton { onCameraTap() }
                     PhotosButton { onPhotosTap() }
                     if !items.isEmpty {
-                        AnalyzeButton(isBusy: isBusy) { onAnalyzeTap() }
+                        AnalyzeButton(
+                            isBusy: isBusy,
+                            isUndoAvailable: isUndoAvailable,
+                            action: {
+                                if isUndoAvailable {
+                                    onUndoTap?()
+                                } else {
+                                    onAnalyzeTap()
+                                }
+                            }
+                        )
                         if let trailing = trailingAccessoryButton {
                             trailing
                         }
@@ -175,6 +189,8 @@ struct HeaderImageView: View {
 
 struct AnalyzeButton: View {
     let isBusy: Bool
+    // New: controls mirrored “undo” state
+    let isUndoAvailable: Bool
     let action: () -> Void
 
     @State private var rotation: Angle = .degrees(0)
@@ -186,26 +202,29 @@ struct AnalyzeButton: View {
                     .fill(Color.black.opacity(0.6))
                     .frame(width: 44, height: 44)
 
+                // Wand icon, mirrored when undo is available
+                let wand = Image(systemName: "wand.and.stars")
+                    .foregroundColor(.white)
+                    .imageScale(.medium)
+
                 if isBusy {
-                    Image(systemName: "wand.and.stars")
-                        .foregroundColor(.white)
-                        .imageScale(.medium)
+                    wand
                         .rotationEffect(rotation)
+                        .scaleEffect(x: isUndoAvailable ? -1 : 1, y: 1) // mirror horizontally in undo mode
                         .animation(isBusy ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: rotation)
                         .onAppear { rotation = .degrees(360) }
                         .onChange(of: isBusy) { busy in
                             if busy { rotation = .degrees(360) } else { rotation = .degrees(0) }
                         }
                 } else {
-                    Image(systemName: "wand.and.stars")
-                        .foregroundColor(.white)
-                        .imageScale(.medium)
+                    wand
                         .rotationEffect(.degrees(0))
+                        .scaleEffect(x: isUndoAvailable ? -1 : 1, y: 1) // mirror horizontally in undo mode
                 }
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(isBusy ? "Analyzing Photo" : "Analyze Photo")
+        .accessibilityLabel(isUndoAvailable ? "Undo AI Changes" : (isBusy ? "Analyzing Photo" : "Analyze Photo"))
     }
 }
 
