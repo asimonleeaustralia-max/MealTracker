@@ -10,6 +10,9 @@ private enum SeederDefaults {
     static let phase = "MealsSeeding.phase"
     static let queued = "MealsSeeding.queued"
     static let lastError = "MealsSeeding.lastError"
+    // Durable completion markers (Option A)
+    static let completed = "MealsSeeding.completed"
+    static let completedCount = "MealsSeeding.completedCount"
 }
 
 // Background-capable orchestrator for MealsSeeder that persists progress and can resume after relaunch.
@@ -42,6 +45,9 @@ actor MealsSeedingManager {
             status = .running(downloaded: downloaded, total: total, phase: phase)
         } else if let err = d.string(forKey: SeederDefaults.lastError), !err.isEmpty {
             status = .failed(error: err)
+        } else if d.bool(forKey: SeederDefaults.completed) {
+            let count = d.integer(forKey: SeederDefaults.completedCount)
+            status = .completed(total: max(0, count))
         } else {
             status = .idle
         }
@@ -86,6 +92,7 @@ actor MealsSeedingManager {
             task.setTaskCompleted(success: true)
         } catch {
             await setStatus(.failed(error: error.localizedDescription))
+            persist(error: error.localizedDescription)
             task.setTaskCompleted(success: false)
         }
     }
@@ -98,6 +105,7 @@ actor MealsSeedingManager {
             try await runSeeding(progressPhase: "Discovering IDs…")
         } catch {
             await setStatus(.failed(error: error.localizedDescription))
+            persist(error: error.localizedDescription)
         }
     }
 
@@ -139,12 +147,13 @@ actor MealsSeedingManager {
 
         if isCancelled { throw CancellationError() }
 
-        // Done
-        await setStatus(.completed(total: max(totalCount, lastReportedDownloaded)))
-        persist(downloaded: max(totalCount, lastReportedDownloaded), total: max(totalCount, lastReportedDownloaded), phase: "", error: nil)
-        postLocalNotification(title: "Meals Download Complete", body: "Downloaded \(max(totalCount, lastReportedDownloaded)) items.")
-        // Clear persisted running markers
+        // Done — compute final count and persist durable completion marker
+        let finalTotal = max(totalCount, lastReportedDownloaded)
+        await setStatus(.completed(total: finalTotal))
+        persistCompleted(finalTotal)
+        // Clear only transient running markers
         clearPersistence()
+        postLocalNotification(title: "Meals Download Complete", body: "Downloaded \(finalTotal) items.")
     }
 
     private func handleExpiration() {
@@ -179,6 +188,14 @@ actor MealsSeedingManager {
         }
     }
 
+    // Durable completion marker (Option A)
+    private func persistCompleted(_ total: Int) {
+        let d = UserDefaults.standard
+        d.set(true, forKey: SeederDefaults.completed)
+        d.set(total, forKey: SeederDefaults.completedCount)
+    }
+
+    // Clear only transient state; keep durable completion markers
     private func clearPersistence() {
         let d = UserDefaults.standard
         d.removeObject(forKey: SeederDefaults.downloaded)
@@ -186,6 +203,17 @@ actor MealsSeedingManager {
         d.removeObject(forKey: SeederDefaults.phase)
         d.removeObject(forKey: SeederDefaults.lastError)
         d.set(false, forKey: SeederDefaults.queued)
+        // Do NOT clear completed/completedCount here
+    }
+
+    // Optional: allow resetting the durable completion marker if you add a UI button later
+    func resetCompletedMarker() {
+        let d = UserDefaults.standard
+        d.removeObject(forKey: SeederDefaults.completed)
+        d.removeObject(forKey: SeederDefaults.completedCount)
+        if case .completed = status {
+            status = .idle
+        }
     }
 
     // MARK: - Notifications
