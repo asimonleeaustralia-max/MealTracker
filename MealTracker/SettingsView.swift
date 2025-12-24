@@ -59,6 +59,9 @@ struct SettingsView: View {
     @State private var mealsDBExists: Bool = false
     @State private var mealsDBSizeBytes: Int64 = 0
 
+    // New: confirm removal of downloaded meals
+    @State private var showingMealsDeleteConfirm: Bool = false
+
     // Durable completion from MealsSeedingManager
     private var durableCompleted: Bool {
         UserDefaults.standard.bool(forKey: "MealsSeeding.completed")
@@ -221,24 +224,31 @@ struct SettingsView: View {
                         }
 
                         HStack {
-                            Button {
-                                if networkMonitor.isExpensive || !networkMonitor.isOnWiFi {
-                                    showingSeederConfirm = true
-                                } else {
-                                    Task { await startSeeder() }
+                            // When completed/present, show "Remove downloaded meals"
+                            if (isSeederCompletedForDisplay || mealsDBExists) && !isSeederRunningOrQueued {
+                                Button(role: .destructive) {
+                                    showingMealsDeleteConfirm = true
+                                } label: {
+                                    Text("Remove downloaded meals")
                                 }
-                            } label: {
-                                Text("Download Meals for AI")
-                            }
-                            .disabled(isSeederRunningOrQueued)
-
-                            if isSeederRunningOrQueued {
-                                Spacer()
+                            } else if isSeederRunningOrQueued {
                                 Button(role: .destructive) {
                                     Task { await MealsSeedingManager.shared.cancel() }
                                 } label: {
                                     Text("Cancel")
                                 }
+                            } else {
+                                // Default: offer download
+                                Button {
+                                    if networkMonitor.isExpensive || !networkMonitor.isOnWiFi {
+                                        showingSeederConfirm = true
+                                    } else {
+                                        Task { await startSeeder() }
+                                    }
+                                } label: {
+                                    Text("Download Meals for AI")
+                                }
+                                .disabled(isSeederRunningOrQueued)
                             }
                         }
 
@@ -258,6 +268,15 @@ struct SettingsView: View {
                         }
                     } message: {
                         Text("This will download meals and drinks from public sources. It may be large and take time. The process will continue in the background.")
+                    }
+                    // Confirm removal of downloaded meals
+                    .alert("Remove downloaded meals?", isPresented: $showingMealsDeleteConfirm) {
+                        Button("Cancel", role: .cancel) { }
+                        Button("Remove", role: .destructive) {
+                            Task { await removeMealsDBAndReset() }
+                        }
+                    } message: {
+                        Text("This will delete the downloaded meals database from your device. You can download them again later.")
                     }
                     .onAppear {
                         Task {
@@ -587,6 +606,14 @@ struct SettingsView: View {
         mealsDBSizeBytes = exists ? await MealsDBManager.shared.databaseFileSizeBytes() : 0
     }
 
+    // New: Remove meals DB and reset completion flag
+    private func removeMealsDBAndReset() async {
+        await MealsDBManager.shared.deleteDatabaseFileIfExists()
+        await MealsSeedingManager.shared.resetCompletedMarker()
+        await refreshMealsDBInfo()
+        await refreshSeederStatus()
+    }
+
     // MARK: - OFF helpers (existing below)
 
     private var offCurrentStatus: ParquetDownloadManager.Status {
@@ -732,7 +759,7 @@ struct SettingsView: View {
         return df.string(from: date)
     }
 
-    private func loadSyncedDate() async {
+    private func loadSyncedDate(_ date: Date? = nil) async {
         do {
             let date = try await session.dateSync.getSyncedDate()
             await MainActor.run {
@@ -894,3 +921,4 @@ struct SettingsView: View {
         }
     }
 }
+

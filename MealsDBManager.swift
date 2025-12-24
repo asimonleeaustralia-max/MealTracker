@@ -54,6 +54,18 @@ actor MealsDBManager {
         return 0
     }
 
+    // New: Close any open handles and delete the Meals.duckdb file if it exists.
+    func deleteDatabaseFileIfExists() {
+        // Drop references so DuckDB closes the file when these are deinited.
+        connection = nil
+        database = nil
+
+        guard let url = try? databaseURL() else { return }
+        if FileManager.default.fileExists(atPath: url.path) {
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
     // MARK: - Setup
 
     private func openIfNeeded() throws {
@@ -211,6 +223,10 @@ actor MealsDBManager {
     }
     func databaseFileExists() -> Bool { false }
     func databaseFileSizeBytes() -> Int64 { 0 }
+
+    // Stub delete for non-DuckDB targets
+    func deleteDatabaseFileIfExists() { }
 }
 
 #endif
+
