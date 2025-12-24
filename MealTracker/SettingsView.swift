@@ -230,8 +230,8 @@ struct SettingsView: View {
                 .onAppear { Task { await refreshOFFStatus() } }
                 .onReceive(timer) { _ in Task { await refreshOFFStatus() } }
 
-                // NEW: Bulk Download Meals (Seeder)
-                Section(header: Text("Bulk Download Meals (Seeder)")) {
+                // NEW: Local meals database
+                Section(header: Text("Local meals database")) {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
                             Text("Status")
