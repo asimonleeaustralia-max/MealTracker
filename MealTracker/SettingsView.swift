@@ -239,6 +239,19 @@ struct SettingsView: View {
                             Text(seederStatusText).foregroundStyle(.secondary)
                         }
 
+                        // Indeterminate while discovering totals
+                        if seederStatusText.hasPrefix("Running"), seederTotal == 0 {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                                .padding(.top, 4)
+                            if !seederPhase.isEmpty {
+                                Text(seederPhase)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        // Determinate once totals are known
                         if seederTotal > 0 && (seederDownloaded <= seederTotal) {
                             ProgressView(value: Double(seederDownloaded), total: Double(seederTotal))
                             HStack {
@@ -251,7 +264,7 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                         }
 
-                        if !seederPhase.isEmpty {
+                        if !seederPhase.isEmpty && !(seederStatusText.hasPrefix("Running") && seederTotal == 0) {
                             Text(seederPhase)
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
