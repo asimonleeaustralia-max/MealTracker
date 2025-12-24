@@ -31,6 +31,29 @@ actor MealsDBManager {
         return try body(conn)
     }
 
+    // MARK: - Public helpers for file info
+
+    // Returns the URL to Meals.duckdb (creates parent directories if needed).
+    func databaseFileURL() throws -> URL {
+        try databaseURL()
+    }
+
+    // True if Meals.duckdb exists on disk.
+    func databaseFileExists() -> Bool {
+        if let url = try? databaseURL() {
+            return FileManager.default.fileExists(atPath: url.path)
+        }
+        return false
+    }
+
+    // Returns the byte size of Meals.duckdb if it exists; 0 otherwise.
+    func databaseFileSizeBytes() -> Int64 {
+        guard let url = try? databaseURL() else { return 0 }
+        let vals = try? url.resourceValues(forKeys: [.fileSizeKey])
+        if let bytes = vals?.fileSize { return Int64(bytes) }
+        return 0
+    }
+
     // MARK: - Setup
 
     private func openIfNeeded() throws {
@@ -181,6 +204,13 @@ actor MealsDBManager {
     func withConnection<T>(_ body: (Connection) throws -> T) throws -> T {
         throw NSError(domain: "MealsDBManager", code: 1, userInfo: [NSLocalizedDescriptionKey: "DuckDB is not available in this target"])
     }
+
+    // Stubs for file info
+    func databaseFileURL() throws -> URL {
+        throw NSError(domain: "MealsDBManager", code: 2, userInfo: [NSLocalizedDescriptionKey: "DuckDB is not available in this target"])
+    }
+    func databaseFileExists() -> Bool { false }
+    func databaseFileSizeBytes() -> Int64 { 0 }
 }
 
 #endif

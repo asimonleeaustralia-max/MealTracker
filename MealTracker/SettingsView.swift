@@ -47,13 +47,34 @@ struct SettingsView: View {
     @State private var offError: String?
     @State private var offFreeBytes: Int64 = 0
 
-    // New: Meals seeder UI state (polled from manager)
+    // Meals seeder UI state
     @State private var seederStatusText: String = "Idle"
     @State private var seederDownloaded: Int = 0
     @State private var seederTotal: Int = 0
     @State private var seederPhase: String = ""
     @State private var showingSeederConfirm: Bool = false
     @State private var seederError: String?
+
+    // Meals DB file info
+    @State private var mealsDBExists: Bool = false
+    @State private var mealsDBSizeBytes: Int64 = 0
+
+    // Durable completion from MealsSeedingManager
+    private var durableCompleted: Bool {
+        UserDefaults.standard.bool(forKey: "MealsSeeding.completed")
+    }
+    private var durableCompletedCount: Int {
+        UserDefaults.standard.integer(forKey: "MealsSeeding.completedCount")
+    }
+
+    // Consider it "Completed" for display if:
+    // - current polled status is Completed, OR
+    // - durable completion marker is set AND the DB file exists
+    private var isSeederCompletedForDisplay: Bool {
+        if seederStatusText == "Completed" { return true }
+        if durableCompleted && mealsDBExists { return true }
+        return false
+    }
 
     private var availableLanguages: [String] {
         let codes = Bundle.main.localizations.filter { $0.lowercased() != "base" }
@@ -121,7 +142,7 @@ struct SettingsView: View {
                     }
                 }
 
-                // NEW: Local meals database (bulk downloader) — only when AI features enabled
+                // Meals DB download section
                 if aiFeaturesEnabled {
                     Section {
                         VStack(alignment: .leading, spacing: 6) {
@@ -131,14 +152,23 @@ struct SettingsView: View {
                                 Text(seederStatusText).foregroundStyle(.secondary)
                             }
 
-                            // Show final count when completed
-                            if seederStatusText == "Completed" {
-                                Text("Downloaded \(seederTotal) meals")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                            // Completed line inline with size when available
+                            if isSeederCompletedForDisplay {
+                                let count = (seederStatusText == "Completed") ? seederTotal : durableCompletedCount
+                                HStack(spacing: 6) {
+                                    Text("Downloaded \(count) meals")
+                                    if mealsDBExists {
+                                        Text("—")
+                                            .foregroundStyle(.secondary)
+                                        Text(byteCountString(mealsDBSizeBytes))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                             }
 
-                            // Always show a counter line while running/queued.
+                            // Progress/counters while running/queued
                             if isSeederRunningOrQueued {
                                 let totalText = seederTotal > 0 ? "\(seederTotal)" : "—"
                                 HStack {
@@ -192,7 +222,6 @@ struct SettingsView: View {
 
                         HStack {
                             Button {
-                                // Confirm if not on Wi‑Fi
                                 if networkMonitor.isExpensive || !networkMonitor.isOnWiFi {
                                     showingSeederConfirm = true
                                 } else {
@@ -212,6 +241,15 @@ struct SettingsView: View {
                                 }
                             }
                         }
+
+                        // New: Pro upsell note for non-Pro users under the meals downloader
+                        if tier == .free {
+                            Text("Pro users get advanced machine vision and personalised feedback on their meals.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.top, 4)
+                        }
                     }
                     .alert("Download Meals for AI?", isPresented: $showingSeederConfirm) {
                         Button("Cancel", role: .cancel) { }
@@ -221,8 +259,18 @@ struct SettingsView: View {
                     } message: {
                         Text("This will download meals and drinks from public sources. It may be large and take time. The process will continue in the background.")
                     }
-                    .onAppear { Task { await refreshSeederStatus() } }
-                    .onReceive(timer) { _ in Task { await refreshSeederStatus() } }
+                    .onAppear {
+                        Task {
+                            await refreshSeederStatus()
+                            await refreshMealsDBInfo()
+                        }
+                    }
+                    .onReceive(timer) { _ in
+                        Task {
+                            await refreshSeederStatus()
+                            await refreshMealsDBInfo()
+                        }
+                    }
                 }
 
                 // Account & Plan
@@ -417,7 +465,10 @@ struct SettingsView: View {
                 Task { await loadSyncedDate() }
                 enforceFreeTierPeopleIfNeeded(isFreeTier: isFreeTier)
                 Task { await refreshOFFStatus() }
-                Task { await refreshSeederStatus() }
+                Task {
+                    await refreshSeederStatus()
+                    await refreshMealsDBInfo()
+                }
             }
             .onChange(of: session.isLoggedIn) { _ in
                 let newTier = Entitlements.tier(for: session)
@@ -523,9 +574,17 @@ struct SettingsView: View {
     }
 
     private func startSeeder() async {
-        // Start immediately in the foreground
         await MealsSeedingManager.shared.runNowOnMainThreadForDebug()
         await refreshSeederStatus()
+        await refreshMealsDBInfo()
+    }
+
+    // Meals DB info refresh
+    @MainActor
+    private func refreshMealsDBInfo() async {
+        let exists = await MealsDBManager.shared.databaseFileExists()
+        mealsDBExists = exists
+        mealsDBSizeBytes = exists ? await MealsDBManager.shared.databaseFileSizeBytes() : 0
     }
 
     // MARK: - OFF helpers (existing below)
@@ -553,10 +612,8 @@ struct SettingsView: View {
         return fmt.string(fromByteCount: bytes)
     }
 
-    // NEW: Implement OFF status refresh to fix missing symbol
     @MainActor
     private func refreshOFFStatus() async {
-        // Poll manager state
         let manager = ParquetDownloadManager.shared
         let status = await manager.status
         let free = await manager.bytesAvailableOnDisk()
@@ -578,11 +635,9 @@ struct SettingsView: View {
                 offStatusText = "Not downloaded"
                 offError = nil
             }
-
         case .checkingSize:
             offStatusText = "Checking size…"
             offError = nil
-
         case .readyToDownload(let expectedBytes):
             offExpectedBytes = expectedBytes
             offReceivedBytes = 0
@@ -593,36 +648,31 @@ struct SettingsView: View {
                 offStatusText = "Ready"
             }
             offError = nil
-
         case .downloading(let progress, let received, let expected):
             offExpectedBytes = expected
             offReceivedBytes = received
             offProgress = max(0, min(progress, 1))
             offStatusText = "Downloading"
             offError = nil
-
         case .completed(_, let bytes):
             offExpectedBytes = bytes
             offReceivedBytes = bytes
             offProgress = 1.0
             offStatusText = "Completed"
             offError = nil
-
         case .failed(let error):
             offStatusText = "Failed"
             offError = error
-
         case .cancelled:
             offStatusText = "Cancelled"
             offError = nil
         }
     }
 
-    // Buttons for OFF section
     @ViewBuilder
     private func actionButtons() -> some View {
         let manager = ParquetDownloadManager.shared
-        let _ = Task { await manager.fileExists() } // placeholder to silence unused warning if any
+        let _ = Task { await manager.fileExists() }
 
         let isDownloading = offStatusText == "Downloading"
         let isCompleted = offStatusText == "Completed" || offStatusText == "Downloaded"
@@ -720,11 +770,10 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - People helpers (minimal local implementations)
+    // MARK: - People helpers
 
     private func enforceFreeTierPeopleIfNeeded(isFreeTier: Bool) {
         guard isFreeTier else { return }
-        // Keep first active person as default, soft-delete the rest
         var keptDefault: Person?
         for (idx, p) in people.enumerated() {
             if idx == 0 {
@@ -735,8 +784,6 @@ struct SettingsView: View {
                 p.isRemoved = true
             }
         }
-        // If no people exist, PersistenceController seeding will handle next launch;
-        // we do nothing more here.
         if context.hasChanges {
             try? context.save()
         }
@@ -744,7 +791,6 @@ struct SettingsView: View {
 
     private func setDefaultPerson(by id: UUID?) {
         guard let id else { return }
-        // Ensure exactly one default among active people
         var didChange = false
         for p in people {
             let shouldBeDefault = (p.id == id)
@@ -766,7 +812,6 @@ struct SettingsView: View {
         if trimmed.count > 40 {
             return NSLocalizedString("add_person_error_name_too_long", comment: "Name too long")
         }
-        // Ensure uniqueness among active (non-removed)
         if people.contains(where: { $0.name.caseInsensitiveCompare(trimmed) == .orderedSame }) {
             return NSLocalizedString("add_person_error_duplicate_name", comment: "Name already exists")
         }
@@ -805,12 +850,8 @@ struct SettingsView: View {
     }
 
     private func performDelete(_ person: Person) {
-        // Prevent deleting the only active person
         let activeCount = people.count
-        if activeCount <= 1 {
-            return
-        }
-        // If deleting the default, transfer default to the first other active person
+        if activeCount <= 1 { return }
         if person.isDefault {
             if let replacement = people.first(where: { $0.id != person.id }) {
                 replacement.isDefault = true
@@ -837,7 +878,6 @@ struct SettingsView: View {
         p.id = UUID()
         p.name = name
         p.isRemoved = false
-        // If no default currently, make this the default; otherwise non-default
         if !people.contains(where: { $0.isDefault }) {
             p.isDefault = true
         } else {
