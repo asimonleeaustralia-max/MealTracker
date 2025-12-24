@@ -14,32 +14,24 @@ struct SettingsView: View {
     @AppStorage("vitaminsUnit") private var vitaminsUnit: VitaminsUnit = .milligrams
     @AppStorage("showMinerals") private var showMinerals: Bool = false
     @AppStorage("handedness") private var handedness: Handedness = .right
-    // New: data sharing preference (default = public)
     @AppStorage("dataSharingPreference") private var dataSharing: DataSharingPreference = .public
-    // New: Simulants group visibility (default disabled)
     @AppStorage("showSimulants") private var showSimulants: Bool = false
-    // New: open app to new meal on launch
     @AppStorage("openToNewMealOnLaunch") private var openToNewMealOnLaunch: Bool = false
-    // New: AI feedback severity (stub; default = balanced)
     @AppStorage("aiFeedbackSeverity") private var aiFeedbackSeverity: AIFeedbackSeverity = .balanced
 
     @State private var syncedDateText: String = "—"
     @State private var isSyncing: Bool = false
     @State private var syncError: String?
 
-    // Login sheet
     @State private var showingLogin = false
 
-    // People (Core Data) — fetch only active (non-removed)
     @FetchRequest(fetchRequest: Person.fetchAllRequest())
     private var people: FetchedResults<Person>
 
-    // Add Person sheet state
     @State private var showingAddPersonSheet: Bool = false
     @State private var newPersonName: String = ""
     @State private var addPersonError: String?
 
-    // Delete confirmation state
     @State private var personPendingDeletion: Person?
 
     // OFF download UI state
@@ -51,8 +43,15 @@ struct SettingsView: View {
     @State private var showingOFFConfirm: Bool = false
     @State private var offConfirmMessage: String = ""
     @State private var offError: String?
-    // Cached free space (actor-fetched)
     @State private var offFreeBytes: Int64 = 0
+
+    // New: Meals seeder UI state (polled from manager)
+    @State private var seederStatusText: String = "Idle"
+    @State private var seederDownloaded: Int = 0
+    @State private var seederTotal: Int = 0
+    @State private var seederPhase: String = ""
+    @State private var showingSeederConfirm: Bool = false
+    @State private var seederError: String?
 
     private var availableLanguages: [String] {
         let codes = Bundle.main.localizations.filter { $0.lowercased() != "base" }
@@ -60,14 +59,12 @@ struct SettingsView: View {
         return Array(Set(list)).sorted()
     }
 
-    // People cap
     private let maxActivePeople = 15
     private var isAtPeopleCap: Bool { people.count >= maxActivePeople }
 
     var body: some View {
         let l = LocalizationManager(languageCode: appLanguageCode)
 
-        // Read environment-dependent values here (safe)
         let tier = Entitlements.tier(for: session)
         let isFreeTier = (tier == .free)
         let isEligibleForOfflineDB = session.isLoggedIn && tier == .paid
@@ -83,7 +80,7 @@ struct SettingsView: View {
 
         NavigationView {
             Form {
-                // Language (moved to top)
+                // Language
                 Section {
                     Picker(l.localized("choose_language"), selection: $appLanguageCode) {
                         ForEach(availableLanguages, id: \.self) { code in
@@ -92,7 +89,7 @@ struct SettingsView: View {
                     }
                 }
 
-                // Handedness (localized)
+                // Handedness
                 Section(header: Text(LocalizedStringKey("handedness_section_title"))) {
                     Picker("", selection: $handedness) {
                         Text(LocalizedStringKey("left_handed")).tag(Handedness.left)
@@ -101,11 +98,9 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                 }
 
-                // Nutrition options: Vitamins, Minerals, Stimulants
+                // Nutrition options
                 Section(header: Text(l.localized("nutrition_options_section_title"))) {
-                    Toggle(isOn: $showVitamins) {
-                        Text(l.localized("show_vitamins"))
-                    }
+                    Toggle(isOn: $showVitamins) { Text(l.localized("show_vitamins")) }
                     if showVitamins {
                         Picker(l.localized("vitamin_units"), selection: $vitaminsUnit) {
                             ForEach(VitaminsUnit.allCases, id: \.self) { unit in
@@ -113,18 +108,11 @@ struct SettingsView: View {
                             }
                         }
                     }
-
-                    Toggle(isOn: $showMinerals) {
-                        Text(l.localized("show_minerals"))
-                    }
-
-                    // Note: stored key is "showSimulants" (spelling), label shows "Stimulants"
-                    Toggle(isOn: $showSimulants) {
-                        Text(l.localized("show_stimulants"))
-                    }
+                    Toggle(isOn: $showMinerals) { Text(l.localized("show_minerals")) }
+                    Toggle(isOn: $showSimulants) { Text(l.localized("show_stimulants")) }
                 }
 
-                // Account & Plan section (use existing key from Localizable.strings)
+                // Account & Plan
                 Section(header: Text(LocalizedStringKey("account_plan_section_title"))) {
                     HStack {
                         Text(LocalizedStringKey("access_tier"))
@@ -132,8 +120,6 @@ struct SettingsView: View {
                         Text(tier == .paid ? NSLocalizedString("access_tier.paid", comment: "") : NSLocalizedString("access_tier.free", comment: ""))
                             .foregroundStyle(.secondary)
                     }
-
-                    // Logged-in state
                     HStack {
                         Text(LocalizedStringKey("account_status"))
                         Spacer()
@@ -145,40 +131,27 @@ struct SettingsView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-
-                    // Login / Logout actions
                     if session.isLoggedIn {
                         Button(role: .destructive) {
                             Task { await session.logout() }
-                        } label: {
-                            Text(LocalizedStringKey("log_out"))
-                        }
+                        } label: { Text(LocalizedStringKey("log_out")) }
                     } else {
-                        Button {
-                            showingLogin = true
-                        } label: {
-                            Text(LocalizedStringKey("log_in"))
-                        }
+                        Button { showingLogin = true } label: { Text(LocalizedStringKey("log_in")) }
                         .sheet(isPresented: $showingLogin) {
                             LoginView { email, password in
                                 Task {
                                     do {
                                         try await session.login(email: email, password: password)
                                         showingLogin = false
-                                    } catch {
-                                        // Keep inline error UI within LoginView if needed
-                                    }
+                                    } catch {}
                                 }
                             }
                         }
                     }
-
-                    // Limits
                     HStack {
                         Text(LocalizedStringKey("meals_left_today"))
                         Spacer()
-                        Text(mealsRemainingText)
-                            .foregroundStyle(.secondary)
+                        Text(mealsRemainingText).foregroundStyle(.secondary)
                     }
                     HStack {
                         Text(LocalizedStringKey("photos_per_meal_limit"))
@@ -187,7 +160,6 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    // Date Synced (Cloud Stub)
                     Section {
                         HStack {
                             Text(LocalizedStringKey("synced_date"))
@@ -197,31 +169,24 @@ struct SettingsView: View {
                         Button {
                             Task { await syncNow() }
                         } label: {
-                            if isSyncing {
-                                ProgressView().progressViewStyle(.circular)
-                            } else {
-                                Text(LocalizedStringKey("sync_now"))
-                            }
+                            if isSyncing { ProgressView().progressViewStyle(.circular) }
+                            else { Text(LocalizedStringKey("sync_now")) }
                         }
                         .disabled(isSyncing || !session.isLoggedIn)
                         if let syncError {
-                            Text(syncError)
-                                .font(.footnote)
-                                .foregroundStyle(.red)
+                            Text(syncError).font(.footnote).foregroundStyle(.red)
                         }
                     }
                 }
 
-                // Offline Barcode Database — always visible (Option A)
+                // Offline Barcode Database (existing)
                 Section(header: Text(isEligibleForOfflineDB ? "Offline Barcode Database saved locally" : "Offline Barcode Database saved locally (Pro feature)")) {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
                             Text("Status")
                             Spacer()
-                            Text(offStatusText)
-                                .foregroundStyle(.secondary)
+                            Text(offStatusText).foregroundStyle(.secondary)
                         }
-
                         if case .downloading = offCurrentStatus {
                             ProgressView(value: offProgress)
                             HStack {
@@ -234,27 +199,19 @@ struct SettingsView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         }
-
                         if let offError {
-                            Text(offError)
-                                .font(.footnote)
-                                .foregroundStyle(.red)
+                            Text(offError).font(.footnote).foregroundStyle(.red)
                         }
-
-                        // Network warning
                         if networkMonitor.isConnected && networkMonitor.isExpensive {
                             Text("You are not on Wi‑Fi. Downloading may use cellular data.")
                                 .font(.footnote)
                                 .foregroundStyle(.orange)
                         }
-
-                        // Free space hint
                         let freeBytes = offFreeBytes
                         HStack {
                             Text("Free space available")
                             Spacer()
-                            Text(byteCountString(freeBytes))
-                                .foregroundStyle(.secondary)
+                            Text(byteCountString(freeBytes)).foregroundStyle(.secondary)
                         }
                         .font(.footnote)
 
@@ -266,27 +223,92 @@ struct SettingsView: View {
                                 .padding(.top, 4)
                         }
                     }
-
-                    // Action buttons (disabled when not eligible)
                     actionButtons()
                         .disabled(!isEligibleForOfflineDB)
                         .opacity(isEligibleForOfflineDB ? 1.0 : 0.55)
                 }
                 .onAppear { Task { await refreshOFFStatus() } }
-                .onReceive(timer) { _ in
-                    Task { await refreshOFFStatus() }
-                }
+                .onReceive(timer) { _ in Task { await refreshOFFStatus() } }
 
-                // People management
+                // NEW: Bulk Download Meals (Seeder)
+                Section(header: Text("Bulk Download Meals (Seeder)")) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Status")
+                            Spacer()
+                            Text(seederStatusText).foregroundStyle(.secondary)
+                        }
+
+                        if seederTotal > 0 && (seederDownloaded <= seederTotal) {
+                            ProgressView(value: Double(seederDownloaded), total: Double(seederTotal))
+                            HStack {
+                                Text("\(seederDownloaded) of \(seederTotal)")
+                                Spacer()
+                                let pct = seederTotal > 0 ? Int((Double(seederDownloaded) / Double(seederTotal)) * 100.0) : 0
+                                Text("\(pct)%")
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        }
+
+                        if !seederPhase.isEmpty {
+                            Text(seederPhase)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        if let err = seederError {
+                            Text(err).font(.footnote).foregroundStyle(.red)
+                        }
+
+                        if networkMonitor.isConnected && (networkMonitor.isExpensive || !networkMonitor.isOnWiFi) {
+                            Text("You are not on Wi‑Fi. Bulk download will wait for Wi‑Fi and may use cellular if you proceed.")
+                                .font(.footnote)
+                                .foregroundStyle(.orange)
+                        }
+                    }
+
+                    HStack {
+                        Button {
+                            // Confirm if not on Wi‑Fi
+                            if networkMonitor.isExpensive || !networkMonitor.isOnWiFi {
+                                showingSeederConfirm = true
+                            } else {
+                                Task { await startSeeder() }
+                            }
+                        } label: {
+                            Text("Start Bulk Download")
+                        }
+                        .disabled(isSeederRunningOrQueued)
+
+                        if isSeederRunningOrQueued {
+                            Spacer()
+                            Button(role: .destructive) {
+                                Task { await MealsSeedingManager.shared.cancel() }
+                            } label: {
+                                Text("Cancel")
+                            }
+                        }
+                    }
+                }
+                .alert("Start Bulk Download?", isPresented: $showingSeederConfirm) {
+                    Button("Cancel", role: .cancel) { }
+                    Button("Start") {
+                        Task { await startSeeder() }
+                    }
+                } message: {
+                    Text("This will download meals and drinks from public sources. It may be large and take time. The process will continue in the background.")
+                }
+                .onAppear { Task { await refreshSeederStatus() } }
+                .onReceive(timer) { _ in Task { await refreshSeederStatus() } }
+
+                // People management (existing)
                 Section(header: Text(NSLocalizedString("people_section_title", comment: "People")) ) {
-                    // Default person dropdown (only active people)
                     Picker(NSLocalizedString("default_person_picker_title", comment: "Default person"),
                            selection: Binding<UUID?>(
-                            get: {
-                                people.first(where: { $0.isDefault })?.id
-                            },
+                            get: { people.first(where: { $0.isDefault })?.id },
                             set: { newID in
-                                // Prevent changes on free tier
+                                let isFreeTier = (tier == .free)
                                 guard !isFreeTier else { return }
                                 setDefaultPerson(by: newID)
                             })) {
@@ -297,10 +319,9 @@ struct SettingsView: View {
                         }
                     }
                     .pickerStyle(.menu)
-                    .disabled(people.isEmpty || isFreeTier) // greyed out on free
-                    .opacity(isFreeTier ? 0.85 : 1.0) // slightly more grey when not pro
+                    .disabled(people.isEmpty || isFreeTier)
+                    .opacity(isFreeTier ? 0.85 : 1.0)
 
-                    // Informational notice for free tier (localized key)
                     if isFreeTier {
                         Text(LocalizedStringKey("pro_people_notice"))
                             .font(.footnote)
@@ -308,7 +329,6 @@ struct SettingsView: View {
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.top, 4)
                     } else {
-                        // Add Person button (paid tiers)
                         Button {
                             newPersonName = ""
                             addPersonError = nil
@@ -329,7 +349,6 @@ struct SettingsView: View {
                         }
                     }
 
-                    // List of people with in-row soft delete (no swipe)
                     ForEach(people) { person in
                         HStack {
                             if handedness == .left {
@@ -357,9 +376,9 @@ struct SettingsView: View {
                 Task { await loadSyncedDate() }
                 enforceFreeTierPeopleIfNeeded(isFreeTier: isFreeTier)
                 Task { await refreshOFFStatus() }
+                Task { await refreshSeederStatus() }
             }
             .onChange(of: session.isLoggedIn) { _ in
-                // When login state changes, re-evaluate and enforce
                 let newTier = Entitlements.tier(for: session)
                 enforceFreeTierPeopleIfNeeded(isFreeTier: newTier == .free)
             }
@@ -368,25 +387,6 @@ struct SettingsView: View {
                     Button(l.localized("done")) { dismiss() }
                 }
             }
-            .alert(item: $personPendingDeletion) { person in
-                Alert(
-                    title: Text(NSLocalizedString("confirm_delete_person_title", comment: "Delete person?")),
-                    message: Text(String(format: NSLocalizedString("confirm_delete_person_message", comment: "Are you sure you want to remove %@?"), person.name)),
-                    primaryButton: .destructive(Text(NSLocalizedString("delete", comment: "Delete"))) {
-                        // Block deleting the default ("Me") person at action time too
-                        guard !person.isDefault else {
-                            personPendingDeletion = nil
-                            return
-                        }
-                        softDeletePerson(person)
-                        personPendingDeletion = nil
-                    },
-                    secondaryButton: .cancel {
-                        personPendingDeletion = nil
-                    }
-                )
-            }
-            // Move the Add Person sheet to the top-level NavigationView to avoid immediate close
             .sheet(isPresented: $showingAddPersonSheet) {
                 NavigationView {
                     Form {
@@ -396,7 +396,6 @@ struct SettingsView: View {
                                         get: { newPersonName },
                                         set: { value in
                                             newPersonName = value
-                                            // Live-validate as user types
                                             addPersonError = validationError(for: value)
                                         }
                                       ))
@@ -404,14 +403,12 @@ struct SettingsView: View {
                                 .disableAutocorrection(true)
 
                             if let error = addPersonError, !error.isEmpty {
-                                Text(error)
-                                    .font(.footnote)
-                                    .foregroundStyle(.red)
+                                Text(error).font(.footnote).foregroundStyle(.red)
                             }
                         }
                     }
                     .navigationTitle(NSLocalizedString("add_person_nav_title", comment: "Add Person"))
-                    .navigationBarTitleDisplayMode(.inline) // smaller title again
+                    .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
                             Button(NSLocalizedString("cancel", comment: "Cancel")) {
@@ -439,10 +436,59 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - OFF helpers
+    // MARK: - Seeder helpers
+
+    private var isSeederRunningOrQueued: Bool {
+        if seederStatusText == "Queued" { return true }
+        if seederStatusText.hasPrefix("Running") { return true }
+        return false
+    }
+
+    @MainActor
+    private func refreshSeederStatus() async {
+        let s = await MealsSeedingManager.shared.currentStatus()
+        switch s {
+        case .idle:
+            seederStatusText = "Idle"
+            seederError = nil
+            seederDownloaded = 0
+            seederTotal = 0
+            seederPhase = ""
+        case .queued:
+            seederStatusText = "Queued"
+            seederError = nil
+        case .running(let downloaded, let total, let phase):
+            seederStatusText = "Running"
+            seederDownloaded = downloaded
+            seederTotal = max(total, downloaded)
+            seederPhase = phase
+            seederError = nil
+        case .completed(let total):
+            seederStatusText = "Completed"
+            seederDownloaded = total
+            seederTotal = total
+            seederPhase = ""
+            seederError = nil
+        case .failed(let error):
+            seederStatusText = "Failed"
+            seederError = error
+        case .cancelled:
+            seederStatusText = "Cancelled"
+            seederError = nil
+            seederDownloaded = 0
+            seederTotal = 0
+            seederPhase = ""
+        }
+    }
+
+    private func startSeeder() async {
+        await MealsSeedingManager.shared.startQueued()
+        await refreshSeederStatus()
+    }
+
+    // MARK: - OFF helpers (existing below)
 
     private var offCurrentStatus: ParquetDownloadManager.Status {
-        // We keep local mirror via refreshOFFStatus
         if offStatusText.contains("Downloading") {
             return .downloading(progress: offProgress, receivedBytes: offReceivedBytes, expectedBytes: offExpectedBytes)
         }
@@ -465,380 +511,304 @@ struct SettingsView: View {
         return fmt.string(fromByteCount: bytes)
     }
 
+    // NEW: Implement OFF status refresh to fix missing symbol
     @MainActor
     private func refreshOFFStatus() async {
-        let mgr = ParquetDownloadManager.shared
-        let status = await mgr.status
+        // Poll manager state
+        let manager = ParquetDownloadManager.shared
+        let status = await manager.status
+        let free = await manager.bytesAvailableOnDisk()
+        offFreeBytes = free
+
         switch status {
         case .idle:
-            let exists = await mgr.fileExists()
-            if exists {
-                let size = await mgr.existingFileSize()
-                offStatusText = "Downloaded (\(byteCountString(size)))"
-                offExpectedBytes = size
-                offReceivedBytes = size
+            if await manager.fileExists() {
+                let bytes = await manager.existingFileSize()
+                offExpectedBytes = bytes
+                offReceivedBytes = bytes
                 offProgress = 1.0
-                // Update free space cache too
-                offFreeBytes = await mgr.bytesAvailableOnDisk()
+                offStatusText = "Downloaded"
+                offError = nil
             } else {
-                offStatusText = "Not downloaded"
-                offProgress = 0
                 offExpectedBytes = -1
                 offReceivedBytes = 0
-                offFreeBytes = await mgr.bytesAvailableOnDisk()
+                offProgress = 0
+                offStatusText = "Not downloaded"
+                offError = nil
             }
+
         case .checkingSize:
             offStatusText = "Checking size…"
             offError = nil
-            offFreeBytes = await mgr.bytesAvailableOnDisk()
+
         case .readyToDownload(let expectedBytes):
             offExpectedBytes = expectedBytes
-            let sizeText = expectedBytes > 0 ? byteCountString(expectedBytes) : "unknown size"
-            offStatusText = "Ready (\(sizeText))"
-            offError = nil
-            // Show confirm with Wi‑Fi/disk warning
-            let free = await ParquetDownloadManager.shared.bytesAvailableOnDisk()
-            offFreeBytes = free
-            var warnings: [String] = []
+            offReceivedBytes = 0
+            offProgress = 0
             if expectedBytes > 0 {
-                if expectedBytes > free {
-                    warnings.append("Not enough free space. Requires \(byteCountString(expectedBytes)), available \(byteCountString(free)).")
-                } else if expectedBytes > (free / 2) {
-                    warnings.append("Large download: \(byteCountString(expectedBytes)).")
-                }
+                offStatusText = "Ready (\(byteCountString(expectedBytes)))"
             } else {
-                warnings.append("Large download.")
+                offStatusText = "Ready"
             }
-            if networkMonitor.isExpensive || !networkMonitor.isOnWiFi {
-                warnings.append("You are not on Wi‑Fi. Downloading may use cellular data.")
-            }
-            let messageLines = ["This will download the Open Food Facts database for offline use.", "Estimated size: \(sizeText)"] + warnings
-            offConfirmMessage = messageLines.joined(separator: "\n\n")
-            showingOFFConfirm = true
+            offError = nil
+
         case .downloading(let progress, let received, let expected):
-            offProgress = max(0, min(1, progress))
-            offReceivedBytes = received
             offExpectedBytes = expected
-            offStatusText = expected > 0
-                ? String(format: "Downloading… %.0f%%", offProgress * 100.0)
-                : "Downloading…"
+            offReceivedBytes = received
+            offProgress = max(0, min(progress, 1))
+            offStatusText = "Downloading"
             offError = nil
-            offFreeBytes = await mgr.bytesAvailableOnDisk()
+
         case .completed(_, let bytes):
-            offStatusText = "Downloaded (\(byteCountString(bytes)))"
+            offExpectedBytes = bytes
+            offReceivedBytes = bytes
             offProgress = 1.0
+            offStatusText = "Completed"
             offError = nil
-            offFreeBytes = await mgr.bytesAvailableOnDisk()
+
         case .failed(let error):
             offStatusText = "Failed"
             offError = error
-            offFreeBytes = await mgr.bytesAvailableOnDisk()
+
         case .cancelled:
             offStatusText = "Cancelled"
             offError = nil
-            offProgress = 0
-            offFreeBytes = await mgr.bytesAvailableOnDisk()
         }
     }
 
+    // Buttons for OFF section
     @ViewBuilder
     private func actionButtons() -> some View {
-        let mgr = ParquetDownloadManager.shared
-        let exists = (try? mgr.destinationURL()).map { FileManager.default.fileExists(atPath: $0.path) } ?? false
+        let manager = ParquetDownloadManager.shared
+        let _ = Task { await manager.fileExists() } // placeholder to silence unused warning if any
+
+        let isDownloading = offStatusText == "Downloading"
+        let isCompleted = offStatusText == "Completed" || offStatusText == "Downloaded"
+        let isReady = offStatusText.hasPrefix("Ready")
 
         HStack {
-            if offStatusText.starts(with: "Downloading") {
+            Button {
+                Task { await ParquetDownloadManager.shared.fetchExpectedSize() }
+            } label: {
+                Text("Check Size")
+            }
+            .disabled(isDownloading)
+
+            Spacer()
+
+            if isDownloading {
                 Button(role: .destructive) {
-                    Task { await mgr.cancel() }
-                } label: {
-                    Text("Cancel Download")
-                }
-            } else {
-                Button {
+                    Task { await ParquetDownloadManager.shared.cancel() }
+                } label: { Text("Cancel") }
+            } else if isCompleted {
+                Button(role: .destructive) {
                     Task {
-                        await ParquetDownloadManager.shared.fetchExpectedSize()
+                        if let url = try? await ParquetDownloadManager.shared.destinationURL(),
+                           FileManager.default.fileExists(atPath: url.path) {
+                            try? FileManager.default.removeItem(at: url)
+                        }
                         await refreshOFFStatus()
                     }
-                } label: {
-                    Text(exists ? "Re-download" : "Download for offline use")
-                }
-            }
-
-            if exists {
-                Spacer()
-                Button(role: .destructive) {
-                    if let url = try? mgr.destinationURL() {
-                        try? FileManager.default.removeItem(at: url)
+                } label: { Text("Delete") }
+            } else {
+                Button {
+                    if networkMonitor.isExpensive || !networkMonitor.isOnWiFi {
+                        let expected = offExpectedBytes
+                        if expected > 0 {
+                            offConfirmMessage = "Download size about \(byteCountString(expected)). The download will wait for Wi‑Fi when possible."
+                        } else {
+                            offConfirmMessage = "Download size unknown. The download will wait for Wi‑Fi when possible."
+                        }
+                        showingOFFConfirm = true
+                    } else {
+                        Task { await ParquetDownloadManager.shared.startDownload() }
                     }
-                    Task { await refreshOFFStatus() }
                 } label: {
-                    Text("Remove")
+                    Text(isReady ? "Download" : "Download")
                 }
+                .disabled(isDownloading)
             }
         }
     }
 
-    // MARK: - Add Person flow (unchanged below)
+    // MARK: - Sync helpers
 
-    private func normalizedName(_ s: String) -> String {
-        s.trimmingCharacters(in: .whitespacesAndNewlines)
-         .folding(options: [.diacriticInsensitive, .caseInsensitive, .widthInsensitive], locale: .current)
-         .lowercased()
+    private func formattedSyncedDate(_ date: Date) -> String {
+        let df = DateFormatter()
+        df.dateStyle = .medium
+        df.timeStyle = .short
+        return df.string(from: date)
     }
 
-    private func nameAlreadyExists(_ name: String) -> Bool {
-        let target = normalizedName(name)
-        // people excludes removed already
-        return people.contains { normalizedName($0.name) == target }
-    }
-
-    private func validationError(for raw: String) -> String? {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
-            return NSLocalizedString("add_person_error_empty", comment: "Name cannot be empty")
-        }
-        if nameAlreadyExists(trimmed) {
-            return NSLocalizedString("add_person_error_duplicate", comment: "That name already exists")
-        }
-        if people.count >= maxActivePeople {
-            let fmt = NSLocalizedString("add_person_error_max_reached", comment: "Max active people reached")
-            return String(format: fmt, maxActivePeople)
-        }
-        return nil
-    }
-
-    private func attemptSaveNewPerson() {
-        // Guard free tier (should be unreachable since button is hidden)
-        let isFreeTier = Entitlements.tier(for: session) == .free
-        guard !isFreeTier else { return }
-
-        // Enforce hard cap before proceeding
-        if people.count >= maxActivePeople {
-            let fmt = NSLocalizedString("add_person_error_max_reached", comment: "Max active people reached")
-            addPersonError = String(format: fmt, maxActivePeople)
-            return
-        }
-
-        let trimmed = newPersonName.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let error = validationError(for: trimmed) {
-            addPersonError = error
-            return
-        }
-
-        // Passed validation — insert and save
-        let p = Person(context: context)
-        p.name = trimmed
-        p.isRemoved = false
-
-        // If no default person exists yet (among active), make this one default
-        if people.first(where: { $0.isDefault }) == nil {
-            p.isDefault = true
-        }
-
+    private func loadSyncedDate() async {
         do {
-            try context.save()
-            showingAddPersonSheet = false
-        } catch {
-            addPersonError = error.localizedDescription
-        }
-    }
-
-    private func deleteButton(for person: Person) -> some View {
-        // Do not allow deleting the default ("Me") person
-        let isProtected = person.isDefault
-        return Button {
-            // Prevent deleting the last remaining active person
-            guard people.count >= 2 else { return }
-            // Block if protected
-            guard !isProtected else { return }
-            personPendingDeletion = person
-        } label: {
-            Image(systemName: "trash")
-                .foregroundStyle(isProtected ? AnyShapeStyle(.secondary) : AnyShapeStyle(.red))
-                .imageScale(.medium)
-                .accessibilityLabel(
-                    Text(String(format: NSLocalizedString("delete_person_accessibility_label", comment: "Delete %@"), person.name))
-                )
-        }
-        .buttonStyle(.borderless)
-        .disabled(people.count <= 1 || isProtected)
-        .opacity(isProtected ? 0.4 : 1.0)
-    }
-
-    private func softDeletePerson(_ person: Person) {
-        // Prevent deleting the last remaining active person
-        guard people.count >= 2 else { return }
-        // Never delete the default ("Me") person
-        guard !person.isDefault else { return }
-
-        let deletedDefault = person.isDefault
-        person.isDefault = false
-        person.isRemoved = true
-
-        do {
-            try context.save()
-        } catch {
-            // Handle save error
-        }
-
-        // Reassign default if we removed the default person
-        if deletedDefault {
-            do {
-                let remaining = try context.fetch(Person.fetchAllRequest()) // active only
-                if let first = remaining.first {
-                    for p in remaining { p.isDefault = (p == first) }
-                    try context.save()
+            let date = try await session.dateSync.getSyncedDate()
+            await MainActor.run {
+                if let d = date {
+                    syncedDateText = formattedSyncedDate(d)
+                } else {
+                    syncedDateText = "—"
                 }
-            } catch {
-                // Handle fetch/save error
+                syncError = nil
+            }
+        } catch {
+            await MainActor.run {
+                syncedDateText = "—"
+                syncError = error.localizedDescription
             }
         }
     }
 
-    private func softDeletePeople(at offsets: IndexSet) {
-        // Retained for potential reuse; no longer wired to swipe.
-        let toDelete = offsets.map { people[$0] }
-
-        // Prevent deleting the last remaining active person
-        guard people.count - toDelete.count >= 1 else {
-            return
+    private func syncNow() async {
+        await MainActor.run {
+            isSyncing = true
+            syncError = nil
         }
-
-        // If any target is the default ("Me"), refuse the whole operation
-        guard !toDelete.contains(where: { $0.isDefault }) else {
-            return
-        }
-
-        var deletedDefault = false
-        for p in toDelete {
-            if p.isDefault { deletedDefault = true }
-            p.isDefault = false
-            p.isRemoved = true
+        defer {
+            Task { @MainActor in isSyncing = false }
         }
 
         do {
-            try context.save()
+            try await session.dateSync.setSyncedDate(Date())
+            await loadSyncedDate()
         } catch {
-            // Handle save error
-        }
-
-        // If we removed the default, ensure one active default exists
-        if deletedDefault {
-            do {
-                let remaining = try context.fetch(Person.fetchAllRequest()) // active only
-                if let first = remaining.first {
-                    // Set exactly one default among active
-                    for p in remaining { p.isDefault = (p == first) }
-                    try context.save()
-                }
-            } catch {
-                // Handle fetch/save error
+            await MainActor.run {
+                syncError = error.localizedDescription
             }
         }
     }
 
-    private func setDefaultPerson(by id: UUID?) {
-        guard let id else { return }
-        // Toggle default among active people only
-        for p in people {
-            p.isDefault = (p.id == id)
-        }
-        do {
-            try context.save()
-        } catch {
-            // Handle save error
-        }
-    }
+    // MARK: - People helpers (minimal local implementations)
 
-    // Enforce free plan behavior: single default person named "Me", no changes allowed.
     private func enforceFreeTierPeopleIfNeeded(isFreeTier: Bool) {
         guard isFreeTier else { return }
-
-        // Ensure one default person exists among active and is named "Me"
-        // If none exist, create one.
-        let activePeople = Array(people)
-        if activePeople.isEmpty {
-            let p = Person(context: context)
-            let defaultName = NSLocalizedString("default_person_name_me", comment: "Default person name for device owner")
-            p.name = (defaultName == "default_person_name_me") ? "Me" : defaultName
-            p.isDefault = true
-            p.isRemoved = false
-            try? context.save()
-            return
-        }
-
-        // Ensure exactly one default
-        var foundDefault: Person?
-        for p in activePeople {
-            if p.isDefault {
-                if foundDefault == nil {
-                    foundDefault = p
-                } else {
-                    p.isDefault = false
-                }
+        // Keep first active person as default, soft-delete the rest
+        var keptDefault: Person?
+        for (idx, p) in people.enumerated() {
+            if idx == 0 {
+                if !p.isDefault { p.isDefault = true }
+                keptDefault = p
+            } else {
+                p.isDefault = false
+                p.isRemoved = true
             }
         }
-        if foundDefault == nil, let first = activePeople.first {
-            first.isDefault = true
-            foundDefault = first
-        }
-
-        // Ensure default person's name is "Me"
-        if let d = foundDefault {
-            let desiredName = NSLocalizedString("default_person_name_me", comment: "Default person name for device owner")
-            let target = (desiredName == "default_person_name_me") ? "Me" : desiredName
-            if d.name != target {
-                d.name = target
-            }
-        }
-
+        // If no people exist, PersistenceController seeding will handle next launch;
+        // we do nothing more here.
         if context.hasChanges {
             try? context.save()
         }
     }
 
-    // MARK: - Sync stubs
-
-    @MainActor
-    private func loadSyncedDate() async {
-        isSyncing = true
-        syncError = nil
-        defer { isSyncing = false }
-        do {
-            if let d = try await session.dateSync.getSyncedDate() {
-                syncedDateText = DateFormatter.localizedString(from: d, dateStyle: .medium, timeStyle: .short)
-            } else {
-                syncedDateText = NSLocalizedString("synced_date_not_set", comment: "")
+    private func setDefaultPerson(by id: UUID?) {
+        guard let id else { return }
+        // Ensure exactly one default among active people
+        var didChange = false
+        for p in people {
+            let shouldBeDefault = (p.id == id)
+            if p.isDefault != shouldBeDefault {
+                p.isDefault = shouldBeDefault
+                didChange = true
             }
-        } catch {
-            syncError = error.localizedDescription
+        }
+        if didChange {
+            try? context.save()
         }
     }
 
-    @MainActor
-    private func syncNow() async {
-        isSyncing = true
-        syncError = nil
-        defer { isSyncing = false }
-        do {
-            guard session.isLoggedIn else {
-                syncError = NSLocalizedString("must_be_logged_in_to_sync", comment: "Must be logged in")
-                return
+    private func validationError(for name: String) -> String? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            return NSLocalizedString("add_person_error_empty_name", comment: "Name cannot be empty")
+        }
+        if trimmed.count > 40 {
+            return NSLocalizedString("add_person_error_name_too_long", comment: "Name too long")
+        }
+        // Ensure uniqueness among active (non-removed)
+        if people.contains(where: { $0.name.caseInsensitiveCompare(trimmed) == .orderedSame }) {
+            return NSLocalizedString("add_person_error_duplicate_name", comment: "Name already exists")
+        }
+        return nil
+        }
+
+    @ViewBuilder
+    private func deleteButton(for person: Person) -> some View {
+        Button(role: .destructive) {
+            personPendingDeletion = person
+        } label: {
+            Image(systemName: "trash")
+        }
+        .buttonStyle(.borderless)
+        .confirmationDialog(
+            NSLocalizedString("confirm_delete_person_title", comment: "Delete Person?"),
+            isPresented: Binding(
+                get: { personPendingDeletion?.id == person.id },
+                set: { presenting in
+                    if !presenting { personPendingDeletion = nil }
+                }),
+            titleVisibility: .visible
+        ) {
+            Button(role: .destructive) {
+                performDelete(person)
+                personPendingDeletion = nil
+            } label: {
+                Text(NSLocalizedString("delete", comment: "Delete"))
             }
-            // For demo: set "now" as the synced date, then read back to display
-            let now = Date()
-            try await session.dateSync.setSyncedDate(now)
-            try await Task.sleep(nanoseconds: 150_000_000) // small delay to mimic network
-            try await loadSyncedDate()
-        } catch {
-            syncError = error.localizedDescription
+            Button(NSLocalizedString("cancel", comment: "Cancel"), role: .cancel) {
+                personPendingDeletion = nil
+            }
+        } message: {
+            Text(NSLocalizedString("confirm_delete_person_message", comment: "This will remove the person from the list."))
         }
     }
-}
 
-#Preview {
-    let controller = PersistenceController(inMemory: true)
-    return SettingsView()
-        .environment(\.managedObjectContext, controller.container.viewContext)
-        .environmentObject(SessionManager())
+    private func performDelete(_ person: Person) {
+        // Prevent deleting the only active person
+        let activeCount = people.count
+        if activeCount <= 1 {
+            return
+        }
+        // If deleting the default, transfer default to the first other active person
+        if person.isDefault {
+            if let replacement = people.first(where: { $0.id != person.id }) {
+                replacement.isDefault = true
+            }
+        }
+        person.isDefault = false
+        person.isRemoved = true
+        try? context.save()
+    }
+
+    private func attemptSaveNewPerson() {
+        let name = newPersonName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let err = validationError(for: name) {
+            addPersonError = err
+            return
+        }
+        if isAtPeopleCap {
+            let fmt = NSLocalizedString("add_person_error_max_reached", comment: "Shown when reaching max active people")
+            addPersonError = String(format: fmt, maxActivePeople)
+            return
+        }
+
+        let p = Person(context: context)
+        p.id = UUID()
+        p.name = name
+        p.isRemoved = false
+        // If no default currently, make this the default; otherwise non-default
+        if !people.contains(where: { $0.isDefault }) {
+            p.isDefault = true
+        } else {
+            p.isDefault = false
+        }
+
+        do {
+            try context.save()
+            newPersonName = ""
+            addPersonError = nil
+            showingAddPersonSheet = false
+        } catch {
+            addPersonError = error.localizedDescription
+        }
+    }
 }

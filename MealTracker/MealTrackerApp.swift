@@ -8,6 +8,8 @@
 import SwiftUI
 import CoreData
 import UIKit
+import BackgroundTasks
+import UserNotifications
 
 @main
 struct MealTrackerApp: App {
@@ -25,6 +27,9 @@ struct MealTrackerApp: App {
 
     // Presentation control
     @State private var presentNewMealSheet: Bool = false
+
+    // MARK: - Background Task identifiers
+    private let mealsSeedingTaskIdentifier = "com.mealtracker.mealsseeding"
 
     init() {
         // One-time migration: assign UUIDs to any Meal rows missing an id
@@ -45,6 +50,22 @@ struct MealTrackerApp: App {
                 }
             }
         }
+
+        // Register background processing task for Meals Seeder
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: mealsSeedingTaskIdentifier, using: nil) { task in
+            // Ensure correct task type
+            guard let processingTask = task as? BGProcessingTask else {
+                task.setTaskCompleted(success: false)
+                return
+            }
+            // Kick off the seeding manager to run in background
+            Task {
+                await MealsSeedingManager.shared.handleBackgroundTask(processingTask)
+            }
+        }
+
+        // Ask for user notification permission once (to notify on completion/failure)
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { _, _ in }
     }
 
     var body: some Scene {
@@ -84,6 +105,8 @@ struct MealTrackerApp: App {
                                     if context.hasChanges {
                                         try? context.save()
                                     }
+                                    // Give BGTaskScheduler a chance to run queued work
+                                    scheduleMealsSeedingIfQueued()
                                 }
                             }
                     }
@@ -116,6 +139,7 @@ struct MealTrackerApp: App {
                                     if context.hasChanges {
                                         try? context.save()
                                     }
+                                    scheduleMealsSeedingIfQueued()
                                 }
                             }
                     }
@@ -123,6 +147,33 @@ struct MealTrackerApp: App {
             }
             .environment(\.managedObjectContext, persistenceController.container.viewContext)
             .environmentObject(session)
+        }
+    }
+
+    // MARK: - BGTask scheduling entry points
+
+    // Called when user taps "Start Bulk Download" in Settings; the manager will call this.
+    static func scheduleMealsSeedingTask() {
+        let request = BGProcessingTaskRequest(identifier: "com.mealtracker.mealsseeding")
+        request.requiresNetworkConnectivity = true
+        request.requiresExternalPower = false
+        // Let the system run it soon
+        do {
+            try BGTaskScheduler.shared.submit(request)
+        } catch {
+            #if DEBUG
+            print("BGTaskScheduler submit failed: \(error)")
+            #endif
+        }
+    }
+
+    // When app goes to background, if a seeding run is queued or running, re-submit to keep the system aware.
+    private func scheduleMealsSeedingIfQueued() {
+        Task {
+            let shouldSchedule = await MealsSeedingManager.shared.shouldEnsureScheduled()
+            if shouldSchedule {
+                Self.scheduleMealsSeedingTask()
+            }
         }
     }
 }
@@ -134,4 +185,3 @@ private struct MealsRootView: View {
         MealsGalleryView()
     }
 }
-
