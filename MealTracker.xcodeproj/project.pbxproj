@@ -23,6 +23,7 @@
 		C37002252EFA8B7C0085904C /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C37002242EFA8B7C0085904C /* AppDelegate.swift */; };
 		C37002272EFB90900085904C /* MealsDBManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C37002262EFB90900085904C /* MealsDBManager.swift */; };
 		C37002292EFB90990085904C /* MealsRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = C37002282EFB90990085904C /* MealsRepository.swift */; };
+		C370024A2EFB93450085904C /* MealsSeeder.swift in Sources */ = {isa = PBXBuildFile; fileRef = C37002492EFB93450085904C /* MealsSeeder.swift */; };
 		C376B3542EE98CFC0003C83B /* DateSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C376B3532EE98CFC0003C83B /* DateSyncService.swift */; };
 		C381065E2ED29E5500C796E0 /* LocalBarcodeDB.swift in Sources */ = {isa = PBXBuildFile; fileRef = C381065D2ED29E5500C796E0 /* LocalBarcodeDB.swift */; };
 		C38106602ED29E5A00C796E0 /* PhotoNutritionGuesser.swift in Sources */ = {isa = PBXBuildFile; fileRef = C381065F2ED29E5A00C796E0 /* PhotoNutritionGuesser.swift */; };
@@ -55,6 +56,7 @@
 		C37002242EFA8B7C0085904C /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		C37002262EFB90900085904C /* MealsDBManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MealsDBManager.swift; sourceTree = "<group>"; };
 		C37002282EFB90990085904C /* MealsRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MealsRepository.swift; sourceTree = "<group>"; };
+		C37002492EFB93450085904C /* MealsSeeder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MealsSeeder.swift; sourceTree = "<group>"; };
 		C376B3532EE98CFC0003C83B /* DateSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateSyncService.swift; sourceTree = "<group>"; };
 		C3798F872ECA75BE00945BBF /* MealTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MealTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C381065D2ED29E5500C796E0 /* LocalBarcodeDB.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalBarcodeDB.swift; sourceTree = "<group>"; };
@@ -130,6 +132,7 @@
 				C37002242EFA8B7C0085904C /* AppDelegate.swift */,
 				C37002262EFB90900085904C /* MealsDBManager.swift */,
 				C37002282EFB90990085904C /* MealsRepository.swift */,
+				C37002492EFB93450085904C /* MealsSeeder.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -231,6 +234,7 @@
 				C37002232EFA85E70085904C /* ParquetDownloadManager.swift in Sources */,
 				C38106602ED29E5A00C796E0 /* PhotoNutritionGuesser.swift in Sources */,
 				C37002002EFA818E0085904C /* OpenFoodFactsClient.swift in Sources */,
+				C370024A2EFB93450085904C /* MealsSeeder.swift in Sources */,
 				C34176E22ED2795200C73645 /* PhotoService.swift in Sources */,
 				C35F5E7D2EDEFAA400DD2844 /* PhotoLibraryPickerView.swift in Sources */,
 				C34176E02ED2794C00C73645 /* PhotoAssetDTO.swift in Sources */,
