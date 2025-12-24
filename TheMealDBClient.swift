@@ -13,13 +13,7 @@ enum TheMealDBClient {
     static func fetchAllMeals(logger: ((String) -> Void)? = nil, maxItems: Int? = nil) async throws -> [MealsRepository.MealRow] {
         var rows: [MealsRepository.MealRow] = []
 
-        // TheMealDB provides category listing and per-meal details.
-        // Strategy:
-        // 1) List categories
-        // 2) For each category, list meals (name + id)
-        // 3) For each id, fetch full details and map
-
-        let categories = try await listCategories()
+        let categories = try await listCategories(logger: logger)
         logger?("TheMealDB: found \(categories.count) categories")
 
         var seenIDs = Set<String>()
@@ -27,21 +21,21 @@ enum TheMealDBClient {
 
         for cat in categories {
             if budget <= 0 { break }
-            let summaries = try await listMeals(inCategory: cat)
+            let summaries = try await listMeals(inCategory: cat, logger: logger)
             logger?("TheMealDB: \(cat) -> \(summaries.count) meals")
             for s in summaries {
                 if budget <= 0 { break }
                 guard !seenIDs.contains(s.idMeal) else { continue }
                 seenIDs.insert(s.idMeal)
                 do {
-                    if let detail = try await lookupMealDetail(id: s.idMeal) {
+                    if let detail = try await lookupMealDetail(id: s.idMeal, logger: logger) {
                         if let row = map(detail: detail) {
                             rows.append(row)
                             budget -= 1
                         }
                     }
                 } catch {
-                    logger?("TheMealDB: failed detail for id \(s.idMeal): \(error.localizedDescription)")
+                    logger?("TheMealDB: failed detail for id \(s.idMeal): \(prettyError(error))")
                 }
             }
         }
@@ -52,11 +46,11 @@ enum TheMealDBClient {
     // MARK: - Models
 
     private struct CategoriesResponse: Decodable {
-        let categories: [Category]
+        let categories: [Category]?
     }
 
     private struct Category: Decodable {
-        let strCategory: String
+        let strCategory: String?
     }
 
     private struct ListResponse: Decodable {
@@ -84,39 +78,46 @@ enum TheMealDBClient {
 
     // MARK: - Networking
 
-    private static func listCategories() async throws -> [String] {
+    private static func listCategories(logger: ((String) -> Void)? = nil) async throws -> [String] {
         let url = URL(string: "https://www.themealdb.com/api/json/v1/1/list.php?c=list")!
-        let (data, resp) = try await URLSession.shared.data(from: url)
-        guard let http = resp as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
-            throw URLError(.badServerResponse)
+        let data = try await fetchJSONData(from: url, logger: logger)
+        do {
+            let decoded = try JSONDecoder().decode(CategoriesResponse.self, from: data)
+            let cats = (decoded.categories ?? []).compactMap { $0.strCategory?.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+            return cats
+        } catch {
+            logger?("TheMealDB: decode categories failed: \(prettyError(error))")
+            throw error
         }
-        let decoded = try JSONDecoder().decode(CategoriesResponse.self, from: data)
-        return decoded.categories.map { $0.strCategory }
     }
 
-    private static func listMeals(inCategory category: String) async throws -> [MealSummary] {
+    private static func listMeals(inCategory category: String, logger: ((String) -> Void)? = nil) async throws -> [MealSummary] {
         guard let enc = category.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let url = URL(string: "https://www.themealdb.com/api/json/v1/1/filter.php?c=\(enc)") else {
             return []
         }
-        let (data, resp) = try await URLSession.shared.data(from: url)
-        guard let http = resp as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
-            throw URLError(.badServerResponse)
+        let data = try await fetchJSONData(from: url, logger: logger)
+        do {
+            let decoded = try JSONDecoder().decode(ListResponse.self, from: data)
+            return decoded.meals ?? []
+        } catch {
+            logger?("TheMealDB: decode list for category \(category) failed: \(prettyError(error))")
+            throw error
         }
-        let decoded = try JSONDecoder().decode(ListResponse.self, from: data)
-        return decoded.meals ?? []
     }
 
-    private static func lookupMealDetail(id: String) async throws -> MealDetail? {
+    private static func lookupMealDetail(id: String, logger: ((String) -> Void)? = nil) async throws -> MealDetail? {
         guard let url = URL(string: "https://www.themealdb.com/api/json/v1/1/lookup.php?i=\(id)") else {
             return nil
         }
-        let (data, resp) = try await URLSession.shared.data(from: url)
-        guard let http = resp as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
-            throw URLError(.badServerResponse)
+        let data = try await fetchJSONData(from: url, logger: logger)
+        do {
+            let decoded = try JSONDecoder().decode(DetailResponse.self, from: data)
+            return decoded.meals?.first
+        } catch {
+            logger?("TheMealDB: decode detail \(id) failed: \(prettyError(error))")
+            throw error
         }
-        let decoded = try JSONDecoder().decode(DetailResponse.self, from: data)
-        return decoded.meals?.first
     }
 
     // MARK: - Mapping
@@ -125,7 +126,7 @@ enum TheMealDBClient {
         // idMeal is a string; convert to Int64 if possible, otherwise hash
         let id64: Int64 = Int64(detail.idMeal) ?? Int64(abs(detail.idMeal.hashValue))
 
-        let title = detail.strMeal ?? "Meal"
+        let title = (detail.strMeal?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 } ?? "Meal"
         let descParts = [
             detail.strCategory,
             detail.strArea,
@@ -178,6 +179,44 @@ enum TheMealDBClient {
             zinc: nil,
             magnesium: nil
         )
+    }
+
+    // MARK: - Helpers
+
+    private static func fetchJSONData(from url: URL, logger: ((String) -> Void)? = nil) async throws -> Data {
+        let (data, resp) = try await URLSession.shared.data(from: url)
+        guard let http = resp as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
+            throw URLError(.badServerResponse)
+        }
+        // Some public endpoints can return empty objects; guard against 0-byte
+        guard !data.isEmpty else {
+            let err = NSError(domain: "TheMealDBClient", code: -1, userInfo: [NSLocalizedDescriptionKey: "Empty response body from \(url.absoluteString)"])
+            logger?("TheMealDB: \(err.localizedDescription)")
+            throw err
+        }
+        // Optional: sanity check Content-Type starts with application/json
+        if let ct = http.value(forHTTPHeaderField: "Content-Type"), !ct.lowercased().contains("application/json") {
+            logger?("TheMealDB: Unexpected Content-Type '\(ct)' from \(url.absoluteString)")
+        }
+        return data
+    }
+
+    private static func prettyError(_ error: Error) -> String {
+        if let decErr = error as? DecodingError {
+            switch decErr {
+            case .keyNotFound(let key, let ctx):
+                return "Missing key '\(key.stringValue)' at \(ctx.codingPath.map { $0.stringValue }.joined(separator: "."))"
+            case .valueNotFound(let type, let ctx):
+                return "Missing \(type) at \(ctx.codingPath.map { $0.stringValue }.joined(separator: "."))"
+            case .typeMismatch(let type, let ctx):
+                return "Type mismatch \(type) at \(ctx.codingPath.map { $0.stringValue }.joined(separator: "."))"
+            case .dataCorrupted(let ctx):
+                return "Data corrupted at \(ctx.codingPath.map { $0.stringValue }.joined(separator: "."))"
+            @unknown default:
+                return "\(error.localizedDescription)"
+            }
+        }
+        return error.localizedDescription
     }
 }
 
