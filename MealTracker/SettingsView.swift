@@ -18,6 +18,8 @@ struct SettingsView: View {
     @AppStorage("showSimulants") private var showSimulants: Bool = false
     @AppStorage("openToNewMealOnLaunch") private var openToNewMealOnLaunch: Bool = false
     @AppStorage("aiFeedbackSeverity") private var aiFeedbackSeverity: AIFeedbackSeverity = .balanced
+    // New: AI features master switch (default off)
+    @AppStorage("aiFeaturesEnabled") private var aiFeaturesEnabled: Bool = false
 
     @State private var syncedDateText: String = "—"
     @State private var isSyncing: Bool = false
@@ -110,6 +112,13 @@ struct SettingsView: View {
                     }
                     Toggle(isOn: $showMinerals) { Text(l.localized("show_minerals")) }
                     Toggle(isOn: $showSimulants) { Text(l.localized("show_stimulants")) }
+                }
+
+                // AI features master toggle
+                Section {
+                    Toggle(isOn: $aiFeaturesEnabled) {
+                        Text("Enable AI features")
+                    }
                 }
 
                 // Account & Plan
@@ -230,107 +239,109 @@ struct SettingsView: View {
                 .onAppear { Task { await refreshOFFStatus() } }
                 .onReceive(timer) { _ in Task { await refreshOFFStatus() } }
 
-                // NEW: Local meals database
-                Section(header: Text("Local meals database")) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Text("Status")
-                            Spacer()
-                            Text(seederStatusText).foregroundStyle(.secondary)
-                        }
-
-                        // Show final count when completed
-                        if seederStatusText == "Completed" {
-                            Text("Downloaded \(seederTotal) meals")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        // Always show a counter line while running/queued.
-                        if isSeederRunningOrQueued {
-                            let totalText = seederTotal > 0 ? "\(seederTotal)" : "—"
+                // NEW: Local meals database (bulk downloader) — only when AI features enabled
+                if aiFeaturesEnabled {
+                    Section(header: Text("Local meals database")) {
+                        VStack(alignment: .leading, spacing: 6) {
                             HStack {
-                                Text("Downloaded: \(seederDownloaded) of \(totalText)")
+                                Text("Status")
                                 Spacer()
-                                if seederTotal > 0 {
-                                    let pct = Int((Double(seederDownloaded) / Double(seederTotal)) * 100.0)
-                                    Text("\(pct)%")
-                                }
+                                Text(seederStatusText).foregroundStyle(.secondary)
                             }
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        }
 
-                        // Indeterminate while discovering totals
-                        if seederStatusText.hasPrefix("Running"), seederTotal == 0 {
-                            ProgressView()
-                                .progressViewStyle(.circular)
-                                .padding(.top, 4)
-                            if !seederPhase.isEmpty {
-                                Text(seederPhase)
+                            // Show final count when completed
+                            if seederStatusText == "Completed" {
+                                Text("Downloaded \(seederTotal) meals")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
-                        }
 
-                        // Determinate once totals are known
-                        if seederTotal > 0 && (seederDownloaded <= seederTotal) && isSeederRunningOrQueued {
-                            ProgressView(value: Double(seederDownloaded), total: Double(seederTotal))
-                            if !seederPhase.isEmpty {
+                            // Always show a counter line while running/queued.
+                            if isSeederRunningOrQueued {
+                                let totalText = seederTotal > 0 ? "\(seederTotal)" : "—"
+                                HStack {
+                                    Text("Downloaded: \(seederDownloaded) of \(totalText)")
+                                    Spacer()
+                                    if seederTotal > 0 {
+                                        let pct = Int((Double(seederDownloaded) / Double(seederTotal)) * 100.0)
+                                        Text("\(pct)%")
+                                    }
+                                }
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            }
+
+                            // Indeterminate while discovering totals
+                            if seederStatusText.hasPrefix("Running"), seederTotal == 0 {
+                                ProgressView()
+                                    .progressViewStyle(.circular)
+                                    .padding(.top, 4)
+                                if !seederPhase.isEmpty {
+                                    Text(seederPhase)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+
+                            // Determinate once totals are known
+                            if seederTotal > 0 && (seederDownloaded <= seederTotal) && isSeederRunningOrQueued {
+                                ProgressView(value: Double(seederDownloaded), total: Double(seederTotal))
+                                if !seederPhase.isEmpty {
+                                    Text(seederPhase)
+                                        .font(.footnote)
+                                        .foregroundStyle(.secondary)
+                                }
+                            } else if !seederPhase.isEmpty && !(seederStatusText.hasPrefix("Running") && seederTotal == 0) && isSeederRunningOrQueued {
                                 Text(seederPhase)
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
                             }
-                        } else if !seederPhase.isEmpty && !(seederStatusText.hasPrefix("Running") && seederTotal == 0) && isSeederRunningOrQueued {
-                            Text(seederPhase)
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
 
-                        if let err = seederError {
-                            Text(err).font(.footnote).foregroundStyle(.red)
-                        }
-
-                        if networkMonitor.isConnected && (networkMonitor.isExpensive || !networkMonitor.isOnWiFi) {
-                            Text("You are not on Wi‑Fi. Bulk download will wait for Wi‑Fi and may use cellular if you proceed.")
-                                .font(.footnote)
-                                .foregroundStyle(.orange)
-                        }
-                    }
-
-                    HStack {
-                        Button {
-                            // Confirm if not on Wi‑Fi
-                            if networkMonitor.isExpensive || !networkMonitor.isOnWiFi {
-                                showingSeederConfirm = true
-                            } else {
-                                Task { await startSeeder() }
+                            if let err = seederError {
+                                Text(err).font(.footnote).foregroundStyle(.red)
                             }
-                        } label: {
-                            Text("Start Bulk Download")
-                        }
-                        .disabled(isSeederRunningOrQueued)
 
-                        if isSeederRunningOrQueued {
-                            Spacer()
-                            Button(role: .destructive) {
-                                Task { await MealsSeedingManager.shared.cancel() }
+                            if networkMonitor.isConnected && (networkMonitor.isExpensive || !networkMonitor.isOnWiFi) {
+                                Text("You are not on Wi‑Fi. Bulk download will wait for Wi‑Fi and may use cellular if you proceed.")
+                                    .font(.footnote)
+                                    .foregroundStyle(.orange)
+                            }
+                        }
+
+                        HStack {
+                            Button {
+                                // Confirm if not on Wi‑Fi
+                                if networkMonitor.isExpensive || !networkMonitor.isOnWiFi {
+                                    showingSeederConfirm = true
+                                } else {
+                                    Task { await startSeeder() }
+                                }
                             } label: {
-                                Text("Cancel")
+                                Text("Start Bulk Download")
+                            }
+                            .disabled(isSeederRunningOrQueued)
+
+                            if isSeederRunningOrQueued {
+                                Spacer()
+                                Button(role: .destructive) {
+                                    Task { await MealsSeedingManager.shared.cancel() }
+                                } label: {
+                                    Text("Cancel")
+                                }
                             }
                         }
                     }
-                }
-                .alert("Start Bulk Download?", isPresented: $showingSeederConfirm) {
-                    Button("Cancel", role: .cancel) { }
-                    Button("Start") {
-                        Task { await startSeeder() }
+                    .alert("Start Bulk Download?", isPresented: $showingSeederConfirm) {
+                        Button("Cancel", role: .cancel) { }
+                        Button("Start") {
+                            Task { await startSeeder() }
+                        }
+                    } message: {
+                        Text("This will download meals and drinks from public sources. It may be large and take time. The process will continue in the background.")
                     }
-                } message: {
-                    Text("This will download meals and drinks from public sources. It may be large and take time. The process will continue in the background.")
+                    .onAppear { Task { await refreshSeederStatus() } }
+                    .onReceive(timer) { _ in Task { await refreshSeederStatus() } }
                 }
-                .onAppear { Task { await refreshSeederStatus() } }
-                .onReceive(timer) { _ in Task { await refreshSeederStatus() } }
 
                 // People management (existing)
                 Section(header: Text(NSLocalizedString("people_section_title", comment: "People")) ) {
