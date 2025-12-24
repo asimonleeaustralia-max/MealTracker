@@ -239,6 +239,21 @@ struct SettingsView: View {
                             Text(seederStatusText).foregroundStyle(.secondary)
                         }
 
+                        // Always show a counter line while running/queued.
+                        if isSeederRunningOrQueued {
+                            let totalText = seederTotal > 0 ? "\(seederTotal)" : "—"
+                            HStack {
+                                Text("Downloaded: \(seederDownloaded) of \(totalText)")
+                                Spacer()
+                                if seederTotal > 0 {
+                                    let pct = Int((Double(seederDownloaded) / Double(seederTotal)) * 100.0)
+                                    Text("\(pct)%")
+                                }
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        }
+
                         // Indeterminate while discovering totals
                         if seederStatusText.hasPrefix("Running"), seederTotal == 0 {
                             ProgressView()
@@ -254,17 +269,12 @@ struct SettingsView: View {
                         // Determinate once totals are known
                         if seederTotal > 0 && (seederDownloaded <= seederTotal) {
                             ProgressView(value: Double(seederDownloaded), total: Double(seederTotal))
-                            HStack {
-                                Text("\(seederDownloaded) of \(seederTotal)")
-                                Spacer()
-                                let pct = seederTotal > 0 ? Int((Double(seederDownloaded) / Double(seederTotal)) * 100.0) : 0
-                                Text("\(pct)%")
+                            if !seederPhase.isEmpty {
+                                Text(seederPhase)
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
                             }
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        }
-
-                        if !seederPhase.isEmpty && !(seederStatusText.hasPrefix("Running") && seederTotal == 0) {
+                        } else if !seederPhase.isEmpty && !(seederStatusText.hasPrefix("Running") && seederTotal == 0) {
                             Text(seederPhase)
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)

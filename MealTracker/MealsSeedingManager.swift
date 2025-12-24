@@ -110,8 +110,11 @@ actor MealsSeedingManager {
     // Core runner. Uses a progress-enabled variant of MealsSeeder.
     private func runSeeding(progressPhase initialPhase: String) async throws {
         isCancelled = false
-        persist(downloaded: 0, total: 0, phase: initialPhase, error: nil)
-        await setStatus(.running(downloaded: 0, total: 0, phase: initialPhase))
+
+        // Emit an early "Connecting" phase so UI can confirm connectivity immediately.
+        let connectingPhase = "Connecting to sources…"
+        persist(downloaded: 0, total: 0, phase: connectingPhase, error: nil)
+        await setStatus(.running(downloaded: 0, total: 0, phase: connectingPhase))
 
         // We wrap MealsSeeder to get discovery total and then per-item progress.
         var lastReportedDownloaded = 0
