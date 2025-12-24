@@ -56,6 +56,9 @@ struct GalleryHeader: View {
     // New: optional trailing accessory button (e.g., person selector) to render next to the wand
     var trailingAccessoryButton: AnyView? = nil
 
+    // New: gate AI controls (wizard/undo) behind settings
+    var aiEnabled: Bool = false
+
     // Thumbnail sizing and spacing (10% smaller than 64; tighter spacing)
     private let thumbSize: CGFloat = 58
     private let thumbSpacing: CGFloat = 6
@@ -99,7 +102,7 @@ struct GalleryHeader: View {
                 HStack(spacing: 10) {
                     CameraButton { onCameraTap() }
                     PhotosButton { onPhotosTap() }
-                    if !items.isEmpty {
+                    if !items.isEmpty, aiEnabled {
                         AnalyzeButton(
                             isBusy: isBusy,
                             isUndoAvailable: isUndoAvailable,
