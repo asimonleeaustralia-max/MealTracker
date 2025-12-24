@@ -482,7 +482,8 @@ struct SettingsView: View {
     }
 
     private func startSeeder() async {
-        await MealsSeedingManager.shared.startQueued()
+        // Start immediately in the foreground
+        await MealsSeedingManager.shared.runNowOnMainThreadForDebug()
         await refreshSeederStatus()
     }
 
