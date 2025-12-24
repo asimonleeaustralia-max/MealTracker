@@ -239,6 +239,13 @@ struct SettingsView: View {
                             Text(seederStatusText).foregroundStyle(.secondary)
                         }
 
+                        // Show final count when completed
+                        if seederStatusText == "Completed" {
+                            Text("Downloaded \(seederTotal) meals")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
                         // Always show a counter line while running/queued.
                         if isSeederRunningOrQueued {
                             let totalText = seederTotal > 0 ? "\(seederTotal)" : "—"
@@ -267,14 +274,14 @@ struct SettingsView: View {
                         }
 
                         // Determinate once totals are known
-                        if seederTotal > 0 && (seederDownloaded <= seederTotal) {
+                        if seederTotal > 0 && (seederDownloaded <= seederTotal) && isSeederRunningOrQueued {
                             ProgressView(value: Double(seederDownloaded), total: Double(seederTotal))
                             if !seederPhase.isEmpty {
                                 Text(seederPhase)
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
                             }
-                        } else if !seederPhase.isEmpty && !(seederStatusText.hasPrefix("Running") && seederTotal == 0) {
+                        } else if !seederPhase.isEmpty && !(seederStatusText.hasPrefix("Running") && seederTotal == 0) && isSeederRunningOrQueued {
                             Text(seederPhase)
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
