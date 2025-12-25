@@ -114,9 +114,13 @@ struct MealTrackerApp: App {
                     NavigationView {
                         MealsRootView()
                             .sheet(isPresented: $presentNewMealSheet) {
-                                MealFormView()
-                                    .environment(\.managedObjectContext, persistenceController.container.viewContext)
-                                    .environmentObject(session)
+                                // FIX: wrap MealFormView in a NavigationView on iOS 15 as well
+                                NavigationView {
+                                    MealFormView()
+                                        .environment(\.managedObjectContext, persistenceController.container.viewContext)
+                                        .environmentObject(session)
+                                }
+                                .accessibilityIdentifier("newMealSheet")
                             }
                             .onAppear {
                                 // Always open entry screen immediately on launch

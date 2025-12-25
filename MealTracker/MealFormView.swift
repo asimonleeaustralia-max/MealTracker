@@ -308,7 +308,9 @@ struct MealFormView: View {
             formContent(l: l)
                 .modifier(CompactSectionSpacing())
         }
-        .toolbar { toolbarContent(l: l) }
+        // Attach toolbars directly here, avoiding conditional logic inside the builder.
+        // Apply two separate toolbar modifiers guarded by availability.
+        .modifier(ToolbarShim(l: l, isEditing: isEditing, isValid: isValid, forceEnableSave: forceEnableSave, showingSettings: $showingSettings, showingDeleteConfirm: $showingDeleteConfirm, dismiss: dismiss, save: save))
         .sheet(isPresented: $showingSettings) {
             SettingsView()
                 .environmentObject(session)
@@ -670,8 +672,10 @@ struct MealFormView: View {
         .onChange(of: fat) { _ in recomputeConsistencyAndBlinkIfFixed() }
     }
 
+    // iOS 16+ toolbar content
+    @available(iOS 16.0, *)
     @ToolbarContentBuilder
-    private func toolbarContent(l: LocalizationManager) -> some ToolbarContent {
+    func toolbarContent_iOS16(l: LocalizationManager) -> some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
             Button(l.localized("cancel")) { dismiss() }
         }
@@ -685,7 +689,32 @@ struct MealFormView: View {
             }
             .accessibilityLabel(Text(l.localized("settings")))
         }
-        // iOS 15-safe: always include the item, hide/disable when not editing.
+        ToolbarItem(placement: .bottomBar) {
+            Button(role: .destructive) {
+                showingDeleteConfirm = true
+            } label: {
+                Text(l.localized("delete"))
+            }
+            .opacity(isEditing ? 1 : 0)
+            .disabled(!isEditing)
+            .accessibilityHidden(!isEditing)
+        }
+    }
+
+    // iOS 15 toolbar content
+    @ToolbarContentBuilder
+    func toolbarContent_iOS15(l: LocalizationManager) -> some ToolbarContent {
+        ToolbarItem(placement: .navigationBarLeading) {
+            Button(l.localized("cancel")) { dismiss() }
+        }
+        ToolbarItemGroup(placement: .navigationBarTrailing) {
+            Button(l.localized("save")) { save() }
+                .disabled(!(isValid || forceEnableSave))
+            Button(action: { showingSettings = true }) {
+                Image(systemName: "gearshape")
+            }
+            .accessibilityLabel(Text(l.localized("settings")))
+        }
         ToolbarItem(placement: .bottomBar) {
             Button(role: .destructive) {
                 showingDeleteConfirm = true
@@ -731,3 +760,106 @@ struct MealFormView: View {
     // ... rest of file remains unchanged ...
 }
 
+// MARK: - Toolbar shim modifier to avoid #available inside ToolbarContentBuilder
+private struct ToolbarShim: ViewModifier {
+    let l: LocalizationManager
+    let isEditing: Bool
+    let isValid: Bool
+    let forceEnableSave: Bool
+    @Binding var showingSettings: Bool
+    @Binding var showingDeleteConfirm: Bool
+    let dismiss: DismissAction
+    let save: () -> Void
+
+    func body(content: Content) -> some View {
+        var view = AnyView(content)
+        if #available(iOS 16.0, *) {
+            view = AnyView(
+                view.toolbar {
+                    // Use the host view’s toolbar builder via an adapter closure
+                    ToolbarContentAdapter_iOS16(l: l, isEditing: isEditing, isValid: isValid, forceEnableSave: forceEnableSave, showingSettings: $showingSettings, showingDeleteConfirm: $showingDeleteConfirm, dismiss: dismiss, save: save)
+                }
+            )
+        } else {
+            view = AnyView(
+                view.toolbar {
+                    ToolbarContentAdapter_iOS15(l: l, isEditing: isEditing, isValid: isValid, forceEnableSave: forceEnableSave, showingSettings: $showingSettings, showingDeleteConfirm: $showingDeleteConfirm, dismiss: dismiss, save: save)
+                }
+            )
+        }
+        return view
+    }
+
+    // Wrap the existing toolbar builders so we can call them from here
+    @available(iOS 16.0, *)
+    @ToolbarContentBuilder
+    private func ToolbarContentAdapter_iOS16(
+        l: LocalizationManager,
+        isEditing: Bool,
+        isValid: Bool,
+        forceEnableSave: Bool,
+        showingSettings: Binding<Bool>,
+        showingDeleteConfirm: Binding<Bool>,
+        dismiss: DismissAction,
+        save: @escaping () -> Void
+    ) -> some ToolbarContent {
+        // We can’t directly call instance methods of MealFormView here, so recreate minimal items inline.
+        ToolbarItem(placement: .cancellationAction) {
+            Button(l.localized("cancel")) { dismiss() }
+        }
+        ToolbarItem(placement: .confirmationAction) {
+            Button(l.localized("save")) { save() }
+                .disabled(!(isValid || forceEnableSave))
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            Button(action: { showingSettings.wrappedValue = true }) {
+                Image(systemName: "gearshape")
+            }
+            .accessibilityLabel(Text(l.localized("settings")))
+        }
+        ToolbarItem(placement: .bottomBar) {
+            Button(role: .destructive) {
+                showingDeleteConfirm.wrappedValue = true
+            } label: {
+                Text(l.localized("delete"))
+            }
+            .opacity(isEditing ? 1 : 0)
+            .disabled(!isEditing)
+            .accessibilityHidden(!isEditing)
+        }
+    }
+
+    @ToolbarContentBuilder
+    private func ToolbarContentAdapter_iOS15(
+        l: LocalizationManager,
+        isEditing: Bool,
+        isValid: Bool,
+        forceEnableSave: Bool,
+        showingSettings: Binding<Bool>,
+        showingDeleteConfirm: Binding<Bool>,
+        dismiss: DismissAction,
+        save: @escaping () -> Void
+    ) -> some ToolbarContent {
+        ToolbarItem(placement: .navigationBarLeading) {
+            Button(l.localized("cancel")) { dismiss() }
+        }
+        ToolbarItemGroup(placement: .navigationBarTrailing) {
+            Button(l.localized("save")) { save() }
+                .disabled(!(isValid || forceEnableSave))
+            Button(action: { showingSettings.wrappedValue = true }) {
+                Image(systemName: "gearshape")
+            }
+            .accessibilityLabel(Text(l.localized("settings")))
+        }
+        ToolbarItem(placement: .bottomBar) {
+            Button(role: .destructive) {
+                showingDeleteConfirm.wrappedValue = true
+            } label: {
+                Text(l.localized("delete"))
+            }
+            .opacity(isEditing ? 1 : 0)
+            .disabled(!isEditing)
+            .accessibilityHidden(!isEditing)
+        }
+    }
+}
