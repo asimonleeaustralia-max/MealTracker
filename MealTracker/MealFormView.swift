@@ -266,6 +266,25 @@ struct MealFormView: View {
     // Keep this for other logic if needed, but UI visibility will use explicitEditMode
     var isEditing: Bool { meal != nil }
 
+    // MARK: - Wizard status (short, top-left)
+    private var wizardStatusText: String {
+        guard aiFeaturesEnabled, !galleryItems.isEmpty else { return "" }
+        if isAnalyzing { return "Analyzing…" }
+        if let err = analyzeError, !err.isEmpty { return err }
+        if wizardCanUndo {
+            // If we can read the method tag, include it; else just say Applied
+            if let tag = meal?.photoGuesserType, !tag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return "Applied: \(tag)"
+            }
+            return "Applied"
+        }
+        return ""
+    }
+
+    private var wizardStatusIsError: Bool {
+        return aiFeaturesEnabled && (analyzeError != nil)
+    }
+
     var body: some View {
         // Keep local constants lightly typed to help the solver
         let l: LocalizationManager = LocalizationManager(languageCode: appLanguageCode)
@@ -302,7 +321,10 @@ struct MealFormView: View {
                 },
                 trailingAccessoryButton: personSelectorAccessoryIfEligible(),
                 // Gate wizard visibility
-                aiEnabled: aiFeaturesEnabled
+                aiEnabled: aiFeaturesEnabled,
+                // New: short status text overlay (top-left)
+                statusText: wizardStatusText,
+                statusIsError: wizardStatusIsError
             )
 
             formContent(l: l)

@@ -59,6 +59,10 @@ struct GalleryHeader: View {
     // New: gate AI controls (wizard/undo) behind settings
     var aiEnabled: Bool = false
 
+    // New: short status overlay at top-left
+    var statusText: String? = nil
+    var statusIsError: Bool = false
+
     // Thumbnail sizing and spacing (10% smaller than 64; tighter spacing)
     private let thumbSize: CGFloat = 58
     private let thumbSpacing: CGFloat = 6
@@ -68,8 +72,27 @@ struct GalleryHeader: View {
     var body: some View {
         VStack(spacing: 8) {
             ZStack(alignment: .bottomTrailing) {
-                if items.isEmpty {
-                    HeaderImageView(image: nil)
+                ZStack(alignment: .topLeading) {
+                    if items.isEmpty {
+                        HeaderImageView(image: nil)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: isExpanded ? fullHeight : collapsedHeight)
+                            .clipped()
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+                                    isExpanded.toggle()
+                                }
+                            }
+                    } else {
+                        TabView(selection: $selectedIndex) {
+                            ForEach(items.indices, id: \.self) { idx in
+                                let image = items[idx].thumbnailImage
+                                HeaderImageView(image: image)
+                                    .tag(idx)
+                            }
+                        }
+                        .tabViewStyle(.page(indexDisplayMode: .automatic))
                         .frame(maxWidth: .infinity)
                         .frame(height: isExpanded ? fullHeight : collapsedHeight)
                         .clipped()
@@ -79,23 +102,21 @@ struct GalleryHeader: View {
                                 isExpanded.toggle()
                             }
                         }
-                } else {
-                    TabView(selection: $selectedIndex) {
-                        ForEach(items.indices, id: \.self) { idx in
-                            let image = items[idx].thumbnailImage
-                            HeaderImageView(image: image)
-                                .tag(idx)
-                        }
                     }
-                    .tabViewStyle(.page(indexDisplayMode: .automatic))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: isExpanded ? fullHeight : collapsedHeight)
-                    .clipped()
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
-                            isExpanded.toggle()
-                        }
+
+                    // Top-left status overlay
+                    if aiEnabled, let text = statusText, !text.isEmpty {
+                        Text(text)
+                            .font(.caption2)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .foregroundStyle(statusIsError ? Color.white : Color.primary)
+                            .background(
+                                Capsule()
+                                    .fill(statusIsError ? Color.red.opacity(0.85) : Color(.systemBackground).opacity(0.7))
+                            )
+                            .padding(10)
+                            .accessibilityLabel(text)
                     }
                 }
 
@@ -882,3 +903,4 @@ struct CompactSectionSpacing: ViewModifier {
         }
     }
 }
+
