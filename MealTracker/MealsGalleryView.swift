@@ -62,7 +62,6 @@ struct MealsGalleryView: View {
                 .background(Color(.systemBackground))
             }
         }
-        .navigationTitle(Text(LocalizedStringKey("meals_gallery_title")))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             // Only the Add button on the right
@@ -452,4 +451,3 @@ private struct MacroCircle: View {
         .accessibilityLabel("\(shortLabel) \(value) \(unit)")
     }
 }
-
