@@ -81,7 +81,7 @@
 "right_handed" = "Right-handed";
 
 "show_vitamins_entry" = "Show Vitamins Entry";
-"vitamins_unit" = "Vitamins unit";
+"vitamin_unit" = "Vitamins unit";
 "vitamins_unit.mg" = "mg";
 "vitamins_unit.ug" = "µg";
 "show_minerals_entry" = "Show Minerals Entry";
@@ -101,6 +101,7 @@
 "magnesium" = "Magnesium";
 
 "show_details" = "Show Details";
+"hide_details" = "Hide Details";
 "show_vitamins" = "Show Vitamins";
 "show_minerals" = "Show Minerals";
 "hide_minerals" = "Hide Minerals";
