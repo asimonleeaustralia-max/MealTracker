@@ -14,6 +14,8 @@
 		C34176E22ED2795200C73645 /* PhotoService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34176E12ED2795200C73645 /* PhotoService.swift */; };
 		C34176E42ED288BC00C73645 /* MealPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34176E32ED288BC00C73645 /* MealPhoto.swift */; };
 		C35F5E7D2EDEFAA400DD2844 /* PhotoLibraryPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C35F5E7C2EDEFAA400DD2844 /* PhotoLibraryPickerView.swift */; };
+		C3636E1C2EFE0C9100665602 /* MealFormView+Media.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3636E1B2EFE0C9100665602 /* MealFormView+Media.swift */; };
+		C3636E1E2EFE0CF200665602 /* MealFormView+DomainLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3636E1D2EFE0CF200665602 /* MealFormView+DomainLogic.swift */; };
 		C37001F92EF7AA680085904C /* SettingsTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = C37001F82EF7AA680085904C /* SettingsTypes.swift */; };
 		C37001FC2EF936C90085904C /* DuckDBManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C37001FB2EF936C90085904C /* DuckDBManager.swift */; };
 		C37001FE2EF936CD0085904C /* BarcodeRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = C37001FD2EF936CD0085904C /* BarcodeRepository.swift */; };
@@ -49,6 +51,8 @@
 		C34176E12ED2795200C73645 /* PhotoService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoService.swift; sourceTree = "<group>"; };
 		C34176E32ED288BC00C73645 /* MealPhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MealPhoto.swift; sourceTree = "<group>"; };
 		C35F5E7C2EDEFAA400DD2844 /* PhotoLibraryPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoLibraryPickerView.swift; sourceTree = "<group>"; };
+		C3636E1B2EFE0C9100665602 /* MealFormView+Media.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MealFormView+Media.swift"; sourceTree = "<group>"; };
+		C3636E1D2EFE0CF200665602 /* MealFormView+DomainLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MealFormView+DomainLogic.swift"; sourceTree = "<group>"; };
 		C37001F82EF7AA680085904C /* SettingsTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTypes.swift; sourceTree = "<group>"; };
 		C37001FB2EF936C90085904C /* DuckDBManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuckDBManager.swift; sourceTree = "<group>"; };
 		C37001FD2EF936CD0085904C /* BarcodeRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeRepository.swift; sourceTree = "<group>"; };
@@ -139,6 +143,8 @@
 				C37002492EFB93450085904C /* MealsSeeder.swift */,
 				C370026C2EFB97140085904C /* TheMealDBClient.swift */,
 				C370026E2EFB97220085904C /* TheCocktailDBClient.swift */,
+				C3636E1B2EFE0C9100665602 /* MealFormView+Media.swift */,
+				C3636E1D2EFE0CF200665602 /* MealFormView+DomainLogic.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -231,6 +237,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				C393072E2EEF8BF80017E7A0 /* Person.swift in Sources */,
+				C3636E1E2EFE0CF200665602 /* MealFormView+DomainLogic.swift in Sources */,
 				C37002212EFA85D70085904C /* NetworkMonitor.swift in Sources */,
 				C37002272EFB90900085904C /* MealsDBManager.swift in Sources */,
 				C37001F92EF7AA680085904C /* SettingsTypes.swift in Sources */,
@@ -240,6 +247,7 @@
 				C37002232EFA85E70085904C /* ParquetDownloadManager.swift in Sources */,
 				C38106602ED29E5A00C796E0 /* PhotoNutritionGuesser.swift in Sources */,
 				C37002002EFA818E0085904C /* OpenFoodFactsClient.swift in Sources */,
+				C3636E1C2EFE0C9100665602 /* MealFormView+Media.swift in Sources */,
 				C370026F2EFB97220085904C /* TheCocktailDBClient.swift in Sources */,
 				C370024A2EFB93450085904C /* MealsSeeder.swift in Sources */,
 				C34176E22ED2795200C73645 /* PhotoService.swift in Sources */,
