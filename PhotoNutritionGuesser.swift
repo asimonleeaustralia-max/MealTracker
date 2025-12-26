@@ -371,7 +371,7 @@ struct PhotoNutritionGuesser {
 
     // MARK: - Parsing
 
-    private static func parseNutrition(from rawText: String) -> GuessResult {
+    static func parseNutrition(from rawText: String) -> GuessResult {
         // Normalize OCR text robustly for multilingual matching
         let lines = rawText
             .components(separatedBy: .newlines)
@@ -411,7 +411,7 @@ struct PhotoNutritionGuesser {
 
         // Boundary pattern: start or separator before; separator or end after
         let BSTART = "(?:(?<=^)|(?<=[\\s:：•·\\-\\(\\)\\[\\]，。、，、|/]))"
-        let BEND = "(?:(?=$)|(?=[\\s:：•·\\-\\(\\)\\[\\]，。、，、|/]))"
+        let BEND = "(?:(?=$)|(?=[\\s:：•·\\-\\(\\)\\[\\]，。、 、|/]))"
 
         // Localized unit fragments
         let grams = LocalizedUnits.gramsPattern
@@ -743,7 +743,7 @@ struct PhotoNutritionGuesser {
         let ironKeys = ["iron","fe","железо","залізо","铁","鐵","鉄","철","حديد","ברזל","लोहा","আয়রন"]
         let potassiumKeys = ["potassium","kalium","k","калий","калій","钾","鉀","カリウム","칼륨","بوتاسيوم","אשלגן","पोटैशियम","পটাশিয়াম"]
         let zincKeys = ["zinc","zn","цинк","цинк (zn)","锌","鋅","亜鉛","아연","زنك","אבץ","जिंक","দস্তা"]
-        let magnesiumKeys = ["magnesium","mg","магний","магній","镁","鎂","マグネシウム","마그네슘","مगنيسيوم","מגנזיום","मैग्नीशियम","ম্যাগনেসিয়াম"]
+        let magnesiumKeys = ["magnesium","mg","магний","магній","镁","鎂","マグネシウム","마그네슘","مगनيسيوم","מגנזיום","मैग्नीशियम","ম্যাগনেসিয়াম"]
 
         // Sodium and salt
         let sodiumKeys = ["sodium","na","sodio","natrium","ナトリウム","나트륨","钠","鈉","натрий","натрій","صوديوم","נתרן","सोडियम","সোডিয়াম","natrium (na)"]
@@ -760,7 +760,7 @@ struct PhotoNutritionGuesser {
             "energia","kalorien","kilokalorien","kcal",
             "energia","kcal","kalorii",
             "energia","kcal","калории","ккал",
-            "طاقة","كيلوكالوري","سعرات","سعرات حرارية","كيلو كالوري","كيلو-كالوري","kcal",
+            "طاقة","كيلوكالوري","سعرات","سعرات حرارية","كيلو كالوري","كيلो-كالوري","kcal",
             "אנרגיה","קק\"ל","קק״ל","kcal",
             "ऊर्जा","किलो कैलोरी","किलो-कैलोरी","kcal",
             "শক্তি","কিলোক্যালোরি","kcal",
@@ -783,7 +783,7 @@ struct PhotoNutritionGuesser {
             "طاقة","كيلوجول","kJ",
             "אנרגיה","ק\"ג'","קג׳","kJ",
             "ऊर्जा","किलो जूल","kJ",
-            "শক্তি","কিলোজुल","kJ",
+            "শক্তি","কিলোজুল","kJ",
             "พลังงาน","กิโลจูล","kJ",
             "năng lượng","kJ",
             "tenaga","kilojoule","kJ",
@@ -1144,7 +1144,7 @@ struct PhotoNutritionGuesser {
 }
 
 // Convenience to check if anything was parsed
-private extension PhotoNutritionGuesser.GuessResult {
+extension PhotoNutritionGuesser.GuessResult {
     var hasAnyValue: Bool {
         return calories != nil
         || carbohydrates != nil
