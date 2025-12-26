@@ -119,6 +119,10 @@ class Meal: NSManagedObject, Identifiable {
     // Optional: last sync GUID assigned by cloud after successful sync (nil when never synced)
     @NSManaged var lastSyncGUID: String?
 
+    // New: optional short tag describing how the wizard determined values for the attached photo(s).
+    // Examples: "barcode", "ocr", "featureprint", "visual"
+    @NSManaged var photoGuesserType: String?
+
     // Ensure defaults for brand new inserts so `id` is never nil in the store
     override func awakeFromInsert() {
         super.awakeFromInsert()
@@ -207,3 +211,4 @@ extension Meal {
         try? context.save()
     }
 }
+

@@ -343,6 +343,14 @@ extension MealFormView {
         await MainActor.run { isAnalyzing = true }
         defer { Task { await MainActor.run { isAnalyzing = false } } }
 
+        // Helper to set the guesser tag and persist immediately
+        @MainActor
+        func tagMealGuesser(_ tag: String) {
+            let m = ensureMealForPhoto()
+            m.photoGuesserType = tag
+            try? context.save()
+        }
+
         do {
             // First: try barcode path with DB -> OFF, then return early if anything applied
             if let image = UIImage(data: data) {
@@ -357,6 +365,11 @@ extension MealFormView {
                             sodiumUnit: sodiumUnit,
                             vitaminsUnit: vitaminsUnit
                         )
+                        // Record method used
+                        await MainActor.run {
+                            targetMeal.photoGuesserType = "barcode"
+                            try? context.save()
+                        }
                         // We applied authoritative values; refresh the form fields from Core Data object to show them
                         await MainActor.run {
                             // Reload visible text fields for any newly populated values (fill empty-only)
@@ -411,7 +424,13 @@ extension MealFormView {
 
             // If no barcode path succeeded, fall back to the original pipeline
             if let result = try await PhotoNutritionGuesser.guess(from: data, languageCode: appLanguageCode) {
+                // We don’t know which sub-path (ocr/featureprint/visual) was used from outside,
+                // so infer by checking which fields are present in the result and in what order we attempt in PhotoNutritionGuesser:
+                // - If any vitamins/minerals or sodium look parsed (beyond macros), likely OCR.
+                // - Else if macros only and came from FeaturePrint, we’ll tag "featureprint".
+                // - Else last-resort visual heuristic: "visual".
                 await MainActor.run {
+                    // Apply results to UI
                     if calories.isEmpty, let kcal = result.calories {
                         let uiVal: Int
                         switch energyUnit {
@@ -498,7 +517,32 @@ extension MealFormView {
                     recomputeConsistencyAndBlinkIfFixed()
                     forceEnableSave = true
                 }
+
+                // Decide which tag to record based on presence of OCR-like fields
+                await MainActor.run {
+                    let m = ensureMealForPhoto()
+                    // If sodium or vitamins/minerals are present, that strongly indicates OCR parsing.
+                    let lookedLikeOCR =
+                        result.sodiumMg != nil ||
+                        result.vitaminA != nil || result.vitaminB != nil || result.vitaminC != nil ||
+                        result.vitaminD != nil || result.vitaminE != nil || result.vitaminK != nil ||
+                        result.calcium != nil || result.iron != nil || result.potassium != nil ||
+                        result.zinc != nil || result.magnesium != nil
+                    if lookedLikeOCR {
+                        m.photoGuesserType = "ocr"
+                    } else {
+                        // PhotoNutritionGuesser tries FeaturePrint before Visual heuristic.
+                        // If only macros came back, assume featureprint; otherwise visual.
+                        let macrosPresent = (result.carbohydrates != nil) || (result.protein != nil) || (result.fat != nil) || (result.calories != nil)
+                        m.photoGuesserType = macrosPresent ? "featureprint" : "visual"
+                    }
+                    try? context.save()
+                }
+
+                return
             }
+
+            // If PhotoNutritionGuesser.guess returned nil, nothing was detected. Do not set a tag.
         } catch {
             await MainActor.run { analyzeError = "Analysis failed: \(error)" }
         }
