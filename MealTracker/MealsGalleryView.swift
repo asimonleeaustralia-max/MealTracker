@@ -201,6 +201,13 @@ private struct MealTile: View {
         }
     }
 
+    // Consider a meal “saved” if its objectID is not temporary and it has a context.
+    private var isSaved: Bool {
+        guard let ctx = meal.managedObjectContext else { return false }
+        // A non-temporary objectID indicates it has been saved at least once.
+        return !meal.objectID.isTemporaryID && ctx.registeredObject(for: meal.objectID) != nil
+    }
+
     var body: some View {
         // Defensive: avoid touching properties if the object is deleted or contextless
         if meal.isDeleted || meal.managedObjectContext == nil {
@@ -344,6 +351,20 @@ private struct MealTile: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.tertiary)
+
+                // DEBUG-only: show photoGuesserType after save, only if set (wizard used)
+                #if DEBUG
+                if isSaved, let tag = meal.photoGuesserType, !tag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    HStack(spacing: 6) {
+                        Image(systemName: "wand.and.stars")
+                            .foregroundStyle(.secondary)
+                        Text("Guesser: \(tag)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.top, 2)
+                }
+                #endif
             }
             .padding(12)
             .frame(width: fixedWidth, alignment: .center) // ensure the whole tile respects the column width
@@ -431,3 +452,4 @@ private struct MacroCircle: View {
         .accessibilityLabel("\(shortLabel) \(value) \(unit)")
     }
 }
+
