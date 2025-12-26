@@ -27,27 +27,34 @@ extension MealFormView {
             mealDescription = meal.title
 
             calories = Int(meal.calories).description
-            carbohydrates = Int(meal.carbohydrates).description
-            protein = Int(meal.protein).description
-            sodium = Int(meal.sodium).description
-            fat = Int(meal.fat).description
-            alcohol = Int(meal.alcohol).description
+            // Use cleanString to preserve decimals for grams
+            carbohydrates = meal.carbohydrates.cleanString
+            protein = meal.protein.cleanString
+            sodium = {
+                if sodiumUnit == .milligrams {
+                    return Int(meal.sodium).description
+                } else {
+                    return (meal.sodium / 1000.0).cleanString
+                }
+            }()
+            fat = meal.fat.cleanString
+            alcohol = meal.alcohol.cleanString
             nicotine = Int(meal.nicotine).description
             theobromine = Int(meal.theobromine).description
             caffeine = Int(meal.caffeine).description
             taurine = Int(meal.taurine).description
-            starch = Int(meal.starch).description
-            sugars = Int(meal.sugars).description
-            fibre = Int(meal.fibre).description
-            monounsaturatedFat = Int(meal.monounsaturatedFat).description
-            polyunsaturatedFat = Int(meal.polyunsaturatedFat).description
-            saturatedFat = Int(meal.saturatedFat).description
-            transFat = Int(meal.transFat).description
-            omega3 = Int(meal.omega3).description
-            omega6 = Int(meal.omega6).description
-            animalProtein = Int(meal.animalProtein).description
-            plantProtein = Int(meal.plantProtein).description
-            proteinSupplements = Int(meal.proteinSupplements).description
+            starch = meal.starch.cleanString
+            sugars = meal.sugars.cleanString
+            fibre = meal.fibre.cleanString
+            monounsaturatedFat = meal.monounsaturatedFat.cleanString
+            polyunsaturatedFat = meal.polyunsaturatedFat.cleanString
+            saturatedFat = meal.saturatedFat.cleanString
+            transFat = meal.transFat.cleanString
+            omega3 = meal.omega3.cleanString
+            omega6 = meal.omega6.cleanString
+            animalProtein = meal.animalProtein.cleanString
+            plantProtein = meal.plantProtein.cleanString
+            proteinSupplements = meal.proteinSupplements.cleanString
 
             vitaminA = Int(vitaminsUnit.fromStorageMG(meal.vitaminA)).description
             vitaminB = Int(vitaminsUnit.fromStorageMG(meal.vitaminB)).description
@@ -114,7 +121,7 @@ extension MealFormView {
             plantTouched = !plantProtein.isEmpty
             supplementsTouched = !proteinSupplements.isEmpty
 
-            func zeroToEmpty(_ s: String) -> String { s == "0" ? "" : s }
+            func zeroToEmpty(_ s: String) -> String { s == "0" || s == "0.0" ? "" : s }
 
             carbohydrates = zeroToEmpty(carbohydrates)
             protein = zeroToEmpty(protein)

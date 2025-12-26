@@ -41,7 +41,7 @@ struct MealFormView: View {
 
     // Hidden title/date inputs removed from UI; we still keep local state for default title logic
     @State var mealDescription: String = "" // not shown in UI for new meals
-    // Numeric inputs (now integers only)
+    // Numeric inputs (grams now allow decimals)
     @State var calories: String = ""
     @State var carbohydrates: String = ""
     @State var protein: String = ""
@@ -442,12 +442,12 @@ struct MealFormView: View {
                 VStack(spacing: 0) {
                     MetricField(
                         titleKey: "carbohydrates",
-                        text: numericBindingInt($carbohydrates),
+                        text: numericBindingDecimal($carbohydrates),
                         isGuess: $carbohydratesIsGuess,
-                        keyboard: .numberPad,
+                        keyboard: .decimalPad,
                         manager: l,
                         unitSuffix: "g",
-                        validator: { ValidationThresholds.grams.severity(for: $0) },
+                        doubleValidator: { ValidationThresholds.grams.severityDouble($0) },
                         leadingAccessory: {
                             AnyView(
                                 Group {
@@ -493,12 +493,12 @@ struct MealFormView: View {
                 VStack(spacing: 0) {
                     MetricField(
                         titleKey: "protein",
-                        text: numericBindingInt($protein),
+                        text: numericBindingDecimal($protein),
                         isGuess: $proteinIsGuess,
-                        keyboard: .numberPad,
+                        keyboard: .decimalPad,
                         manager: l,
                         unitSuffix: "g",
-                        validator: { ValidationThresholds.grams.severity(for: $0) },
+                        doubleValidator: { ValidationThresholds.grams.severityDouble($0) },
                         leadingAccessory: {
                             AnyView(
                                 Group {
@@ -544,12 +544,12 @@ struct MealFormView: View {
                 VStack(spacing: 0) {
                     MetricField(
                         titleKey: "fat",
-                        text: numericBindingInt($fat),
+                        text: numericBindingDecimal($fat),
                         isGuess: $fatIsGuess,
-                        keyboard: .numberPad,
+                        keyboard: .decimalPad,
                         manager: l,
                         unitSuffix: "g",
-                        validator: { ValidationThresholds.grams.severity(for: $0) },
+                        doubleValidator: { ValidationThresholds.grams.severityDouble($0) },
                         leadingAccessory: {
                             AnyView(
                                 Group {
@@ -598,28 +598,39 @@ struct MealFormView: View {
 
             // Sodium
             Section {
-                MetricField(
-                    titleKey: "sodium",
-                    text: numericBindingInt($sodium),
-                    isGuess: $sodiumIsGuess,
-                    keyboard: .numberPad,
-                    manager: l,
-                    unitSuffix: (sodiumUnit == .milligrams ? "mg" : "g"),
-                    validator: {
-                        sodiumUnit == .milligrams
-                        ? ValidationThresholds.sodiumMg.severity(for: $0)
-                        : ValidationThresholds.sodiumG.severity(for: $0)
-                    },
-                    focusedField: $focused,
-                    thisField: .sodium,
-                    onSubmit: { focused = nil }
-                )
+                if sodiumUnit == .milligrams {
+                    MetricField(
+                        titleKey: "sodium",
+                        text: numericBindingInt($sodium),
+                        isGuess: $sodiumIsGuess,
+                        keyboard: .numberPad,
+                        manager: l,
+                        unitSuffix: "mg",
+                        validator: { ValidationThresholds.sodiumMg.severity(for: $0) },
+                        focusedField: $focused,
+                        thisField: .sodium,
+                        onSubmit: { focused = nil }
+                    )
+                } else {
+                    MetricField(
+                        titleKey: "sodium",
+                        text: numericBindingDecimal($sodium),
+                        isGuess: $sodiumIsGuess,
+                        keyboard: .decimalPad,
+                        manager: l,
+                        unitSuffix: "g",
+                        doubleValidator: { ValidationThresholds.sodiumG.severityDouble($0) },
+                        focusedField: $focused,
+                        thisField: .sodium,
+                        onSubmit: { focused = nil }
+                    )
+                }
             }
 
             // Stimulants group (optional)
             if showSimulants {
                 Section(header: Text("Stimulants")) {
-                    MetricField(titleKey: "alcohol", text: numericBindingInt($alcohol), isGuess: $alcoholIsGuess, keyboard: .numberPad, manager: l, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
+                    MetricField(titleKey: "alcohol", text: numericBindingDecimal($alcohol), isGuess: $alcoholIsGuess, keyboard: .decimalPad, manager: l, unitSuffix: "g", doubleValidator: { ValidationThresholds.grams.severityDouble($0) })
                     MetricField(titleKey: "nicotine", text: numericBindingInt($nicotine), isGuess: $nicotineIsGuess, keyboard: .numberPad, manager: l, unitSuffix: "mg", validator: { ValidationThresholds.vitaminMineralMg.severity(for: $0) })
                     MetricField(titleKey: "theobromine", text: numericBindingInt($theobromine), isGuess: $theobromineIsGuess, keyboard: .numberPad, manager: l, unitSuffix: "mg", validator: { ValidationThresholds.vitaminMineralMg.severity(for: $0) })
                     MetricField(titleKey: "caffeine", text: numericBindingInt($caffeine), isGuess: $caffeineIsGuess, keyboard: .numberPad, manager: l, unitSuffix: "mg", validator: { ValidationThresholds.vitaminMineralMg.severity(for: $0) })
@@ -863,3 +874,4 @@ private struct ToolbarShim: ViewModifier {
         }
     }
 }
+

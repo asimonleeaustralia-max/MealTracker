@@ -332,6 +332,15 @@ struct ValidationThresholds {
         if value >= unusual { return .unusual }
         return .none
     }
+
+    // New: Double-based severity helper (for grams with decimals)
+    func severityDouble(_ value: Double) -> ValidationSeverity {
+        let unusualD = Double(unusual)
+        let stupidD = Double(stupid)
+        if value >= stupidD { return .stupid }
+        if value >= unusualD { return .unusual }
+        return .none
+    }
 }
 
 struct ToggleDetailsButton: View {
@@ -373,7 +382,10 @@ struct MetricField: View {
     let manager: LocalizationManager
     var unitSuffix: String? = nil
     var isPrelocalizedTitle: Bool = false
-    var validator: ((Int) -> ValidationSeverity)? = nil
+
+    // Validators: support both Int (mg/µg) and Double (grams)
+    var intValidator: ((Int) -> ValidationSeverity)? = nil
+    var doubleValidator: ((Double) -> ValidationSeverity)? = nil
 
     var leadingAccessory: (() -> AnyView)? = nil
     var trailingAccessory: (() -> AnyView)? = nil
@@ -409,7 +421,40 @@ struct MetricField: View {
         self.manager = manager
         self.unitSuffix = unitSuffix
         self.isPrelocalizedTitle = isPrelocalizedTitle
-        self.validator = validator
+        // Back-compat: if caller used old validator param, assign to intValidator
+        self.intValidator = validator
+        self.leadingAccessory = leadingAccessory
+        self.trailingAccessory = trailingAccessory
+        self.highlight = highlight
+        self.focusedField = focusedField
+        self.thisField = thisField
+        self.onSubmit = onSubmit
+    }
+
+    // New convenience init for Double validator (grams)
+    init(
+        titleKey: String,
+        text: Binding<String>,
+        isGuess: Binding<Bool>,
+        keyboard: UIKeyboardType = .decimalPad,
+        manager: LocalizationManager,
+        unitSuffix: String? = "g",
+        doubleValidator: ((Double) -> ValidationSeverity)?,
+        leadingAccessory: (() -> AnyView)? = nil,
+        trailingAccessory: (() -> AnyView)? = nil,
+        highlight: FieldHighlight = .none,
+        focusedField: FocusState<MealFormView.FocusedField?>.Binding? = nil,
+        thisField: MealFormView.FocusedField? = nil,
+        onSubmit: (() -> Void)? = nil
+    ) {
+        self.titleKey = titleKey
+        self._text = text
+        self._isGuess = isGuess
+        self.keyboard = keyboard
+        self.manager = manager
+        self.unitSuffix = unitSuffix
+        self.isPrelocalizedTitle = false
+        self.doubleValidator = doubleValidator
         self.leadingAccessory = leadingAccessory
         self.trailingAccessory = trailingAccessory
         self.highlight = highlight
@@ -436,12 +481,19 @@ struct MetricField: View {
         return titled
     }
 
-    private var parsedValue: Int? { Int(text) }
+    private var parsedInt: Int? { Int(text) }
+    private var parsedDouble: Double? { Double(text.replacingOccurrences(of: ",", with: ".")) }
 
     private var severity: ValidationSeverity {
-        guard let v = parsedValue, let validator else { return .none }
-        if v < 0 { return .stupid }
-        return validator(v)
+        if let dv = doubleValidator, let v = parsedDouble {
+            if v < 0 { return .stupid }
+            return dv(v)
+        }
+        if let iv = intValidator, let v = parsedInt {
+            if v < 0 { return .stupid }
+            return iv(v)
+        }
+        return .none
     }
 
     private var underlineColor: Color {
@@ -570,7 +622,7 @@ struct MetricField: View {
                 }
 
                 if let trailing = trailingAccessory {
-                    trailing()
+                    trailing() // FIX: invoke the closure to produce a View
                 }
             }
         }
@@ -662,9 +714,33 @@ struct CarbsSubFields: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            MetricField(titleKey: "sugars", text: $sugarsText, isGuess: $sugarsIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
-            MetricField(titleKey: "starch", text: $starchText, isGuess: $starchIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
-            MetricField(titleKey: "fibre", text: $fibreText, isGuess: $fibreIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
+            MetricField(
+                titleKey: "sugars",
+                text: $sugarsText,
+                isGuess: $sugarsIsGuess,
+                keyboard: .decimalPad,
+                manager: manager,
+                unitSuffix: "g",
+                doubleValidator: { ValidationThresholds.grams.severityDouble($0) }
+            )
+            MetricField(
+                titleKey: "starch",
+                text: $starchText,
+                isGuess: $starchIsGuess,
+                keyboard: .decimalPad,
+                manager: manager,
+                unitSuffix: "g",
+                doubleValidator: { ValidationThresholds.grams.severityDouble($0) }
+            )
+            MetricField(
+                titleKey: "fibre",
+                text: $fibreText,
+                isGuess: $fibreIsGuess,
+                keyboard: .decimalPad,
+                manager: manager,
+                unitSuffix: "g",
+                doubleValidator: { ValidationThresholds.grams.severityDouble($0) }
+            )
         }
     }
 }
@@ -680,9 +756,9 @@ struct ProteinSubFields: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            MetricField(titleKey: "animal_protein", text: $animalText, isGuess: $animalIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
-            MetricField(titleKey: "plant_protein", text: $plantText, isGuess: $plantIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
-            MetricField(titleKey: "protein_supplements", text: $supplementsText, isGuess: $supplementsIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
+            MetricField(titleKey: "animal_protein", text: $animalText, isGuess: $animalIsGuess, keyboard: .decimalPad, manager: manager, unitSuffix: "g", doubleValidator: { ValidationThresholds.grams.severityDouble($0) })
+            MetricField(titleKey: "plant_protein", text: $plantText, isGuess: $plantIsGuess, keyboard: .decimalPad, manager: manager, unitSuffix: "g", doubleValidator: { ValidationThresholds.grams.severityDouble($0) })
+            MetricField(titleKey: "protein_supplements", text: $supplementsText, isGuess: $supplementsIsGuess, keyboard: .decimalPad, manager: manager, unitSuffix: "g", doubleValidator: { ValidationThresholds.grams.severityDouble($0) })
         }
     }
 }
@@ -706,14 +782,14 @@ struct FatSubFields: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            MetricField(titleKey: "monounsaturated_fat", text: $monoText, isGuess: $monoIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
-            MetricField(titleKey: "polyunsaturated_fat", text: $polyText, isGuess: $polyIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
-            MetricField(titleKey: "saturated_fat", text: $satText, isGuess: $satIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
-            MetricField(titleKey: "trans_fat", text: $transText, isGuess: $transIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
+            MetricField(titleKey: "monounsaturated_fat", text: $monoText, isGuess: $monoIsGuess, keyboard: .decimalPad, manager: manager, unitSuffix: "g", doubleValidator: { ValidationThresholds.grams.severityDouble($0) })
+            MetricField(titleKey: "polyunsaturated_fat", text: $polyText, isGuess: $polyIsGuess, keyboard: .decimalPad, manager: manager, unitSuffix: "g", doubleValidator: { ValidationThresholds.grams.severityDouble($0) })
+            MetricField(titleKey: "saturated_fat", text: $satText, isGuess: $satIsGuess, keyboard: .decimalPad, manager: manager, unitSuffix: "g", doubleValidator: { ValidationThresholds.grams.severityDouble($0) })
+            MetricField(titleKey: "trans_fat", text: $transText, isGuess: $transIsGuess, keyboard: .decimalPad, manager: manager, unitSuffix: "g", doubleValidator: { ValidationThresholds.grams.severityDouble($0) })
             // Omega-3 (grams)
-            MetricField(titleKey: "omega3", text: $omega3Text, isGuess: $omega3IsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
+            MetricField(titleKey: "omega3", text: $omega3Text, isGuess: $omega3IsGuess, keyboard: .decimalPad, manager: manager, unitSuffix: "g", doubleValidator: { ValidationThresholds.grams.severityDouble($0) })
             // Omega-6 (grams)
-            MetricField(titleKey: "omega6", text: $omega6Text, isGuess: $omega6IsGuess, keyboard: .numberPad, manager: manager, unitSuffix: "g", validator: { ValidationThresholds.grams.severity(for: $0) })
+            MetricField(titleKey: "omega6", text: $omega6Text, isGuess: $omega6IsGuess, keyboard: .decimalPad, manager: manager, unitSuffix: "g", doubleValidator: { ValidationThresholds.grams.severityDouble($0) })
         }
     }
 }
@@ -806,4 +882,3 @@ struct CompactSectionSpacing: ViewModifier {
         }
     }
 }
-

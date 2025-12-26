@@ -375,14 +375,14 @@ extension MealFormView {
                             // Reload visible text fields for any newly populated values (fill empty-only)
                             // Only update fields that remain empty in UI to avoid clobbering user edits-in-progress.
                             if calories.isEmpty { calories = Int(targetMeal.calories).description }
-                            if carbohydrates.isEmpty { carbohydrates = Int(targetMeal.carbohydrates).description }
-                            if protein.isEmpty { protein = Int(targetMeal.protein).description }
-                            if fat.isEmpty { fat = Int(targetMeal.fat).description }
+                            if carbohydrates.isEmpty { carbohydrates = targetMeal.carbohydrates.cleanString }
+                            if protein.isEmpty { protein = targetMeal.protein.cleanString }
+                            if fat.isEmpty { fat = targetMeal.fat.cleanString }
 
                             if sodium.isEmpty {
                                 switch sodiumUnit {
                                 case .milligrams: sodium = Int(targetMeal.sodium).description
-                                case .grams: sodium = Int((targetMeal.sodium / 1000.0).rounded()).description
+                                case .grams: sodium = (targetMeal.sodium / 1000.0).cleanString
                                 }
                             }
 
@@ -406,14 +406,14 @@ extension MealFormView {
                             fillVM(&zinc, from: targetMeal.zinc)
                             fillVM(&magnesium, from: targetMeal.magnesium)
 
-                            if sugars.isEmpty { sugars = Int(targetMeal.sugars).description }
-                            if starch.isEmpty { starch = Int(targetMeal.starch).description }
-                            if fibre.isEmpty { fibre = Int(targetMeal.fibre).description }
+                            if sugars.isEmpty { sugars = targetMeal.sugars.cleanString }
+                            if starch.isEmpty { starch = targetMeal.starch.cleanString }
+                            if fibre.isEmpty { fibre = targetMeal.fibre.cleanString }
 
-                            if monounsaturatedFat.isEmpty { monounsaturatedFat = Int(targetMeal.monounsaturatedFat).description }
-                            if polyunsaturatedFat.isEmpty { polyunsaturatedFat = Int(targetMeal.polyunsaturatedFat).description }
-                            if saturatedFat.isEmpty { saturatedFat = Int(targetMeal.saturatedFat).description }
-                            if transFat.isEmpty { transFat = Int(targetMeal.transFat).description }
+                            if monounsaturatedFat.isEmpty { monounsaturatedFat = targetMeal.monounsaturatedFat.cleanString }
+                            if polyunsaturatedFat.isEmpty { polyunsaturatedFat = targetMeal.polyunsaturatedFat.cleanString }
+                            if saturatedFat.isEmpty { saturatedFat = targetMeal.saturatedFat.cleanString }
+                            if transFat.isEmpty { transFat = targetMeal.transFat.cleanString }
                         }
 
                         // After applying authoritative data, stop further analysis.
@@ -424,13 +424,7 @@ extension MealFormView {
 
             // If no barcode path succeeded, fall back to the original pipeline
             if let result = try await PhotoNutritionGuesser.guess(from: data, languageCode: appLanguageCode) {
-                // We don’t know which sub-path (ocr/featureprint/visual) was used from outside,
-                // so infer by checking which fields are present in the result and in what order we attempt in PhotoNutritionGuesser:
-                // - If any vitamins/minerals or sodium look parsed (beyond macros), likely OCR.
-                // - Else if macros only and came from FeaturePrint, we’ll tag "featureprint".
-                // - Else last-resort visual heuristic: "visual".
                 await MainActor.run {
-                    // Apply results to UI
                     if calories.isEmpty, let kcal = result.calories {
                         let uiVal: Int
                         switch energyUnit {
@@ -443,42 +437,49 @@ extension MealFormView {
                         caloriesIsGuess = true
                     }
 
-                    applyIfEmpty(&carbohydrates, with: result.carbohydrates, markGuess: &carbohydratesIsGuess)
-                    applyIfEmpty(&protein, with: result.protein, markGuess: &proteinIsGuess)
+                    // grams-based fields can be Ints from guesser; keep as strings
+                    func setGIfEmpty(_ field: inout String, _ guessFlag: inout Bool, from v: Int?) {
+                        guard field.isEmpty, let v else { return }
+                        field = String(v)
+                        guessFlag = true
+                    }
+                    setGIfEmpty(&carbohydrates, &carbohydratesIsGuess, from: result.carbohydrates)
+                    setGIfEmpty(&protein, &proteinIsGuess, from: result.protein)
+                    setGIfEmpty(&fat, &fatIsGuess, from: result.fat)
+
                     if sodium.isEmpty, let mg = result.sodiumMg {
                         let uiVal: Int
                         switch sodiumUnit {
                         case .milligrams:
                             uiVal = mg
                         case .grams:
-                            uiVal = Int(Double(mg) / 1000.0)
+                            uiVal = Int((Double(mg) / 1000.0).rounded())
                         }
                         sodium = String(max(0, uiVal))
                         sodiumIsGuess = true
                     }
-                    applyIfEmpty(&fat, with: result.fat, markGuess: &fatIsGuess)
 
-                    applyIfEmpty(&sugars, with: result.sugars, markGuess: &sugarsIsGuess)
+                    setGIfEmpty(&sugars, &sugarsIsGuess, from: result.sugars)
                     sugarsTouched = sugarsTouched || !sugars.isEmpty
-                    applyIfEmpty(&starch, with: result.starch, markGuess: &starchIsGuess)
+                    setGIfEmpty(&starch, &starchIsGuess, from: result.starch)
                     starchTouched = starchTouched || !starch.isEmpty
-                    applyIfEmpty(&fibre, with: result.fibre, markGuess: &fibreIsGuess)
+                    setGIfEmpty(&fibre, &fibreIsGuess, from: result.fibre)
                     fibreTouched = fibreTouched || !fibre.isEmpty
 
-                    applyIfEmpty(&monounsaturatedFat, with: result.monounsaturatedFat, markGuess: &monounsaturatedFatIsGuess)
+                    setGIfEmpty(&monounsaturatedFat, &monounsaturatedFatIsGuess, from: result.monounsaturatedFat)
                     monoTouched = monoTouched || !monounsaturatedFat.isEmpty
-                    applyIfEmpty(&polyunsaturatedFat, with: result.polyunsaturatedFat, markGuess: &polyunsaturatedFatIsGuess)
+                    setGIfEmpty(&polyunsaturatedFat, &polyunsaturatedFatIsGuess, from: result.polyunsaturatedFat)
                     polyTouched = polyTouched || !polyunsaturatedFat.isEmpty
-                    applyIfEmpty(&saturatedFat, with: result.saturatedFat, markGuess: &saturatedFatIsGuess)
+                    setGIfEmpty(&saturatedFat, &saturatedFatIsGuess, from: result.saturatedFat)
                     satTouched = satTouched || !saturatedFat.isEmpty
-                    applyIfEmpty(&transFat, with: result.transFat, markGuess: &transFatIsGuess)
+                    setGIfEmpty(&transFat, &transFatIsGuess, from: result.transFat)
                     transTouched = transTouched || !transFat.isEmpty
 
-                    applyIfEmpty(&animalProtein, with: result.animalProtein, markGuess: &animalProteinIsGuess)
+                    setGIfEmpty(&animalProtein, &animalProteinIsGuess, from: result.animalProtein)
                     animalTouched = animalTouched || !animalProtein.isEmpty
-                    applyIfEmpty(&plantProtein, with: result.plantProtein, markGuess: &plantProteinIsGuess)
+                    setGIfEmpty(&plantProtein, &plantProteinIsGuess, from: result.plantProtein)
                     plantTouched = plantTouched || !plantProtein.isEmpty
-                    applyIfEmpty(&proteinSupplements, with: result.proteinSupplements, markGuess: &proteinSupplementsIsGuess)
+                    setGIfEmpty(&proteinSupplements, &proteinSupplementsIsGuess, from: result.proteinSupplements)
                     supplementsTouched = supplementsTouched || !proteinSupplements.isEmpty
 
                     func applyVitaminMineral(_ field: inout String, _ guessFlag: inout Bool, mg: Int?) {
@@ -518,10 +519,9 @@ extension MealFormView {
                     forceEnableSave = true
                 }
 
-                // Decide which tag to record based on presence of OCR-like fields
+                // Decide which tag to record
                 await MainActor.run {
                     let m = ensureMealForPhoto()
-                    // If sodium or vitamins/minerals are present, that strongly indicates OCR parsing.
                     let lookedLikeOCR =
                         result.sodiumMg != nil ||
                         result.vitaminA != nil || result.vitaminB != nil || result.vitaminC != nil ||
@@ -531,8 +531,6 @@ extension MealFormView {
                     if lookedLikeOCR {
                         m.photoGuesserType = "ocr"
                     } else {
-                        // PhotoNutritionGuesser tries FeaturePrint before Visual heuristic.
-                        // If only macros came back, assume featureprint; otherwise visual.
                         let macrosPresent = (result.carbohydrates != nil) || (result.protein != nil) || (result.fat != nil) || (result.calories != nil)
                         m.photoGuesserType = macrosPresent ? "featureprint" : "visual"
                     }
@@ -552,17 +550,35 @@ extension MealFormView {
 
     var isValid: Bool {
         guard let cal = Int(calories), cal > 0 else { return false }
-        let allNumericStrings = [
-            calories, carbohydrates, protein, sodium, fat, alcohol, nicotine, theobromine, caffeine, taurine,
-            starch, sugars, fibre, monounsaturatedFat, polyunsaturatedFat, saturatedFat, transFat, omega3, omega6,
-            animalProtein, plantProtein, proteinSupplements,
-            vitaminA, vitaminB, vitaminC, vitaminD, vitaminE, vitaminK,
-            calcium, iron, potassium, zinc, magnesium
-        ]
-        return allNumericStrings.dropFirst().allSatisfy { s in
+        // Grams fields should accept Double; mg/µg remain Int.
+        // calories handled above.
+        // sodium: if grams -> Double; if mg -> Int (but UI restricts to Int anyway).
+        func isEmptyOrPositiveDouble(_ s: String) -> Bool {
             guard !s.isEmpty else { return true }
-            return Int(s).map { $0 > 0 } ?? false
+            let v = Double(s.replacingOccurrences(of: ",", with: ".")) ?? -1
+            return v > 0
         }
+        func isEmptyOrPositiveInt(_ s: String) -> Bool {
+            guard !s.isEmpty else { return true }
+            return (Int(s) ?? -1) > 0
+        }
+
+        // grams-based
+        let gramsFields = [carbohydrates, protein, fat, sugars, starch, fibre, monounsaturatedFat, polyunsaturatedFat, saturatedFat, transFat, omega3, omega6, alcohol, animalProtein, plantProtein, proteinSupplements]
+        guard gramsFields.allSatisfy(isEmptyOrPositiveDouble) else { return false }
+
+        // sodium depends on unit
+        if sodiumUnit == .grams {
+            guard isEmptyOrPositiveDouble(sodium) else { return false }
+        } else {
+            guard isEmptyOrPositiveInt(sodium) else { return false }
+        }
+
+        // mg-based stimulants
+        let mgFields = [nicotine, theobromine, caffeine, taurine, vitaminA, vitaminB, vitaminC, vitaminD, vitaminE, vitaminK, calcium, iron, potassium, zinc, magnesium]
+        guard mgFields.allSatisfy(isEmptyOrPositiveInt) else { return false }
+
+        return true
     }
 
     func intOrZero(_ text: String) -> Int {
@@ -570,7 +586,8 @@ extension MealFormView {
     }
 
     func doubleOrZero(_ text: String) -> Double {
-        max(0, Double(text) ?? 0)
+        let normalized = text.replacingOccurrences(of: ",", with: ".")
+        return max(0, Double(normalized) ?? 0)
     }
 
     func defaultTitle(using date: Date) -> String {
@@ -623,38 +640,41 @@ extension MealFormView {
         }()
         object.calories = max(0, kcal)
 
-        object.carbohydrates = Double(intOrZero(carbohydrates))
-        object.protein = Double(intOrZero(protein))
-        object.fat = Double(intOrZero(fat))
-        object.alcohol = Double(intOrZero(alcohol))
+        // Grams fields as Double
+        object.carbohydrates = doubleOrZero(carbohydrates)
+        object.protein = doubleOrZero(protein)
+        object.fat = doubleOrZero(fat)
+        object.alcohol = doubleOrZero(alcohol)
+
+        // mg stimulants
         object.nicotine = Double(intOrZero(nicotine))
         object.theobromine = Double(intOrZero(theobromine))
         object.caffeine = Double(intOrZero(caffeine))
         object.taurine = Double(intOrZero(taurine))
 
         let sodiumMg: Double = {
-            let val = Double(intOrZero(sodium))
-            switch sodiumUnit {
-            case .milligrams: return val
-            case .grams: return val * 1000.0
+            if sodiumUnit == .milligrams {
+                return Double(intOrZero(sodium))
+            } else {
+                return doubleOrZero(sodium) * 1000.0
             }
         }()
         object.sodium = max(0, sodiumMg)
 
-        object.starch = Double(intOrZero(starch))
-        object.sugars = Double(intOrZero(sugars))
-        object.fibre = Double(intOrZero(fibre))
+        object.starch = doubleOrZero(starch)
+        object.sugars = doubleOrZero(sugars)
+        object.fibre = doubleOrZero(fibre)
 
-        object.monounsaturatedFat = Double(intOrZero(monounsaturatedFat))
-        object.polyunsaturatedFat = Double(intOrZero(polyunsaturatedFat))
-        object.saturatedFat = Double(intOrZero(saturatedFat))
-        object.transFat = Double(intOrZero(transFat))
-        object.omega3 = Double(intOrZero(omega3))
-        object.omega6 = Double(intOrZero(omega6))
+        object.monounsaturatedFat = doubleOrZero(monounsaturatedFat)
+        object.polyunsaturatedFat = doubleOrZero(polyunsaturatedFat)
+        object.saturatedFat = doubleOrZero(saturatedFat)
+        object.transFat = doubleOrZero(transFat)
+        object.omega3 = doubleOrZero(omega3)
+        object.omega6 = doubleOrZero(omega6)
 
-        object.animalProtein = Double(intOrZero(animalProtein))
-        object.plantProtein = Double(intOrZero(plantProtein))
-        object.proteinSupplements = Double(intOrZero(proteinSupplements))
+        object.animalProtein = doubleOrZero(animalProtein)
+        object.plantProtein = doubleOrZero(plantProtein)
+        object.proteinSupplements = doubleOrZero(proteinSupplements)
 
         func uiToMG(_ text: String) -> Double {
             let v = Double(intOrZero(text))
@@ -733,6 +753,16 @@ extension MealFormView {
         )
     }
 
+    // New: decimal sanitizer for grams
+    func numericBindingDecimal(_ source: Binding<String>) -> Binding<String> {
+        Binding(
+            get: { source.wrappedValue },
+            set: { newValue in
+                source.wrappedValue = sanitizeDecimalInput(newValue)
+            }
+        )
+    }
+
     func sanitizeIntegerInput(_ input: String) -> String {
         let digitsOnly = input.compactMap { $0.isNumber ? $0 : nil }
         var s = String(digitsOnly)
@@ -742,36 +772,61 @@ extension MealFormView {
         return s
     }
 
+    func sanitizeDecimalInput(_ input: String) -> String {
+        // Allow digits and a single decimal separator (dot or comma, normalize to dot)
+        var result = ""
+        var hasSeparator = false
+        for ch in input {
+            if ch.isNumber {
+                result.append(ch)
+            } else if ch == "." || ch == "," {
+                if !hasSeparator {
+                    hasSeparator = true
+                    result.append(".")
+                }
+            }
+        }
+        // Trim leading zeros unless immediately followed by decimal
+        if result.hasPrefix("0") && result.count > 1 && !result.hasPrefix("0.") {
+            while result.first == "0" && result.count > 1 && !result.hasPrefix("0.") {
+                result.removeFirst()
+            }
+        }
+        // Disallow a lone "0"
+        if result == "0" { return "" }
+        return result
+    }
+
     // MARK: - Consistency
 
     func recomputeConsistency(resetPrevMismatch: Bool = false) {
-        let carbsTotal: Int = Int(carbohydrates) ?? 0
-        let sugarsVal: Int = Int(sugars) ?? 0
-        let starchVal: Int = Int(starch) ?? 0
-        let fibreVal: Int = Int(fibre) ?? 0
-        let carbsSubSum: Int = sugarsVal + starchVal + fibreVal
+        let carbsTotal: Double = Double(carbohydrates.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let sugarsVal: Double = Double(sugars.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let starchVal: Double = Double(starch.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let fibreVal: Double = Double(fibre.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let carbsSubSum: Double = sugarsVal + starchVal + fibreVal
         let carbsHasAnySub: Bool = !(sugars.isEmpty && starch.isEmpty && fibre.isEmpty)
         let carbsHasTotal: Bool = !carbohydrates.isEmpty
-        carbsMismatch = carbsHasTotal && carbsHasAnySub && (carbsSubSum != carbsTotal)
+        carbsMismatch = carbsHasTotal && carbsHasAnySub && (abs(carbsSubSum - carbsTotal) > 0.0001)
 
-        let proteinTotal: Int = Int(protein) ?? 0
-        let animalVal: Int = Int(animalProtein) ?? 0
-        let plantVal: Int = Int(plantProtein) ?? 0
-        let suppsVal: Int = Int(proteinSupplements) ?? 0
-        let proteinSubSum: Int = animalVal + plantVal + suppsVal
+        let proteinTotal: Double = Double(protein.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let animalVal: Double = Double(animalProtein.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let plantVal: Double = Double(plantProtein.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let suppsVal: Double = Double(proteinSupplements.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let proteinSubSum: Double = animalVal + plantVal + suppsVal
         let proteinHasAnySub: Bool = !(animalProtein.isEmpty && plantProtein.isEmpty && proteinSupplements.isEmpty)
         let proteinHasTotal: Bool = !protein.isEmpty
-        proteinMismatch = proteinHasTotal && proteinHasAnySub && (proteinSubSum != proteinTotal)
+        proteinMismatch = proteinHasTotal && proteinHasAnySub && (abs(proteinSubSum - proteinTotal) > 0.0001)
 
-        let fatTotal: Int = Int(fat) ?? 0
-        let monoVal: Int = Int(monounsaturatedFat) ?? 0
-        let polyVal: Int = Int(polyunsaturatedFat) ?? 0
-        let satVal: Int = Int(saturatedFat) ?? 0
-        let transVal: Int = Int(Int(transFat) ?? 0)
-        let fatSubSum: Int = monoVal + polyVal + satVal + transVal
+        let fatTotal: Double = Double(fat.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let monoVal: Double = Double(monounsaturatedFat.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let polyVal: Double = Double(polyunsaturatedFat.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let satVal: Double = Double(saturatedFat.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let transVal: Double = Double(transFat.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let fatSubSum: Double = monoVal + polyVal + satVal + transVal
         let fatHasAnySub: Bool = !(monounsaturatedFat.isEmpty && polyunsaturatedFat.isEmpty && saturatedFat.isEmpty && transFat.isEmpty)
         let fatHasTotal: Bool = !fat.isEmpty
-        fatMismatch = fatHasTotal && fatHasAnySub && (fatSubSum != fatTotal)
+        fatMismatch = fatHasTotal && fatHasAnySub && (abs(fatSubSum - fatTotal) > 0.0001)
 
         if resetPrevMismatch {
             prevCarbsMismatch = carbsMismatch
@@ -830,9 +885,9 @@ extension MealFormView {
         }
     }
 
-    func showHelper(for group: GroupKind, sum: Int) {
+    func showHelper(for group: GroupKind, sum: Double) {
         Task { @MainActor in
-            let text = String(sum)
+            let text = sum.cleanString
             switch group {
             case .carbs:
                 carbsHelperText = text
@@ -856,34 +911,34 @@ extension MealFormView {
     // MARK: - Autofill
 
     func autofillCarbSubfieldsIfNeeded() {
-        guard let total = Int(carbohydrates), total >= 0 else { return }
+        guard let total = Double(carbohydrates.replacingOccurrences(of: ",", with: ".")), total >= 0 else { return }
         if sugarsTouched && starchTouched && fibreTouched { return }
         let ratios: [Double] = [0.30, 0.60, 0.10]
-        let parts = distributeInt(total, ratios: ratios)
-        if !sugarsTouched { sugars = parts[0].description; sugarsIsGuess = true }
-        if !starchTouched { starch = parts[1].description; starchIsGuess = true }
-        if !fibreTouched { fibre = parts[2].description; fibreIsGuess = true }
+        let parts = distributeDouble(total, ratios: ratios)
+        if !sugarsTouched { sugars = parts[0].cleanString; sugarsIsGuess = true }
+        if !starchTouched { starch = parts[1].cleanString; starchIsGuess = true }
+        if !fibreTouched { fibre = parts[2].cleanString; fibreIsGuess = true }
     }
 
     func autofillFatSubfieldsIfNeeded() {
-        guard let total = Int(fat), total >= 0 else { return }
+        guard let total = Double(fat.replacingOccurrences(of: ",", with: ".")), total >= 0 else { return }
         if monoTouched && polyTouched && satTouched && transTouched { return }
         let ratios: [Double] = [0.40, 0.30, 0.25, 0.05]
-        let parts = distributeInt(total, ratios: ratios)
-        if !monoTouched { monounsaturatedFat = parts[0].description; monounsaturatedFatIsGuess = true }
-        if !polyTouched { polyunsaturatedFat = parts[1].description; polyunsaturatedFatIsGuess = true }
-        if !satTouched { saturatedFat = parts[2].description; saturatedFatIsGuess = true }
-        if !transTouched { transFat = parts[3].description; transFatIsGuess = true }
+        let parts = distributeDouble(total, ratios: ratios)
+        if !monoTouched { monounsaturatedFat = parts[0].cleanString; monounsaturatedFatIsGuess = true }
+        if !polyTouched { polyunsaturatedFat = parts[1].cleanString; polyunsaturatedFatIsGuess = true }
+        if !satTouched { saturatedFat = parts[2].cleanString; saturatedFatIsGuess = true }
+        if !transTouched { transFat = parts[3].cleanString; transFatIsGuess = true }
     }
 
     func autofillProteinSubfieldsIfNeeded() {
-        guard let total = Int(protein), total >= 0 else { return }
+        guard let total = Double(protein.replacingOccurrences(of: ",", with: ".")), total >= 0 else { return }
         if animalTouched && plantTouched && supplementsTouched { return }
         let ratios: [Double] = [0.50, 0.40, 0.10]
-        let parts = distributeInt(total, ratios: ratios)
-        if !animalTouched { animalProtein = parts[0].description; animalProteinIsGuess = true }
-        if !plantTouched { plantProtein = parts[1].description; plantProteinIsGuess = true }
-        if !supplementsTouched { proteinSupplements = parts[2].description; proteinSupplementsIsGuess = true }
+        let parts = distributeDouble(total, ratios: ratios)
+        if !animalTouched { animalProtein = parts[0].cleanString; animalProteinIsGuess = true }
+        if !plantTouched { plantProtein = parts[1].cleanString; plantProteinIsGuess = true }
+        if !supplementsTouched { proteinSupplements = parts[2].cleanString; proteinSupplementsIsGuess = true }
     }
 
     // MARK: - Top-level updates from subfields
@@ -891,16 +946,19 @@ extension MealFormView {
     func handleTopFromCarbSubs() {
         let hasAnySub = !(sugars.isEmpty && starch.isEmpty && fibre.isEmpty)
         guard hasAnySub else { return }
-        let sum = (Int(sugars) ?? 0) + (Int(starch) ?? 0) + (Int(fibre) ?? 0)
+        let sugarsVal = Double(sugars.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let starchVal = Double(starch.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let fibreVal = Double(fibre.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let sum = sugarsVal + starchVal + fibreVal
 
-        let currentTop = Int(carbohydrates)
-        let canAutoUpdate = (currentTop == nil) || (currentTop == carbsLastAutoSum)
+        let currentTop = Double(carbohydrates.replacingOccurrences(of: ",", with: "."))
+        let canAutoUpdate = (currentTop == nil) || (currentTop == Double(carbsLastAutoSum ?? -1))
 
         if canAutoUpdate {
             let wasEmpty = carbohydrates.isEmpty
-            carbohydrates = String(sum)
+            carbohydrates = sum.cleanString
             carbohydratesIsGuess = true
-            carbsLastAutoSum = sum
+            carbsLastAutoSum = Int(sum.rounded())
 
             if wasEmpty {
                 flashRedOnce(for: .carbs)
@@ -912,16 +970,19 @@ extension MealFormView {
     func handleTopFromProteinSubs() {
         let hasAnySub = !(animalProtein.isEmpty && plantProtein.isEmpty && proteinSupplements.isEmpty)
         guard hasAnySub else { return }
-        let sum = (Int(animalProtein) ?? 0) + (Int(plantProtein) ?? 0) + (Int(proteinSupplements) ?? 0)
+        let animalVal = Double(animalProtein.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let plantVal = Double(plantProtein.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let suppsVal = Double(proteinSupplements.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let sum = animalVal + plantVal + suppsVal
 
-        let currentTop = Int(protein)
-        let canAutoUpdate = (currentTop == nil) || (currentTop == proteinLastAutoSum)
+        let currentTop = Double(protein.replacingOccurrences(of: ",", with: "."))
+        let canAutoUpdate = (currentTop == nil) || (currentTop == Double(proteinLastAutoSum ?? -1))
 
         if canAutoUpdate {
             let wasEmpty = protein.isEmpty
-            protein = String(sum)
+            protein = sum.cleanString
             proteinIsGuess = true
-            proteinLastAutoSum = sum
+            proteinLastAutoSum = Int(sum.rounded())
 
             if wasEmpty {
                 flashRedOnce(for: .protein)
@@ -933,20 +994,21 @@ extension MealFormView {
     func handleTopFromFatSubs() {
         let hasAnySub = !(monounsaturatedFat.isEmpty && polyunsaturatedFat.isEmpty && saturatedFat.isEmpty && transFat.isEmpty)
         guard hasAnySub else { return }
-        let mono = Int(monounsaturatedFat) ?? 0
-        let poly = Int(polyunsaturatedFat) ?? 0
-        let sat = Int(saturatedFat) ?? 0
-        let trans = Int(transFat) ?? 0
-        let sum = mono + poly + sat + trans
 
-        let currentTop = Int(fat)
-        let canAutoUpdate = (currentTop == nil) || (currentTop == fatLastAutoSum)
+        let monoVal = Double(monounsaturatedFat.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let polyVal = Double(polyunsaturatedFat.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let satVal = Double(saturatedFat.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let transVal = Double(transFat.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let sum = monoVal + polyVal + satVal + transVal
+
+        let currentTop = Double(fat.replacingOccurrences(of: ",", with: "."))
+        let canAutoUpdate = (currentTop == nil) || (currentTop == Double(fatLastAutoSum ?? -1))
 
         if canAutoUpdate {
             let wasEmpty = fat.isEmpty
-            fat = String(sum)
+            fat = sum.cleanString
             fatIsGuess = true
-            fatLastAutoSum = sum
+            fatLastAutoSum = Int(sum.rounded())
 
             if wasEmpty {
                 flashRedOnce(for: .fat)
@@ -958,37 +1020,43 @@ extension MealFormView {
     // MARK: - Helper prompts
 
     func handleHelperForCarbs() {
-        let total = Int(carbohydrates) ?? 0
-        let sum = (Int(sugars) ?? 0) + (Int(starch) ?? 0) + (Int(fibre) ?? 0)
+        let total = Double(carbohydrates.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let sugarsVal = Double(sugars.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let starchVal = Double(starch.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let fibreVal = Double(fibre.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let sum = sugarsVal + starchVal + fibreVal
         let hasAnySub = !(sugars.isEmpty && starch.isEmpty && fibre.isEmpty)
         let hasTotal = !carbohydrates.isEmpty
-        if hasAnySub && hasTotal && sum != total {
+        if hasAnySub && hasTotal && abs(sum - total) > 0.0001 {
             showHelper(for: .carbs, sum: sum)
             flashRedOnce(for: .carbs)
         }
     }
 
     func handleHelperForProtein() {
-        let total = Int(protein) ?? 0
-        let sum = (Int(animalProtein) ?? 0) + (Int(plantProtein) ?? 0) + (Int(proteinSupplements) ?? 0)
+        let total = Double(protein.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let animalVal = Double(animalProtein.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let plantVal = Double(plantProtein.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let suppsVal = Double(proteinSupplements.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let sum = animalVal + plantVal + suppsVal
         let hasAnySub = !(animalProtein.isEmpty && plantProtein.isEmpty && proteinSupplements.isEmpty)
         let hasTotal = !protein.isEmpty
-        if hasAnySub && hasTotal && sum != total {
+        if hasAnySub && hasTotal && abs(sum - total) > 0.0001 {
             showHelper(for: .protein, sum: sum)
             flashRedOnce(for: .protein)
         }
     }
 
     func handleHelperForFat() {
-        let total = Int(fat) ?? 0
-        let mono = Int(monounsaturatedFat) ?? 0
-        let poly = Int(polyunsaturatedFat) ?? 0
-        let sat = Int(saturatedFat) ?? 0
-        let trans = Int(Int(transFat) ?? 0)
-        let sum = mono + poly + sat + trans
+        let total = Double(fat.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let monoVal = Double(monounsaturatedFat.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let polyVal = Double(polyunsaturatedFat.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let satVal = Double(saturatedFat.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let transVal = Double(transFat.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let sum = monoVal + polyVal + satVal + transVal
         let hasAnySub = !(monounsaturatedFat.isEmpty && polyunsaturatedFat.isEmpty && saturatedFat.isEmpty && transFat.isEmpty)
         let hasTotal = !fat.isEmpty
-        if hasAnySub && hasTotal && sum != total {
+        if hasAnySub && hasTotal && abs(sum - total) > 0.0001 {
             showHelper(for: .fat, sum: sum)
             flashRedOnce(for: .fat)
         }
@@ -1013,37 +1081,43 @@ extension MealFormView {
     }
 
     func handleHelperOnTopChangeForCarbs() {
-        let total = Int(carbohydrates) ?? 0
-        let sum = (Int(sugars) ?? 0) + (Int(starch) ?? 0) + (Int(fibre) ?? 0)
+        let total = Double(carbohydrates.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let sugarsVal = Double(sugars.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let starchVal = Double(starch.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let fibreVal = Double(fibre.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let sum = sugarsVal + starchVal + fibreVal
         let hasAnySub = !(sugars.isEmpty && starch.isEmpty && fibre.isEmpty)
         let hasTotal = !carbohydrates.isEmpty
-        if hasAnySub && hasTotal && sum != total {
+        if hasAnySub && hasTotal && abs(sum - total) > 0.0001 {
             showHelper(for: .carbs, sum: sum)
             flashRedOnce(for: .carbs)
         }
     }
 
     func handleHelperOnTopChangeForProtein() {
-        let total = Int(protein) ?? 0
-        let sum = (Int(animalProtein) ?? 0) + (Int(plantProtein) ?? 0) + (Int(proteinSupplements) ?? 0)
+        let total = Double(protein.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let animalVal = Double(animalProtein.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let plantVal = Double(plantProtein.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let suppsVal = Double(proteinSupplements.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let sum = animalVal + plantVal + suppsVal
         let hasAnySub = !(animalProtein.isEmpty && plantProtein.isEmpty && proteinSupplements.isEmpty)
         let hasTotal = !protein.isEmpty
-        if hasAnySub && hasTotal && sum != total {
+        if hasAnySub && hasTotal && abs(sum - total) > 0.0001 {
             showHelper(for: .protein, sum: sum)
             flashRedOnce(for: .protein)
         }
     }
 
     func handleHelperOnTopChangeForFat() {
-        let total = Int(fat) ?? 0
-        let mono = Int(monounsaturatedFat) ?? 0
-        let poly = Int(polyunsaturatedFat) ?? 0
-        let sat = Int(saturatedFat) ?? 0
-        let trans = Int(transFat) ?? 0
-        let sum = mono + poly + sat + trans
+        let total = Double(fat.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let monoVal = Double(monounsaturatedFat.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let polyVal = Double(polyunsaturatedFat.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let satVal = Double(saturatedFat.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let transVal = Double(transFat.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let sum = monoVal + polyVal + satVal + transVal
         let hasAnySub = !(monounsaturatedFat.isEmpty && polyunsaturatedFat.isEmpty && saturatedFat.isEmpty && transFat.isEmpty)
         let hasTotal = !fat.isEmpty
-        if hasAnySub && hasTotal && sum != total {
+        if hasAnySub && hasTotal && abs(sum - total) > 0.0001 {
             showHelper(for: .fat, sum: sum)
             flashRedOnce(for: .fat)
         }
@@ -1067,5 +1141,22 @@ extension MealFormView {
         parts.append(max(0, total - accumulated))
         return parts
     }
-}
 
+    // New: Double distribution preserving decimals
+    func distributeDouble(_ total: Double, ratios: [Double]) -> [Double] {
+        guard total >= 0, !ratios.isEmpty else { return Array(repeating: 0, count: max(1, ratios.count)) }
+        let normalized = ratios.map { max(0.0, $0) }
+        let sum = normalized.reduce(0, +)
+        if sum == 0 { return Array(repeating: 0, count: ratios.count) }
+
+        var parts = [Double]()
+        var accumulated = 0.0
+        for i in 0..<(ratios.count - 1) {
+            let value = (total * (normalized[i] / sum))
+            parts.append(value)
+            accumulated += value
+        }
+        parts.append(max(0, total - accumulated))
+        return parts
+    }
+}
