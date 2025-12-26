@@ -32,6 +32,11 @@ struct MealTrackerApp: App {
     private let mealsSeedingTaskIdentifier = "com.mealtracker.mealsseeding"
 
     init() {
+        // Register default settings (does not overwrite user-changed values)
+        UserDefaults.standard.register(defaults: [
+            "aiFeaturesEnabled": true
+        ])
+
         // One-time migration: assign UUIDs to any Meal rows missing an id
         let context = persistenceController.container.viewContext
         context.performAndWait {
