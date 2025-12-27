@@ -359,63 +359,11 @@ struct SettingsView: View {
                     }
                 }
 
-                // Offline Barcode Database (existing)
-                Section(header: Text(isEligibleForOfflineDB ? "Offline Barcode Database saved locally" : "Offline Barcode Database saved locally (Pro feature)")) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Text("Status")
-                            Spacer()
-                            Text(offStatusText).foregroundStyle(.secondary)
-                        }
-                        if case .downloading = offCurrentStatus {
-                            ProgressView(value: offProgress)
-                            HStack {
-                                Text(byteCountString(offReceivedBytes))
-                                Spacer()
-                                if offExpectedBytes > 0 {
-                                    Text(byteCountString(offExpectedBytes))
-                                }
-                            }
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        }
-                        if let offError {
-                            Text(offError).font(.footnote).foregroundStyle(.red)
-                        }
-                        if networkMonitor.isConnected && networkMonitor.isExpensive {
-                            Text("You are not on Wi‑Fi. Downloading may use cellular data.")
-                                .font(.footnote)
-                                .foregroundStyle(.orange)
-                        }
-                        let freeBytes = offFreeBytes
-                        HStack {
-                            Text("Free space available")
-                            Spacer()
-                            Text(byteCountString(freeBytes)).foregroundStyle(.secondary)
-                        }
-                        .font(.footnote)
-
-                        if !isEligibleForOfflineDB {
-                            Text("Sign in to Pro to download and use the offline barcode database.")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .padding(.top, 4)
-                        }
-                    }
-                    actionButtons()
-                        .disabled(!isEligibleForOfflineDB)
-                        .opacity(isEligibleForOfflineDB ? 1.0 : 0.55)
-                }
-                .onAppear { Task { await refreshOFFStatus() } }
-                .onReceive(timer) { _ in Task { await refreshOFFStatus() } }
-
                 // People management section intentionally removed for now (will return in a future release).
             }
             .onAppear {
                 Task { await loadSyncedDate() }
                 enforceFreeTierPeopleIfNeeded(isFreeTier: isFreeTier)
-                Task { await refreshOFFStatus() }
                 Task {
                     await refreshSeederStatus()
                     await refreshMealsDBInfo()
@@ -466,15 +414,6 @@ struct SettingsView: View {
                         }
                     }
                 }
-            }
-            // OFF confirmation
-            .alert("Download Open Food Facts?", isPresented: $showingOFFConfirm) {
-                Button("Cancel", role: .cancel) { }
-                Button("Download") {
-                    Task { await ParquetDownloadManager.shared.startDownload() }
-                }
-            } message: {
-                Text(offConfirmMessage)
             }
         }
     }
