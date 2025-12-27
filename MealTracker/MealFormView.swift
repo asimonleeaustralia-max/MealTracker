@@ -228,6 +228,9 @@ struct MealFormView: View {
     // New: live progress/status line for the wizard overlay
     @State var wizardProgress: String?
 
+    // New: transient barcode display
+    @State var lastDetectedBarcode: String?
+
     // Force-enable Save after wand finishes
     @State var forceEnableSave: Bool = false
 
@@ -275,21 +278,22 @@ struct MealFormView: View {
     private var wizardStatusText: String {
         guard aiFeaturesEnabled, !galleryItems.isEmpty else { return "" }
         if isAnalyzing {
-            // Prefer live progress if available; else fall back to generic
             if let progress = wizardProgress, !progress.isEmpty {
                 return progress
             }
             return "Analyzing…"
         }
         if let err = analyzeError, !err.isEmpty { return err }
+        // Prefer showing the last detected barcode when available
+        if let code = lastDetectedBarcode, !code.isEmpty {
+            return "Barcode: \(code)"
+        }
         if wizardCanUndo {
-            // If we can read the method tag, include it; else just say Applied
             if let tag = meal?.photoGuesserType, !tag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return "Applied: \(tag)"
             }
             return "Applied"
         }
-        // If analysis finished with a terminal message (e.g., “No barcode or text found.”), keep it briefly
         if let progress = wizardProgress, !progress.isEmpty {
             return progress
         }
@@ -851,4 +855,3 @@ private struct ToolbarShim: ViewModifier {
         }
     }
 }
-

@@ -261,6 +261,8 @@ extension MealFormView {
         wizardCanUndo = false
         analyzeError = nil
         forceEnableSave = false
+        // Clear transient barcode display on undo
+        lastDetectedBarcode = nil
         // Keep the last wizardProgress as-is; user initiated an undo.
     }
 
@@ -282,6 +284,8 @@ extension MealFormView {
         // Capture snapshot before we mutate any field
         await MainActor.run {
             wizardUndoSnapshot = captureSnapshotForWizard()
+            // Clear transient barcode at the start of a new run
+            lastDetectedBarcode = nil
         }
 
         // Run analysis
@@ -345,6 +349,7 @@ extension MealFormView {
         await MainActor.run {
             isAnalyzing = true
             analyzeError = nil
+            lastDetectedBarcode = nil // clear transient barcode at the start
             // Start with barcode phase message
             wizardProgress = "Scanning for barcode…"
         }
@@ -376,6 +381,7 @@ extension MealFormView {
                 if let code = foundBarcode {
                     await MainActor.run {
                         wizardProgress = "Barcode: \(code)"
+                        lastDetectedBarcode = code // persist transiently for display
                     }
 
                     let targetMeal = ensureMealForPhoto()
@@ -443,6 +449,7 @@ extension MealFormView {
                 } else {
                     await MainActor.run {
                         wizardProgress = "No barcode found."
+                        lastDetectedBarcode = nil
                     }
                 }
             }
@@ -562,6 +569,7 @@ extension MealFormView {
                         recomputeConsistencyAndBlinkIfFixed()
                         forceEnableSave = true
                         wizardProgress = "Text found"
+                        lastDetectedBarcode = nil // clear barcode display after OCR-only path
                     }
 
                     // Tag as OCR only
@@ -576,6 +584,7 @@ extension MealFormView {
                 } else {
                     await MainActor.run {
                         wizardProgress = "No text found."
+                        lastDetectedBarcode = nil
                     }
                 }
             }
@@ -584,10 +593,11 @@ extension MealFormView {
             await MainActor.run {
                 if !didApplyFromBarcode && !didApplyFromText {
                     wizardProgress = "No barcode or text found."
+                    lastDetectedBarcode = nil
                 }
             }
         } catch {
-            await MainActor.run { analyzeError = "Analysis failed: \(error)" }
+            await MainActor.run { analyzeError = "Analysis failed: \(error)"; lastDetectedBarcode = nil }
         }
     }
 
