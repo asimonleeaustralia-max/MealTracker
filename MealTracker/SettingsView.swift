@@ -359,6 +359,13 @@ struct SettingsView: View {
                     }
                 }
 
+                // About
+                Section {
+                    NavigationLink(destination: AboutView()) {
+                        Text("About")
+                    }
+                }
+
                 // People management section intentionally removed for now (will return in a future release).
             }
             .onAppear {
