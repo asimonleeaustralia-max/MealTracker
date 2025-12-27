@@ -261,6 +261,7 @@ extension MealFormView {
         wizardCanUndo = false
         analyzeError = nil
         forceEnableSave = false
+        // Keep the last wizardProgress as-is; user initiated an undo.
     }
 
     // MARK: - Analyze button logic
@@ -341,7 +342,12 @@ extension MealFormView {
 
         guard let data = imageData else { return }
 
-        await MainActor.run { isAnalyzing = true }
+        await MainActor.run {
+            isAnalyzing = true
+            analyzeError = nil
+            // Start with barcode phase message
+            wizardProgress = "Scanning for barcode…"
+        }
         defer { Task { await MainActor.run { isAnalyzing = false } } }
 
         // Helper to set the guesser tag and persist immediately
@@ -352,78 +358,99 @@ extension MealFormView {
             try? context.save()
         }
 
+        var didApplyFromBarcode = false
+        var didApplyFromText = false
+
         do {
             // First: try barcode path with DB -> OFF, then return early if anything applied
             if let image = UIImage(data: data) {
                 let variants = [image] + [PhotoNutritionGuesser.rotationVariants(of: image)].flatMap { $0 }
+                var foundBarcode: String?
                 for img in variants {
                     if let code = await PhotoNutritionGuesser.detectFirstBarcode(in: img) {
-                        let targetMeal = ensureMealForPhoto()
-                        await BarcodeRepository.shared.handleScannedBarcode(
-                            code,
-                            for: targetMeal,
-                            in: context,
-                            sodiumUnit: sodiumUnit,
-                            vitaminsUnit: vitaminsUnit
-                        )
-                        // Record method used
-                        await MainActor.run {
-                            targetMeal.photoGuesserType = "barcode"
-                            try? context.save()
-                        }
-                        // We applied authoritative values; refresh the form fields from Core Data object to show them
-                        await MainActor.run {
-                            // Reload visible text fields for any newly populated values (fill empty-only)
-                            // Only update fields that remain empty in UI to avoid clobbering user edits-in-progress.
-                            if calories.isEmpty { calories = Int(targetMeal.calories).description }
-                            if carbohydrates.isEmpty { carbohydrates = targetMeal.carbohydrates.cleanString }
-                            if protein.isEmpty { protein = targetMeal.protein.cleanString }
-                            if fat.isEmpty { fat = targetMeal.fat.cleanString }
+                        foundBarcode = code
+                        break
+                    }
+                }
 
-                            if sodium.isEmpty {
-                                switch sodiumUnit {
-                                case .milligrams: sodium = Int(targetMeal.sodium).description
-                                case .grams: sodium = (targetMeal.sodium / 1000.0).cleanString
-                                }
+                if let code = foundBarcode {
+                    await MainActor.run {
+                        wizardProgress = "Barcode: \(code)"
+                    }
+
+                    let targetMeal = ensureMealForPhoto()
+                    await BarcodeRepository.shared.handleScannedBarcode(
+                        code,
+                        for: targetMeal,
+                        in: context,
+                        sodiumUnit: sodiumUnit,
+                        vitaminsUnit: vitaminsUnit
+                    )
+                    // Record method used
+                    await MainActor.run {
+                        targetMeal.photoGuesserType = "barcode"
+                        try? context.save()
+                    }
+                    // We applied authoritative values; refresh the form fields from Core Data object to show them
+                    await MainActor.run {
+                        // Reload visible text fields for any newly populated values (fill empty-only)
+                        // Only update fields that remain empty in UI to avoid clobbering user edits-in-progress.
+                        if calories.isEmpty { calories = Int(targetMeal.calories).description }
+                        if carbohydrates.isEmpty { carbohydrates = targetMeal.carbohydrates.cleanString }
+                        if protein.isEmpty { protein = targetMeal.protein.cleanString }
+                        if fat.isEmpty { fat = targetMeal.fat.cleanString }
+
+                        if sodium.isEmpty {
+                            switch sodiumUnit {
+                            case .milligrams: sodium = Int(targetMeal.sodium).description
+                            case .grams: sodium = (targetMeal.sodium / 1000.0).cleanString
                             }
-
-                            func fillVM(_ field: inout String, from mg: Double) {
-                                guard field.isEmpty else { return }
-                                switch vitaminsUnit {
-                                case .milligrams: field = Int(mg).description
-                                case .micrograms: field = Int((mg * 1000.0).rounded()).description
-                                }
-                            }
-                            fillVM(&vitaminA, from: targetMeal.vitaminA)
-                            fillVM(&vitaminB, from: targetMeal.vitaminB)
-                            fillVM(&vitaminC, from: targetMeal.vitaminC)
-                            fillVM(&vitaminD, from: targetMeal.vitaminD)
-                            fillVM(&vitaminE, from: targetMeal.vitaminE)
-                            fillVM(&vitaminK, from: targetMeal.vitaminK)
-
-                            fillVM(&calcium, from: targetMeal.calcium)
-                            fillVM(&iron, from: targetMeal.iron)
-                            fillVM(&potassium, from: targetMeal.potassium)
-                            fillVM(&zinc, from: targetMeal.zinc)
-                            fillVM(&magnesium, from: targetMeal.magnesium)
-
-                            if sugars.isEmpty { sugars = targetMeal.sugars.cleanString }
-                            if starch.isEmpty { starch = targetMeal.starch.cleanString }
-                            if fibre.isEmpty { fibre = targetMeal.fibre.cleanString }
-
-                            if monounsaturatedFat.isEmpty { monounsaturatedFat = targetMeal.monounsaturatedFat.cleanString }
-                            if polyunsaturatedFat.isEmpty { polyunsaturatedFat = targetMeal.polyunsaturatedFat.cleanString }
-                            if saturatedFat.isEmpty { saturatedFat = targetMeal.saturatedFat.cleanString }
-                            if transFat.isEmpty { transFat = targetMeal.transFat.cleanString }
                         }
 
-                        // After applying authoritative data, stop further analysis.
-                        return
+                        func fillVM(_ field: inout String, from mg: Double) {
+                            guard field.isEmpty else { return }
+                            switch vitaminsUnit {
+                            case .milligrams: field = Int(mg).description
+                            case .micrograms: field = Int((mg * 1000.0).rounded()).description
+                            }
+                        }
+                        fillVM(&vitaminA, from: targetMeal.vitaminA)
+                        fillVM(&vitaminB, from: targetMeal.vitaminB)
+                        fillVM(&vitaminC, from: targetMeal.vitaminC)
+                        fillVM(&vitaminD, from: targetMeal.vitaminD)
+                        fillVM(&vitaminE, from: targetMeal.vitaminE)
+                        fillVM(&vitaminK, from: targetMeal.vitaminK)
+
+                        fillVM(&calcium, from: targetMeal.calcium)
+                        fillVM(&iron, from: targetMeal.iron)
+                        fillVM(&potassium, from: targetMeal.potassium)
+                        fillVM(&zinc, from: targetMeal.zinc)
+                        fillVM(&magnesium, from: targetMeal.magnesium)
+
+                        if sugars.isEmpty { sugars = targetMeal.sugars.cleanString }
+                        if starch.isEmpty { starch = targetMeal.starch.cleanString }
+                        if fibre.isEmpty { fibre = targetMeal.fibre.cleanString }
+
+                        if monounsaturatedFat.isEmpty { monounsaturatedFat = targetMeal.monounsaturatedFat.cleanString }
+                        if polyunsaturatedFat.isEmpty { polyunsaturatedFat = targetMeal.polyunsaturatedFat.cleanString }
+                        if saturatedFat.isEmpty { saturatedFat = targetMeal.saturatedFat.cleanString }
+                        if transFat.isEmpty { transFat = targetMeal.transFat.cleanString }
+                    }
+
+                    didApplyFromBarcode = true
+                    // After applying authoritative data, stop further analysis.
+                    return
+                } else {
+                    await MainActor.run {
+                        wizardProgress = "No barcode found."
                     }
                 }
             }
 
             // If no barcode path succeeded, run OCR-only pipeline (no featureprint, no visual)
+            await MainActor.run {
+                wizardProgress = "Recognizing text…"
+            }
             if let uiImage = UIImage(data: data) {
                 let variants = PhotoNutritionGuesser.rotationVariants(of: uiImage)
                 var bestParsed: PhotoNutritionGuesser.GuessResult?
@@ -534,6 +561,7 @@ extension MealFormView {
 
                         recomputeConsistencyAndBlinkIfFixed()
                         forceEnableSave = true
+                        wizardProgress = "Text found"
                     }
 
                     // Tag as OCR only
@@ -543,11 +571,21 @@ extension MealFormView {
                         try? context.save()
                     }
 
+                    didApplyFromText = true
                     return
+                } else {
+                    await MainActor.run {
+                        wizardProgress = "No text found."
+                    }
                 }
             }
 
-            // Neither barcode nor OCR produced results: do nothing (no featureprint/visual).
+            // Neither barcode nor OCR produced results: leave a combined message
+            await MainActor.run {
+                if !didApplyFromBarcode && !didApplyFromText {
+                    wizardProgress = "No barcode or text found."
+                }
+            }
         } catch {
             await MainActor.run { analyzeError = "Analysis failed: \(error)" }
         }

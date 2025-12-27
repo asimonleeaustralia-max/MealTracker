@@ -225,6 +225,9 @@ struct MealFormView: View {
     @State var isAnalyzing: Bool = false
     @State var analyzeError: String?
 
+    // New: live progress/status line for the wizard overlay
+    @State var wizardProgress: String?
+
     // Force-enable Save after wand finishes
     @State var forceEnableSave: Bool = false
 
@@ -271,7 +274,13 @@ struct MealFormView: View {
     // MARK: - Wizard status (short, top-left)
     private var wizardStatusText: String {
         guard aiFeaturesEnabled, !galleryItems.isEmpty else { return "" }
-        if isAnalyzing { return "Analyzing…" }
+        if isAnalyzing {
+            // Prefer live progress if available; else fall back to generic
+            if let progress = wizardProgress, !progress.isEmpty {
+                return progress
+            }
+            return "Analyzing…"
+        }
         if let err = analyzeError, !err.isEmpty { return err }
         if wizardCanUndo {
             // If we can read the method tag, include it; else just say Applied
@@ -279,6 +288,10 @@ struct MealFormView: View {
                 return "Applied: \(tag)"
             }
             return "Applied"
+        }
+        // If analysis finished with a terminal message (e.g., “No barcode or text found.”), keep it briefly
+        if let progress = wizardProgress, !progress.isEmpty {
+            return progress
         }
         return ""
     }
