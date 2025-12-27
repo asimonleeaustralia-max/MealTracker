@@ -101,30 +101,52 @@ struct OpenFoodFactsClient {
         let magnesium_unit: String?
     }
 
-    enum OFFError: Error {
+    enum OFFError: Error, LocalizedError {
         case notFound
-        case invalidResponse
+        case invalidResponse(String) // include brief reason
+
+        var errorDescription: String? {
+            switch self {
+            case .notFound:
+                return "Product not found"
+            case .invalidResponse(let reason):
+                return reason
+            }
+        }
     }
 
     // Fetch a product by barcode from OFF
     static func fetchProduct(by barcode: String) async throws -> Product {
-        // Country subdomain can vary; use world as default
         let normalized = barcode.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: " ", with: "")
         guard let url = URL(string: "https://world.openfoodfacts.org/api/v2/product/\(normalized).json") else {
-            throw OFFError.invalidResponse
+            throw OFFError.invalidResponse("Invalid URL")
         }
         var req = URLRequest(url: url)
         req.timeoutInterval = 15
 
         let (data, resp) = try await URLSession.shared.data(for: req)
-        guard let http = resp as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
-            throw OFFError.invalidResponse
+        guard let http = resp as? HTTPURLResponse else {
+            throw OFFError.invalidResponse("No HTTP response")
         }
-        let decoded = try JSONDecoder().decode(Response.self, from: data)
-        guard decoded.status == 1, let product = decoded.product else {
-            throw OFFError.notFound
+        guard 200..<300 ~= http.statusCode else {
+            // Log a small payload preview to help diagnose server-side errors
+            let preview = Self.previewUTF8(data, limit: 500)
+            throw OFFError.invalidResponse("HTTP \(http.statusCode). Payload: \(preview)")
         }
-        return product
+
+        do {
+            let decoded = try JSONDecoder().decode(Response.self, from: data)
+            guard decoded.status == 1, let product = decoded.product else {
+                throw OFFError.notFound
+            }
+            return product
+        } catch {
+            // Decode failed: include URL and payload preview for diagnostics
+            let preview = Self.previewUTF8(data, limit: 500)
+            let ct = http.value(forHTTPHeaderField: "Content-Type") ?? "unknown"
+            let reason = "Decode failed for \(url.absoluteString). Content-Type: \(ct). Payload: \(preview)"
+            throw OFFError.invalidResponse(reason)
+        }
     }
 
     // Map OFF Product -> LocalBarcodeDB.Entry with per-serving preference when sensible
@@ -252,5 +274,15 @@ struct OpenFoodFactsClient {
     private static func normalizedCode(_ raw: String?) -> String {
         (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: " ", with: "")
     }
-}
 
+    // Render a short, safe UTF-8 preview of the response body for diagnostics
+    private static func previewUTF8(_ data: Data, limit: Int) -> String {
+        if data.isEmpty { return "<empty>" }
+        let prefix = data.prefix(limit)
+        if let s = String(data: prefix, encoding: .utf8) {
+            return s.replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: "\r", with: " ")
+        }
+        // Fallback: hex preview if not UTF-8
+        return prefix.map { String(format: "%02x", $0) }.joined()
+    }
+}
