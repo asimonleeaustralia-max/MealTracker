@@ -265,6 +265,22 @@ struct MealFormView: View {
     @State var wizardUndoSnapshot: WizardSnapshot?
     @State var wizardCanUndo: Bool = false
 
+    // MARK: - DEBUG-only wizard log buffer
+    #if DEBUG
+    @State private var wizardDebugLog: [String] = []
+    func appendWizardLog(_ message: String) {
+        let ts = Date()
+        let df = DateFormatter()
+        df.dateFormat = "HH:mm:ss.SSS"
+        let line = "[\(df.string(from: ts))] \(message)"
+        wizardDebugLog.append(line)
+        // Keep log bounded
+        if wizardDebugLog.count > 200 {
+            wizardDebugLog.removeFirst(wizardDebugLog.count - 200)
+        }
+    }
+    #endif
+
     init(meal: Meal? = nil) {
         self._meal = State(initialValue: meal)
         // If the caller provided a meal, we’re explicitly editing.
@@ -348,6 +364,43 @@ struct MealFormView: View {
 
             formContent(l: l)
                 .modifier(CompactSectionSpacing())
+
+            // DEBUG-only wizard progress + API log
+            #if DEBUG
+            if aiFeaturesEnabled, !galleryItems.isEmpty {
+                Section {
+                    if let progress = wizardProgress, !progress.isEmpty {
+                        Text("Wizard: \(progress)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    if let err = analyzeError, !err.isEmpty {
+                        Text("Wizard Error: \(err)")
+                            .font(.caption2)
+                            .foregroundStyle(.red)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    if !wizardDebugLog.isEmpty {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Wizard Debug Log")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                            ForEach(Array(wizardDebugLog.suffix(50)).indices, id: \.self) { idx in
+                                Text(wizardDebugLog[idx])
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .textSelection(.enabled)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 4)
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.bottom, 8)
+            }
+            #endif
         }
         // Attach toolbars directly here, avoiding conditional logic inside the builder.
         // Apply two separate toolbar modifiers guarded by availability.
@@ -755,103 +808,4 @@ struct MealFormView: View {
     }
 
     // ... rest of file remains unchanged ...
-}
-
-// MARK: - Toolbar shim modifier to avoid #available inside ToolbarContentBuilder
-private struct ToolbarShim: ViewModifier {
-    let l: LocalizationManager
-    let isEditing: Bool
-    let isValid: Bool
-    let forceEnableSave: Bool
-    @Binding var showingSettings: Bool
-    @Binding var showingDeleteConfirm: Bool
-    let dismiss: DismissAction
-    let save: () -> Void
-
-    func body(content: Content) -> some View {
-        var view = AnyView(content)
-        if #available(iOS 16.0, *) {
-            view = AnyView(
-                view.toolbar {
-                    // Use the host view’s toolbar builder via an adapter closure
-                    ToolbarContentAdapter_iOS16(l: l, isEditing: isEditing, isValid: isValid, forceEnableSave: forceEnableSave, showingSettings: $showingSettings, showingDeleteConfirm: $showingDeleteConfirm, dismiss: dismiss, save: save)
-                }
-            )
-        } else {
-            view = AnyView(
-                view.toolbar {
-                    ToolbarContentAdapter_iOS15(l: l, isEditing: isEditing, isValid: isValid, forceEnableSave: forceEnableSave, showingSettings: $showingSettings, showingDeleteConfirm: $showingDeleteConfirm, dismiss: dismiss, save: save)
-                }
-            )
-        }
-        return view
-    }
-
-    // Wrap the existing toolbar builders so we can call them from here
-    @available(iOS 16.0, *)
-    @ToolbarContentBuilder
-    private func ToolbarContentAdapter_iOS16(
-        l: LocalizationManager,
-        isEditing: Bool,
-        isValid: Bool,
-        forceEnableSave: Bool,
-        showingSettings: Binding<Bool>,
-        showingDeleteConfirm: Binding<Bool>,
-        dismiss: DismissAction,
-        save: @escaping () -> Void
-    ) -> some ToolbarContent {
-        // Removed Cancel button to avoid duplicate with system Back button.
-        ToolbarItem(placement: .confirmationAction) {
-            Button(l.localized("save")) { save() }
-                .disabled(!(isValid || forceEnableSave))
-        }
-        ToolbarItem(placement: .topBarTrailing) {
-            Button(action: { showingSettings.wrappedValue = true }) {
-                Image(systemName: "gearshape")
-            }
-            .accessibilityLabel(Text(l.localized("settings")))
-        }
-        if isEditing {
-            ToolbarItem(placement: .bottomBar) {
-                Button(role: .destructive) {
-                    showingDeleteConfirm.wrappedValue = true
-                } label: {
-                    Text(l.localized("delete"))
-                }
-            }
-        }
-    }
-
-    @ToolbarContentBuilder
-    private func ToolbarContentAdapter_iOS15(
-        l: LocalizationManager,
-        isEditing: Bool,
-        isValid: Bool,
-        forceEnableSave: Bool,
-        showingSettings: Binding<Bool>,
-        showingDeleteConfirm: Binding<Bool>,
-        dismiss: DismissAction,
-        save: @escaping () -> Void
-    ) -> some ToolbarContent {
-        // Removed leading Cancel button to avoid duplicating Back.
-        ToolbarItemGroup(placement: .navigationBarTrailing) {
-            Button(l.localized("save")) { save() }
-                .disabled(!(isValid || forceEnableSave))
-            Button(action: { showingSettings.wrappedValue = true }) {
-                Image(systemName: "gearshape")
-            }
-            .accessibilityLabel(Text(l.localized("settings")))
-        }
-        // Always include the bottom bar item; hide/disable it when not editing to avoid buildIf on iOS 15.
-        ToolbarItem(placement: .bottomBar) {
-            Button(role: .destructive) {
-                showingDeleteConfirm.wrappedValue = true
-            } label: {
-                Text(l.localized("delete"))
-            }
-            .disabled(!isEditing)
-            .opacity(isEditing ? 1.0 : 0.0)
-            .accessibilityHidden(!isEditing)
-        }
-    }
 }

@@ -331,273 +331,199 @@ extension MealFormView {
         }
     }
 
+    // Add back: core analysis pipeline invoked by the wand
     func analyzePhoto() async {
-        if await MainActor.run(resultType: Bool.self, body: { isAnalyzing }) { return }
-
-        let imageData: Data? = {
-            guard selectedIndex < galleryItems.count else { return nil }
-            switch galleryItems[selectedIndex] {
-            case .persistent(_, let url, _):
-                return try? Data(contentsOf: url)
-            case .inMemory(_, _, let data, _, _):
-                return data
-            }
-        }()
-
-        guard let data = imageData else { return }
-
         await MainActor.run {
             isAnalyzing = true
             analyzeError = nil
-            lastDetectedBarcode = nil // clear transient barcode at the start
-            // Start with barcode phase message
-            wizardProgress = "Scanning for barcode…"
-        }
-        defer { Task { await MainActor.run { isAnalyzing = false } } }
-
-        // Helper to set the guesser tag and persist immediately
-        @MainActor
-        func tagMealGuesser(_ tag: String) {
-            let m = ensureMealForPhoto()
-            m.photoGuesserType = tag
-            try? context.save()
+            wizardProgress = "Detecting barcode…"
+            forceEnableSave = false
         }
 
-        var didApplyFromBarcode = false
-        var didApplyFromText = false
+        // Obtain image to analyze
+        let image: UIImage? = {
+            guard selectedIndex < galleryItems.count else { return nil }
+            switch galleryItems[selectedIndex] {
+            case .persistent(_, let url, _):
+                if let data = try? Data(contentsOf: url) { return UIImage(data: data) }
+                return nil
+            case .inMemory(_, let img, _, _, _):
+                return img
+            }
+        }()
 
+        guard let baseImage = image else {
+            await MainActor.run {
+                analyzeError = "No image"
+                wizardProgress = nil
+                isAnalyzing = false
+            }
+            return
+        }
+
+        // 1) Try barcode on rotations; if found, apply via repository (local DB + OFF)
+        var appliedFromBarcode = false
+        var detectedCode: String?
         do {
-            // First: try barcode path with DB -> OFF, then return early if anything applied
-            if let image = UIImage(data: data) {
-                let variants = [image] + [PhotoNutritionGuesser.rotationVariants(of: image)].flatMap { $0 }
-                var foundBarcode: String?
-                for img in variants {
-                    if let code = await PhotoNutritionGuesser.detectFirstBarcode(in: img) {
-                        foundBarcode = code
-                        break
-                    }
-                }
-
-                if let code = foundBarcode {
+            let variants = PhotoNutritionGuesser.rotationVariants(of: baseImage)
+            for img in variants {
+                if let code = await PhotoNutritionGuesser.detectFirstBarcode(in: img) {
+                    detectedCode = code
                     await MainActor.run {
+                        lastDetectedBarcode = code
                         wizardProgress = "Barcode: \(code)"
-                        lastDetectedBarcode = code // persist transiently for display
                     }
-
-                    let targetMeal = ensureMealForPhoto()
-                    await BarcodeRepository.shared.handleScannedBarcode(
-                        code,
-                        for: targetMeal,
-                        in: context,
-                        sodiumUnit: sodiumUnit,
-                        vitaminsUnit: vitaminsUnit
-                    )
-                    // Record method used
-                    await MainActor.run {
-                        targetMeal.photoGuesserType = "barcode"
-                        try? context.save()
-                    }
-                    // We applied authoritative values; refresh the form fields from Core Data object to show them
-                    await MainActor.run {
-                        // Reload visible text fields for any newly populated values (fill empty-only)
-                        // Only update fields that remain empty in UI to avoid clobbering user edits-in-progress.
-                        if calories.isEmpty { calories = Int(targetMeal.calories).description }
-                        if carbohydrates.isEmpty { carbohydrates = targetMeal.carbohydrates.cleanString }
-                        if protein.isEmpty { protein = targetMeal.protein.cleanString }
-                        if fat.isEmpty { fat = targetMeal.fat.cleanString }
-
-                        if sodium.isEmpty {
-                            switch sodiumUnit {
-                            case .milligrams: sodium = Int(targetMeal.sodium).description
-                            case .grams: sodium = (targetMeal.sodium / 1000.0).cleanString
+                    if let meal = self.meal {
+                        // Apply to Core Data meal via repository, which also hits OFF
+                        await BarcodeRepository.shared.handleScannedBarcode(
+                            code,
+                            for: meal,
+                            in: context,
+                            sodiumUnit: sodiumUnit,
+                            vitaminsUnit: vitaminsUnit,
+                            logger: { msg in
+                                #if DEBUG
+                                self.appendWizardLog(msg)
+                                #endif
+                                Task { @MainActor in
+                                    self.wizardProgress = msg
+                                }
                             }
-                        }
-
-                        func fillVM(_ field: inout String, from mg: Double) {
-                            guard field.isEmpty else { return }
-                            switch vitaminsUnit {
-                            case .milligrams: field = Int(mg).description
-                            case .micrograms: field = Int((mg * 1000.0).rounded()).description
+                        )
+                        // Reflect updated Core Data values into the form if fields are empty
+                        await MainActor.run {
+                            // Calories
+                            if calories.isEmpty, meal.calories > 0 {
+                                calories = Int(meal.calories).description
+                                caloriesIsGuess = false
                             }
+                            // Grams
+                            if carbohydrates.isEmpty, meal.carbohydrates > 0 { carbohydrates = meal.carbohydrates.cleanString; carbohydratesIsGuess = false }
+                            if protein.isEmpty, meal.protein > 0 { protein = meal.protein.cleanString; proteinIsGuess = false }
+                            if fat.isEmpty, meal.fat > 0 { fat = meal.fat.cleanString; fatIsGuess = false }
+
+                            // Sodium (UI unit)
+                            if sodium.isEmpty, meal.sodium > 0 {
+                                if sodiumUnit == .milligrams {
+                                    sodium = Int(meal.sodium).description
+                                } else {
+                                    sodium = (meal.sodium / 1000.0).cleanString
+                                }
+                                sodiumIsGuess = false
+                            }
+
+                            // Sub-macros
+                            if sugars.isEmpty, meal.sugars > 0 { sugars = meal.sugars.cleanString; sugarsIsGuess = false }
+                            if starch.isEmpty, meal.starch > 0 { starch = meal.starch.cleanString; starchIsGuess = false }
+                            if fibre.isEmpty, meal.fibre > 0 { fibre = meal.fibre.cleanString; fibreIsGuess = false }
+
+                            // Fat breakdown
+                            if monounsaturatedFat.isEmpty, meal.monounsaturatedFat > 0 { monounsaturatedFat = meal.monounsaturatedFat.cleanString; monounsaturatedFatIsGuess = false }
+                            if polyunsaturatedFat.isEmpty, meal.polyunsaturatedFat > 0 { polyunsaturatedFat = meal.polyunsaturatedFat.cleanString; polyunsaturatedFatIsGuess = false }
+                            if saturatedFat.isEmpty, meal.saturatedFat > 0 { saturatedFat = meal.saturatedFat.cleanString; saturatedFatIsGuess = false }
+                            if transFat.isEmpty, meal.transFat > 0 { transFat = meal.transFat.cleanString; transFatIsGuess = false }
+
+                            // Vitamins/minerals in UI units
+                            func toUI(_ mg: Double) -> String {
+                                switch vitaminsUnit {
+                                case .milligrams: return Int(mg).description
+                                case .micrograms: return Int((mg * 1000.0).rounded()).description
+                                }
+                            }
+                            if vitaminA.isEmpty, meal.vitaminA > 0 { vitaminA = toUI(meal.vitaminA); vitaminAIsGuess = false }
+                            if vitaminB.isEmpty, meal.vitaminB > 0 { vitaminB = toUI(meal.vitaminB); vitaminBIsGuess = false }
+                            if vitaminC.isEmpty, meal.vitaminC > 0 { vitaminC = toUI(meal.vitaminC); vitaminCIsGuess = false }
+                            if vitaminD.isEmpty, meal.vitaminD > 0 { vitaminD = toUI(meal.vitaminD); vitaminDIsGuess = false }
+                            if vitaminE.isEmpty, meal.vitaminE > 0 { vitaminE = toUI(meal.vitaminE); vitaminEIsGuess = false }
+                            if vitaminK.isEmpty, meal.vitaminK > 0 { vitaminK = toUI(meal.vitaminK); vitaminKIsGuess = false }
+
+                            if calcium.isEmpty, meal.calcium > 0 { calcium = toUI(meal.calcium); calciumIsGuess = false }
+                            if iron.isEmpty, meal.iron > 0 { iron = toUI(meal.iron); ironIsGuess = false }
+                            if potassium.isEmpty, meal.potassium > 0 { potassium = toUI(meal.potassium); potassiumIsGuess = false }
+                            if zinc.isEmpty, meal.zinc > 0 { zinc = toUI(meal.zinc); zincIsGuess = false }
+                            if magnesium.isEmpty, meal.magnesium > 0 { magnesium = toUI(meal.magnesium); magnesiumIsGuess = false }
+
+                            recomputeConsistency(resetPrevMismatch: false)
+                            forceEnableSave = true
                         }
-                        fillVM(&vitaminA, from: targetMeal.vitaminA)
-                        fillVM(&vitaminB, from: targetMeal.vitaminB)
-                        fillVM(&vitaminC, from: targetMeal.vitaminC)
-                        fillVM(&vitaminD, from: targetMeal.vitaminD)
-                        fillVM(&vitaminE, from: targetMeal.vitaminE)
-                        fillVM(&vitaminK, from: targetMeal.vitaminK)
-
-                        fillVM(&calcium, from: targetMeal.calcium)
-                        fillVM(&iron, from: targetMeal.iron)
-                        fillVM(&potassium, from: targetMeal.potassium)
-                        fillVM(&zinc, from: targetMeal.zinc)
-                        fillVM(&magnesium, from: targetMeal.magnesium)
-
-                        if sugars.isEmpty { sugars = targetMeal.sugars.cleanString }
-                        if starch.isEmpty { starch = targetMeal.starch.cleanString }
-                        if fibre.isEmpty { fibre = targetMeal.fibre.cleanString }
-
-                        if monounsaturatedFat.isEmpty { monounsaturatedFat = targetMeal.monounsaturatedFat.cleanString }
-                        if polyunsaturatedFat.isEmpty { polyunsaturatedFat = targetMeal.polyunsaturatedFat.cleanString }
-                        if saturatedFat.isEmpty { saturatedFat = targetMeal.saturatedFat.cleanString }
-                        if transFat.isEmpty { transFat = targetMeal.transFat.cleanString }
+                        appliedFromBarcode = true
                     }
-
-                    didApplyFromBarcode = true
-                    // After applying authoritative data, stop further analysis.
-                    return
-                } else {
-                    await MainActor.run {
-                        wizardProgress = "No barcode found."
-                        lastDetectedBarcode = nil
-                    }
+                    break
                 }
             }
+        }
 
-            // If no barcode path succeeded, run OCR-only pipeline (no featureprint, no visual)
+        // 2) OCR if nothing applied yet, or to complement missing fields
+        await MainActor.run { wizardProgress = "Reading label…" }
+        if let text = await recognizeTextForWizard(in: baseImage, languageCode: appLanguageCode) {
+            let parsed = PhotoNutritionGuesser.parseNutritionForWizard(from: text)
+            // Apply empty-only fields from parsed result
             await MainActor.run {
-                wizardProgress = "Recognizing text…"
-            }
-            if let uiImage = UIImage(data: data) {
-                let variants = PhotoNutritionGuesser.rotationVariants(of: uiImage)
-                var bestParsed: PhotoNutritionGuesser.GuessResult?
-                var bestScore = -1
+                // calories (kcal)
+                applyIfEmpty(&calories, with: parsed.calories, markGuess: &caloriesIsGuess)
+                // grams
+                applyIfEmpty(&carbohydrates, with: parsed.carbohydrates, markGuess: &carbohydratesIsGuess)
+                applyIfEmpty(&protein, with: parsed.protein, markGuess: &proteinIsGuess)
+                applyIfEmpty(&fat, with: parsed.fat, markGuess: &fatIsGuess)
 
-                for img in variants {
-                    if let text = await recognizeTextForWizard(in: img, languageCode: appLanguageCode) {
-                        let parsed = PhotoNutritionGuesser.parseNutritionForWizard(from: text)
-                        let score = parsed.parsedFieldCount
-                        if parsed.hasAnyValue && score > bestScore {
-                            bestScore = score
-                            bestParsed = parsed
-                            if score >= 10 { break }
-                        }
+                // sodium UI: parsed.sodiumMg is mg
+                if sodium.isEmpty, let mg = parsed.sodiumMg {
+                    if sodiumUnit == .milligrams {
+                        sodium = String(max(0, mg))
+                    } else {
+                        // convert mg -> g (rounded to preserve decimals)
+                        sodium = (Double(mg) / 1000.0).cleanString
                     }
+                    sodiumIsGuess = true
                 }
 
-                if let result = bestParsed {
-                    await MainActor.run {
-                        if calories.isEmpty, let kcal = result.calories {
-                            let uiVal: Int
-                            switch energyUnit {
-                            case .calories:
-                                uiVal = kcal
-                            case .kilojoules:
-                                uiVal = Int((Double(kcal) * 4.184).rounded())
-                            }
-                            calories = String(max(0, uiVal))
-                            caloriesIsGuess = true
-                        }
+                // sub-macros (grams)
+                applyIfEmpty(&sugars, with: parsed.sugars, markGuess: &sugarsIsGuess)
+                applyIfEmpty(&starch, with: parsed.starch, markGuess: &starchIsGuess)
+                applyIfEmpty(&fibre, with: parsed.fibre, markGuess: &fibreIsGuess)
 
-                        func setGIfEmpty(_ field: inout String, _ guessFlag: inout Bool, from v: Int?) {
-                            guard field.isEmpty, let v else { return }
-                            field = String(v)
-                            guessFlag = true
-                        }
-                        setGIfEmpty(&carbohydrates, &carbohydratesIsGuess, from: result.carbohydrates)
-                        setGIfEmpty(&protein, &proteinIsGuess, from: result.protein)
-                        setGIfEmpty(&fat, &fatIsGuess, from: result.fat)
+                // fat breakdown (grams)
+                applyIfEmpty(&monounsaturatedFat, with: parsed.monounsaturatedFat, markGuess: &monounsaturatedFatIsGuess)
+                applyIfEmpty(&polyunsaturatedFat, with: parsed.polyunsaturatedFat, markGuess: &polyunsaturatedFatIsGuess)
+                applyIfEmpty(&saturatedFat, with: parsed.saturatedFat, markGuess: &saturatedFatIsGuess)
+                applyIfEmpty(&transFat, with: parsed.transFat, markGuess: &transFatIsGuess)
 
-                        if sodium.isEmpty, let mg = result.sodiumMg {
-                            let uiVal: Int
-                            switch sodiumUnit {
-                            case .milligrams:
-                                uiVal = mg
-                            case .grams:
-                                uiVal = Int((Double(mg) / 1000.0).rounded())
-                            }
-                            sodium = String(max(0, uiVal))
-                            sodiumIsGuess = true
-                        }
+                // protein breakdown (grams)
+                applyIfEmpty(&animalProtein, with: parsed.animalProtein, markGuess: &animalProteinIsGuess)
+                applyIfEmpty(&plantProtein, with: parsed.plantProtein, markGuess: &plantProteinIsGuess)
+                applyIfEmpty(&proteinSupplements, with: parsed.proteinSupplements, markGuess: &proteinSupplementsIsGuess)
 
-                        setGIfEmpty(&sugars, &sugarsIsGuess, from: result.sugars)
-                        sugarsTouched = sugarsTouched || !sugars.isEmpty
-                        setGIfEmpty(&starch, &starchIsGuess, from: result.starch)
-                        starchTouched = starchTouched || !starch.isEmpty
-                        setGIfEmpty(&fibre, &fibreIsGuess, from: result.fibre)
-                        fibreTouched = fibreTouched || !fibre.isEmpty
-
-                        setGIfEmpty(&monounsaturatedFat, &monounsaturatedFatIsGuess, from: result.monounsaturatedFat)
-                        monoTouched = monoTouched || !monounsaturatedFat.isEmpty
-                        setGIfEmpty(&polyunsaturatedFat, &polyunsaturatedFatIsGuess, from: result.polyunsaturatedFat)
-                        polyTouched = polyTouched || !polyunsaturatedFat.isEmpty
-                        setGIfEmpty(&saturatedFat, &saturatedFatIsGuess, from: result.saturatedFat)
-                        satTouched = satTouched || !saturatedFat.isEmpty
-                        setGIfEmpty(&transFat, &transFatIsGuess, from: result.transFat)
-                        transTouched = transTouched || !transFat.isEmpty
-
-                        setGIfEmpty(&animalProtein, &animalProteinIsGuess, from: result.animalProtein)
-                        animalTouched = animalTouched || !animalProtein.isEmpty
-                        setGIfEmpty(&plantProtein, &plantProteinIsGuess, from: result.plantProtein)
-                        plantTouched = plantTouched || !plantProtein.isEmpty
-                        setGIfEmpty(&proteinSupplements, &proteinSupplementsIsGuess, from: result.proteinSupplements)
-                        supplementsTouched = supplementsTouched || !proteinSupplements.isEmpty
-
-                        func applyVitaminMineral(_ field: inout String, _ guessFlag: inout Bool, mg: Int?) {
-                            guard field.isEmpty, let mg else { return }
-                            let uiVal: Int
-                            switch vitaminsUnit {
-                            case .milligrams: uiVal = mg
-                            case .micrograms: uiVal = Int(Double(mg) * 1000.0)
-                            }
-                            field = String(max(0, uiVal))
-                            guessFlag = true
-                        }
-                        applyVitaminMineral(&vitaminA, &vitaminAIsGuess, mg: result.vitaminA)
-                        applyVitaminMineral(&vitaminB, &vitaminBIsGuess, mg: result.vitaminB)
-                        applyVitaminMineral(&vitaminC, &vitaminCIsGuess, mg: result.vitaminC)
-                        applyVitaminMineral(&vitaminD, &vitaminDIsGuess, mg: result.vitaminD)
-                        applyVitaminMineral(&vitaminE, &vitaminEIsGuess, mg: result.vitaminE)
-                        applyVitaminMineral(&vitaminK, &vitaminKIsGuess, mg: result.vitaminK)
-
-                        applyVitaminMineral(&calcium, &calciumIsGuess, mg: result.calcium)
-                        applyVitaminMineral(&iron, &ironIsGuess, mg: result.iron)
-                        applyVitaminMineral(&potassium, &potassiumIsGuess, mg: result.potassium)
-                        applyVitaminMineral(&zinc, &zincIsGuess, mg: result.zinc)
-                        applyVitaminMineral(&magnesium, &magnesiumIsGuess, mg: result.magnesium)
-
-                        if !(carbohydrates.isEmpty), sugars.isEmpty || starch.isEmpty || fibre.isEmpty {
-                            autofillCarbSubfieldsIfNeeded()
-                        }
-                        if !(protein.isEmpty), animalProtein.isEmpty || plantProtein.isEmpty || proteinSupplements.isEmpty {
-                            autofillProteinSubfieldsIfNeeded()
-                        }
-                        if !(fat.isEmpty), monounsaturatedFat.isEmpty || polyunsaturatedFat.isEmpty || saturatedFat.isEmpty || transFat.isEmpty {
-                            autofillFatSubfieldsIfNeeded()
-                        }
-
-                        recomputeConsistencyAndBlinkIfFixed()
-                        forceEnableSave = true
-                        wizardProgress = "Text found"
-                        lastDetectedBarcode = nil // clear barcode display after OCR-only path
+                // vitamins/minerals: parsed in mg base, convert to UI unit
+                func setVitaminUI(_ target: inout String, _ valueMg: Int?, _ flag: inout Bool) {
+                    guard target.isEmpty, let mg = valueMg else { return }
+                    switch vitaminsUnit {
+                    case .milligrams: target = String(max(0, mg))
+                    case .micrograms: target = String(max(0, mg * 1000))
                     }
-
-                    // Tag as OCR only
-                    await MainActor.run {
-                        let m = ensureMealForPhoto()
-                        m.photoGuesserType = "ocr"
-                        try? context.save()
-                    }
-
-                    didApplyFromText = true
-                    return
-                } else {
-                    await MainActor.run {
-                        wizardProgress = "No text found."
-                        lastDetectedBarcode = nil
-                    }
+                    flag = true
                 }
-            }
+                setVitaminUI(&vitaminA, parsed.vitaminA, &vitaminAIsGuess)
+                setVitaminUI(&vitaminB, parsed.vitaminB, &vitaminBIsGuess)
+                setVitaminUI(&vitaminC, parsed.vitaminC, &vitaminCIsGuess)
+                setVitaminUI(&vitaminD, parsed.vitaminD, &vitaminDIsGuess)
+                setVitaminUI(&vitaminE, parsed.vitaminE, &vitaminEIsGuess)
+                setVitaminUI(&vitaminK, parsed.vitaminK, &vitaminKIsGuess)
 
-            // Neither barcode nor OCR produced results: leave a combined message
-            await MainActor.run {
-                if !didApplyFromBarcode && !didApplyFromText {
-                    wizardProgress = "No barcode or text found."
-                    lastDetectedBarcode = nil
-                }
+                setVitaminUI(&calcium, parsed.calcium, &calciumIsGuess)
+                setVitaminUI(&iron, parsed.iron, &ironIsGuess)
+                setVitaminUI(&potassium, parsed.potassium, &potassiumIsGuess)
+                setVitaminUI(&zinc, parsed.zinc, &zincIsGuess)
+                setVitaminUI(&magnesium, parsed.magnesium, &magnesiumIsGuess)
+
+                recomputeConsistency(resetPrevMismatch: false)
             }
-        } catch {
-            await MainActor.run { analyzeError = "Analysis failed: \(error)"; lastDetectedBarcode = nil }
+        }
+
+        await MainActor.run {
+            wizardProgress = appliedFromBarcode ? "Applied from barcode" : "Analysis complete"
+            isAnalyzing = false
+            // If anything non-empty now, allow save button
+            forceEnableSave = true
         }
     }
 
@@ -1336,4 +1262,3 @@ private struct PhotoNutritionGuesserWizardBridge {
         return languages
     }
 }
-

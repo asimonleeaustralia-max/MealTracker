@@ -159,33 +159,44 @@ actor BarcodeRepository {
     }
 
     // High-level: handle a scanned barcode -> local DB -> OFF -> save to DB and apply to meal.
+    // Added optional debug logger to surface API progress/errors to the wizard.
     func handleScannedBarcode(_ rawCode: String,
                               for meal: Meal,
                               in context: NSManagedObjectContext,
                               sodiumUnit: SodiumUnit,
-                              vitaminsUnit: VitaminsUnit) async {
+                              vitaminsUnit: VitaminsUnit,
+                              logger: ((String) -> Void)? = nil) async {
         let code = normalize(rawCode)
 
         // 1) Local lookup
         if let local = await lookup(code: code) {
+            logger?("Local barcode DB hit for \(code)")
             await MainActor.run {
                 applyEntryToMealForm(entry: local, meal: meal, context: context, sodiumUnit: sodiumUnit, vitaminsUnit: vitaminsUnit)
             }
+        } else {
+            logger?("Local barcode DB miss for \(code)")
         }
 
         // 2) Open Food Facts
         do {
+            logger?("OFF: fetching product \(code)…")
             let product = try await OpenFoodFactsClient.fetchProduct(by: code)
+            logger?("OFF: product found for \(code)")
             if let offEntry = OpenFoodFactsClient.mapToEntry(from: product) {
+                logger?("OFF: mapped nutriments -> upserting and applying")
                 // Upsert into DuckDB
                 try? await upsert(entry: offEntry)
                 // Apply to meal (fill empty-only)
                 await MainActor.run {
                     applyEntryToMealForm(entry: offEntry, meal: meal, context: context, sodiumUnit: sodiumUnit, vitaminsUnit: vitaminsUnit)
                 }
+            } else {
+                logger?("OFF: mapping returned no usable nutriments")
             }
         } catch {
-            // OFF not found or network error — ignore silently
+            logger?("OFF: error for \(code): \(error.localizedDescription)")
+            // OFF not found or network error — ignore silently for normal flow
         }
     }
 
