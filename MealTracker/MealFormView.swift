@@ -783,10 +783,7 @@ private struct ToolbarShim: ViewModifier {
         dismiss: DismissAction,
         save: @escaping () -> Void
     ) -> some ToolbarContent {
-        // We can’t directly call instance methods of MealFormView here, so recreate minimal items inline.
-        ToolbarItem(placement: .cancellationAction) {
-            Button(l.localized("cancel")) { dismiss() }
-        }
+        // Removed Cancel button to avoid duplicate with system Back button.
         ToolbarItem(placement: .confirmationAction) {
             Button(l.localized("save")) { save() }
                 .disabled(!(isValid || forceEnableSave))
@@ -819,9 +816,7 @@ private struct ToolbarShim: ViewModifier {
         dismiss: DismissAction,
         save: @escaping () -> Void
     ) -> some ToolbarContent {
-        ToolbarItem(placement: .navigationBarLeading) {
-            Button(l.localized("cancel")) { dismiss() }
-        }
+        // Removed leading Cancel button to avoid duplicating Back.
         ToolbarItemGroup(placement: .navigationBarTrailing) {
             Button(l.localized("save")) { save() }
                 .disabled(!(isValid || forceEnableSave))
@@ -843,3 +838,4 @@ private struct ToolbarShim: ViewModifier {
         }
     }
 }
+
