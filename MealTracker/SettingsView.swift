@@ -410,75 +410,7 @@ struct SettingsView: View {
                 .onAppear { Task { await refreshOFFStatus() } }
                 .onReceive(timer) { _ in Task { await refreshOFFStatus() } }
 
-                // People management (existing)
-                Section(header: Text(NSLocalizedString("people_section_title", comment: "People")) ) {
-                    Picker(NSLocalizedString("default_person_picker_title", comment: "Default person"),
-                           selection: Binding<UUID?>(
-                            get: { people.first(where: { $0.isDefault })?.id },
-                            set: { newID in
-                                let isFreeTier = (tier == .free)
-                                guard !isFreeTier else { return }
-                                setDefaultPerson(by: newID)
-                            })) {
-                        ForEach(people) { person in
-                            Text(person.name)
-                                .foregroundStyle(isFreeTier ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
-                                .tag(Optional.some(person.id))
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .disabled(people.isEmpty || isFreeTier)
-                    .opacity(isFreeTier ? 0.85 : 1.0)
-
-                    if isFreeTier {
-                        Text(LocalizedStringKey("pro_people_notice"))
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.top, 4)
-                    } else {
-                        Button {
-                            newPersonName = ""
-                            addPersonError = nil
-                            showingAddPersonSheet = true
-                        } label: {
-                            Label(NSLocalizedString("add_person_nav_title", comment: "Add Person"),
-                                  systemImage: "plus.circle.fill")
-                        }
-                        .buttonStyle(.borderless)
-                        .disabled(isAtPeopleCap)
-                        .opacity(isAtPeopleCap ? 0.6 : 1.0)
-
-                        if isAtPeopleCap {
-                            let fmt = NSLocalizedString("add_person_error_max_reached", comment: "Shown when reaching max active people")
-                            Text(String(format: fmt, maxActivePeople))
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    ForEach(people) { person in
-                        HStack {
-                            if handedness == .left {
-                                deleteButton(for: person)
-                            }
-
-                            Text(person.name)
-
-                            Spacer()
-
-                            if person.isDefault {
-                                Image(systemName: "star.fill")
-                                    .foregroundStyle(.yellow)
-                                    .accessibilityLabel(Text(NSLocalizedString("default_person_accessibility_label", comment: "Default")))
-                            }
-
-                            if handedness == .right {
-                                deleteButton(for: person)
-                            }
-                        }
-                    }
-                }
+                // People management section intentionally removed for now (will return in a future release).
             }
             .onAppear {
                 Task { await loadSyncedDate() }
@@ -921,4 +853,3 @@ struct SettingsView: View {
         }
     }
 }
-
