@@ -76,6 +76,7 @@ struct MealFormView: View {
     @State var animalProtein: String = ""
     @State var plantProtein: String = ""
     @State var proteinSupplements: String = ""
+
     // Vitamins (UI text values; storage is mg, conversion applied)
     @State var vitaminA: String = ""
     @State var vitaminB: String = ""
@@ -83,6 +84,7 @@ struct MealFormView: View {
     @State var vitaminD: String = ""
     @State var vitaminE: String = ""
     @State var vitaminK: String = ""
+
     // Minerals (UI text values; storage is mg, conversion applied)
     @State var calcium: String = ""
     @State var iron: String = ""
@@ -705,61 +707,6 @@ struct MealFormView: View {
         .onChange(of: fat) { _ in recomputeConsistencyAndBlinkIfFixed() }
     }
 
-    // iOS 16+ toolbar content
-    @available(iOS 16.0, *)
-    @ToolbarContentBuilder
-    func toolbarContent_iOS16(l: LocalizationManager) -> some ToolbarContent {
-        ToolbarItem(placement: .cancellationAction) {
-            Button(l.localized("cancel")) { dismiss() }
-        }
-        ToolbarItem(placement: .confirmationAction) {
-            Button(l.localized("save")) { save() }
-                .disabled(!(isValid || forceEnableSave))
-        }
-        ToolbarItem(placement: .topBarTrailing) {
-            Button(action: { showingSettings = true }) {
-                Image(systemName: "gearshape")
-            }
-            .accessibilityLabel(Text(l.localized("settings")))
-        }
-        ToolbarItem(placement: .bottomBar) {
-            Button(role: .destructive) {
-                showingDeleteConfirm = true
-            } label: {
-                Text(l.localized("delete"))
-            }
-            .opacity(isEditing ? 1 : 0)
-            .disabled(!isEditing)
-            .accessibilityHidden(!isEditing)
-        }
-    }
-
-    // iOS 15 toolbar content
-    @ToolbarContentBuilder
-    func toolbarContent_iOS15(l: LocalizationManager) -> some ToolbarContent {
-        ToolbarItem(placement: .navigationBarLeading) {
-            Button(l.localized("cancel")) { dismiss() }
-        }
-        ToolbarItemGroup(placement: .navigationBarTrailing) {
-            Button(l.localized("save")) { save() }
-                .disabled(!(isValid || forceEnableSave))
-            Button(action: { showingSettings = true }) {
-                Image(systemName: "gearshape")
-            }
-            .accessibilityLabel(Text(l.localized("settings")))
-        }
-        ToolbarItem(placement: .bottomBar) {
-            Button(role: .destructive) {
-                showingDeleteConfirm = true
-            } label: {
-                Text(l.localized("delete"))
-            }
-            .opacity(isEditing ? 1 : 0)
-            .disabled(!isEditing)
-            .accessibilityHidden(!isEditing)
-        }
-    }
-
     private func personActionSheetButtons() -> [ActionSheet.Button] {
         var buttons: [ActionSheet.Button] = []
         // Only allow selection in eligible conditions
@@ -850,15 +797,14 @@ private struct ToolbarShim: ViewModifier {
             }
             .accessibilityLabel(Text(l.localized("settings")))
         }
-        ToolbarItem(placement: .bottomBar) {
-            Button(role: .destructive) {
-                showingDeleteConfirm.wrappedValue = true
-            } label: {
-                Text(l.localized("delete"))
+        if isEditing {
+            ToolbarItem(placement: .bottomBar) {
+                Button(role: .destructive) {
+                    showingDeleteConfirm.wrappedValue = true
+                } label: {
+                    Text(l.localized("delete"))
+                }
             }
-            .opacity(isEditing ? 1 : 0)
-            .disabled(!isEditing)
-            .accessibilityHidden(!isEditing)
         }
     }
 
@@ -884,16 +830,16 @@ private struct ToolbarShim: ViewModifier {
             }
             .accessibilityLabel(Text(l.localized("settings")))
         }
+        // Always include the bottom bar item; hide/disable it when not editing to avoid buildIf on iOS 15.
         ToolbarItem(placement: .bottomBar) {
             Button(role: .destructive) {
                 showingDeleteConfirm.wrappedValue = true
             } label: {
                 Text(l.localized("delete"))
             }
-            .opacity(isEditing ? 1 : 0)
             .disabled(!isEditing)
+            .opacity(isEditing ? 1.0 : 0.0)
             .accessibilityHidden(!isEditing)
         }
     }
 }
-
