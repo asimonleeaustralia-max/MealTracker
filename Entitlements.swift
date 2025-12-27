@@ -16,7 +16,7 @@ enum AccessTier: String {
 struct Entitlements {
     // Limits
     static let freeMaxPhotosPerMeal: Int = 3
-    static let freeMaxMealsPerDay: Int = 5
+    static let freeMaxMealsPerDay: Int = 10
 
     // A practical "unlimited" cap to avoid special cases in UI (very high).
     static let paidMaxPhotosPerMeal: Int = 9999
