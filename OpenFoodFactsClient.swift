@@ -11,6 +11,72 @@ import Foundation
 
 struct OpenFoodFactsClient {
 
+    // MARK: - Lossy numeric decoding helpers
+
+    // Decode Double? from Double/Int/String (accepts "1.2", "1,2", trims, ignores non-numeric tails)
+    private static func decodeLossyDouble(from container: KeyedDecodingContainer<Nutriments.CodingKeys>, forKey key: Nutriments.CodingKeys) -> Double? {
+        // Try Double
+        if let v = try? container.decodeIfPresent(Double.self, forKey: key) {
+            return v
+        }
+        // Try Int
+        if let v = try? container.decodeIfPresent(Int.self, forKey: key) {
+            return Double(v)
+        }
+        // Try String -> Double
+        if let s = try? container.decodeIfPresent(String.self, forKey: key) {
+            return parseLooseDouble(s)
+        }
+        return nil
+    }
+
+    private static func decodeLossyDouble(from container: KeyedDecodingContainer<Product.CodingKeys>, forKey key: Product.CodingKeys) -> Double? {
+        if let v = try? container.decodeIfPresent(Double.self, forKey: key) {
+            return v
+        }
+        if let v = try? container.decodeIfPresent(Int.self, forKey: key) {
+            return Double(v)
+        }
+        if let s = try? container.decodeIfPresent(String.self, forKey: key) {
+            return parseLooseDouble(s)
+        }
+        return nil
+    }
+
+    // Very permissive numeric parser: handles "1,23", " 1.23 ", "1.23g", "trace", etc.
+    private static func parseLooseDouble(_ raw: String?) -> Double? {
+        guard var s = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return nil }
+        // Common textual tokens that mean "very small" -> treat as ~0
+        let lower = s.lowercased()
+        if lower == "trace" || lower == "<0.1" || lower == "< 0.1" { return 0.0 }
+        // Replace comma decimal with dot; keep digits, one dot, and optional leading minus
+        s = s.replacingOccurrences(of: ",", with: ".")
+        var result = ""
+        var seenDot = false
+        var seenDigit = false
+        for (i, ch) in s.enumerated() {
+            if ch.isNumber {
+                result.append(ch)
+                seenDigit = true
+            } else if ch == "." {
+                if !seenDot {
+                    seenDot = true
+                    result.append(ch)
+                } else {
+                    break
+                }
+            } else if ch == "-" && i == 0 {
+                result.append(ch)
+            } else if ch.isWhitespace {
+                if seenDigit { break }
+            } else {
+                if seenDigit { break }
+            }
+        }
+        if result == "" || result == "-" || result == "." || result == "-." { return nil }
+        return Double(result)
+    }
+
     struct Response: Decodable {
         let status: Int?
         let product: Product?
@@ -23,6 +89,29 @@ struct OpenFoodFactsClient {
         let serving_size: String?
         let serving_quantity: Double? // Often missing; not always reliable
         let nutriments: Nutriments?
+
+        enum CodingKeys: String, CodingKey {
+            case code, product_name, categories, serving_size, serving_quantity, nutriments
+        }
+
+        init(code: String?, product_name: String?, categories: String?, serving_size: String?, serving_quantity: Double?, nutriments: Nutriments?) {
+            self.code = code
+            self.product_name = product_name
+            self.categories = categories
+            self.serving_size = serving_size
+            self.serving_quantity = serving_quantity
+            self.nutriments = nutriments
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            self.code = try? c.decodeIfPresent(String.self, forKey: .code)
+            self.product_name = try? c.decodeIfPresent(String.self, forKey: .product_name)
+            self.categories = try? c.decodeIfPresent(String.self, forKey: .categories)
+            self.serving_size = try? c.decodeIfPresent(String.self, forKey: .serving_size)
+            self.serving_quantity = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .serving_quantity)
+            self.nutriments = try? c.decodeIfPresent(Nutriments.self, forKey: .nutriments)
+        }
     }
 
     // OFF nutriments keys are very wide; we only decode what we need.
@@ -64,7 +153,7 @@ struct OpenFoodFactsClient {
         let salt_serving: Double?
         let salt_100g: Double?
 
-        // Minerals (mg basis when possible; OFF sometimes uses different units)
+        // Minerals
         let calcium_serving: Double?
         let calcium_100g: Double?
         let iron_serving: Double?
@@ -76,7 +165,7 @@ struct OpenFoodFactsClient {
         let magnesium_serving: Double?
         let magnesium_100g: Double?
 
-        // Vitamins (mg base when possible; OFF may use µg — we’ll convert)
+        // Vitamins
         let vitamin_a_serving: Double?
         let vitamin_a_100g: Double?
         let vitamin_c_serving: Double?
@@ -88,7 +177,7 @@ struct OpenFoodFactsClient {
         let vitamin_k_serving: Double?
         let vitamin_k_100g: Double?
 
-        // Units for vitamins/minerals (rarely present; if present and micrograms, convert)
+        // Units
         let vitamin_a_unit: String?
         let vitamin_c_unit: String?
         let vitamin_d_unit: String?
@@ -99,6 +188,94 @@ struct OpenFoodFactsClient {
         let potassium_unit: String?
         let zinc_unit: String?
         let magnesium_unit: String?
+
+        enum CodingKeys: String, CodingKey {
+            case energy_kcal_serving, energy_kcal_100g, energy_serving, energy_100g, energy_unit
+            case carbohydrates_serving, carbohydrates_100g, proteins_serving, proteins_100g, fat_serving, fat_100g
+            case sugars_serving, sugars_100g, fiber_serving, fiber_100g
+            case saturated_fat_serving, saturated_fat_100g, trans_fat_serving, trans_fat_100g, monounsaturated_fat_serving, monounsaturated_fat_100g, polyunsaturated_fat_serving, polyunsaturated_fat_100g
+            case sodium_serving, sodium_100g, salt_serving, salt_100g
+            case calcium_serving, calcium_100g, iron_serving, iron_100g, potassium_serving, potassium_100g, zinc_serving, zinc_100g, magnesium_serving, magnesium_100g
+            case vitamin_a_serving, vitamin_a_100g, vitamin_c_serving, vitamin_c_100g, vitamin_d_serving, vitamin_d_100g, vitamin_e_serving, vitamin_e_100g, vitamin_k_serving, vitamin_k_100g
+            case vitamin_a_unit, vitamin_c_unit, vitamin_d_unit, vitamin_e_unit, vitamin_k_unit, calcium_unit, iron_unit, potassium_unit, zinc_unit, magnesium_unit
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+
+            // Energy
+            self.energy_kcal_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .energy_kcal_serving)
+            self.energy_kcal_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .energy_kcal_100g)
+            self.energy_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .energy_serving)
+            self.energy_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .energy_100g)
+            self.energy_unit = try? c.decodeIfPresent(String.self, forKey: .energy_unit)
+
+            // Macros
+            self.carbohydrates_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .carbohydrates_serving)
+            self.carbohydrates_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .carbohydrates_100g)
+            self.proteins_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .proteins_serving)
+            self.proteins_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .proteins_100g)
+            self.fat_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .fat_serving)
+            self.fat_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .fat_100g)
+
+            // Sub-macros
+            self.sugars_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .sugars_serving)
+            self.sugars_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .sugars_100g)
+            self.fiber_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .fiber_serving)
+            self.fiber_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .fiber_100g)
+
+            // Fats breakdown
+            self.saturated_fat_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .saturated_fat_serving)
+            self.saturated_fat_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .saturated_fat_100g)
+            self.trans_fat_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .trans_fat_serving)
+            self.trans_fat_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .trans_fat_100g)
+            self.monounsaturated_fat_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .monounsaturated_fat_serving)
+            self.monounsaturated_fat_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .monounsaturated_fat_100g)
+            self.polyunsaturated_fat_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .polyunsaturated_fat_serving)
+            self.polyunsaturated_fat_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .polyunsaturated_fat_100g)
+
+            // Sodium/salt
+            self.sodium_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .sodium_serving)
+            self.sodium_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .sodium_100g)
+            self.salt_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .salt_serving)
+            self.salt_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .salt_100g)
+
+            // Minerals
+            self.calcium_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .calcium_serving)
+            self.calcium_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .calcium_100g)
+            self.iron_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .iron_serving)
+            self.iron_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .iron_100g)
+            self.potassium_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .potassium_serving)
+            self.potassium_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .potassium_100g)
+            self.zinc_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .zinc_serving)
+            self.zinc_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .zinc_100g)
+            self.magnesium_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .magnesium_serving)
+            self.magnesium_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .magnesium_100g)
+
+            // Vitamins
+            self.vitamin_a_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .vitamin_a_serving)
+            self.vitamin_a_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .vitamin_a_100g)
+            self.vitamin_c_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .vitamin_c_serving)
+            self.vitamin_c_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .vitamin_c_100g)
+            self.vitamin_d_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .vitamin_d_serving)
+            self.vitamin_d_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .vitamin_d_100g)
+            self.vitamin_e_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .vitamin_e_serving)
+            self.vitamin_e_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .vitamin_e_100g)
+            self.vitamin_k_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .vitamin_k_serving)
+            self.vitamin_k_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .vitamin_k_100g)
+
+            // Units
+            self.vitamin_a_unit = try? c.decodeIfPresent(String.self, forKey: .vitamin_a_unit)
+            self.vitamin_c_unit = try? c.decodeIfPresent(String.self, forKey: .vitamin_c_unit)
+            self.vitamin_d_unit = try? c.decodeIfPresent(String.self, forKey: .vitamin_d_unit)
+            self.vitamin_e_unit = try? c.decodeIfPresent(String.self, forKey: .vitamin_e_unit)
+            self.vitamin_k_unit = try? c.decodeIfPresent(String.self, forKey: .vitamin_k_unit)
+            self.calcium_unit = try? c.decodeIfPresent(String.self, forKey: .calcium_unit)
+            self.iron_unit = try? c.decodeIfPresent(String.self, forKey: .iron_unit)
+            self.potassium_unit = try? c.decodeIfPresent(String.self, forKey: .potassium_unit)
+            self.zinc_unit = try? c.decodeIfPresent(String.self, forKey: .zinc_unit)
+            self.magnesium_unit = try? c.decodeIfPresent(String.self, forKey: .magnesium_unit)
+        }
     }
 
     enum OFFError: Error, LocalizedError {
@@ -286,3 +463,4 @@ struct OpenFoodFactsClient {
         return prefix.map { String(format: "%02x", $0) }.joined()
     }
 }
+
