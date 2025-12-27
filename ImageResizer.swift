@@ -20,26 +20,33 @@ struct ImageResizer {
     }
 
     // Resize to fit within maxLongEdge while preserving aspect ratio.
-    // Returns the resized UIImage and JPEG data at the given quality.
+    // IMPORTANT: Draw the original UIImage so its imageOrientation is applied,
+    // producing pixels that are normalized to .up (portrait stays portrait).
     static func resizeToLongEdge(_ maxLongEdge: CGFloat,
                                  image: UIImage,
                                  jpegQuality: CGFloat = 0.72) -> ResizeResult? {
-        guard let cgImage = image.cgImage ?? image.ciImage?.toCGImage() else {
-            return nil
-        }
+        // Compute oriented pixel size (UIImage.size is in points, already oriented)
+        let pixelScale = max(1.0, image.scale)
+        let orientedPixelSize = CGSize(width: image.size.width * pixelScale,
+                                       height: image.size.height * pixelScale)
 
-        let originalSize = CGSize(width: cgImage.width, height: cgImage.height)
-        let scale = min(1.0, maxLongEdge / max(originalSize.width, originalSize.height))
-        let targetSize = CGSize(width: floor(originalSize.width * scale),
-                                height: floor(originalSize.height * scale))
+        // Determine scale factor without upscaling
+        let longEdge = max(orientedPixelSize.width, orientedPixelSize.height)
+        let scale = min(1.0, maxLongEdge / longEdge)
+
+        let targetSize = CGSize(width: floor(orientedPixelSize.width * scale),
+                                height: floor(orientedPixelSize.height * scale))
 
         let rendererFormat = UIGraphicsImageRendererFormat.default()
-        rendererFormat.scale = 1 // we’re working in pixels
+        // Work in pixel units so width/height map 1:1 to encoded JPEG pixels
+        rendererFormat.scale = 1
         rendererFormat.opaque = true
 
         let renderer = UIGraphicsImageRenderer(size: targetSize, format: rendererFormat)
+
+        // Draw the original UIImage (not its cgImage) so UIKit applies orientation.
         let resized = renderer.image { _ in
-            UIImage(cgImage: cgImage).draw(in: CGRect(origin: .zero, size: targetSize))
+            image.draw(in: CGRect(origin: .zero, size: targetSize))
         }
 
         guard let data = resized.jpegData(compressionQuality: jpegQuality) else { return nil }
@@ -63,4 +70,3 @@ private extension CIImage {
         return context.createCGImage(self, from: extent)
     }
 }
-
