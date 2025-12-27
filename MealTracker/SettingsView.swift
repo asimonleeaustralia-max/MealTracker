@@ -18,7 +18,7 @@ struct SettingsView: View {
     @AppStorage("showSimulants") private var showSimulants: Bool = false
     @AppStorage("openToNewMealOnLaunch") private var openToNewMealOnLaunch: Bool = false
     @AppStorage("aiFeedbackSeverity") private var aiFeedbackSeverity: AIFeedbackSeverity = .balanced
-    // New: AI features master switch (default off)
+    // Keep storage but do not show any UI for it for now.
     @AppStorage("aiFeaturesEnabled") private var aiFeaturesEnabled: Bool = false
 
     @State private var syncedDateText: String = "—"
@@ -47,7 +47,7 @@ struct SettingsView: View {
     @State private var offError: String?
     @State private var offFreeBytes: Int64 = 0
 
-    // Meals seeder UI state
+    // Meals seeder UI state (kept for background logic, but no UI will reference it now)
     @State private var seederStatusText: String = "Idle"
     @State private var seederDownloaded: Int = 0
     @State private var seederTotal: Int = 0
@@ -70,9 +70,6 @@ struct SettingsView: View {
         UserDefaults.standard.integer(forKey: "MealsSeeding.completedCount")
     }
 
-    // Consider it "Completed" for display if:
-    // - current polled status is Completed, OR
-    // - durable completion marker is set AND the DB file exists
     private var isSeederCompletedForDisplay: Bool {
         if seederStatusText == "Completed" { return true }
         if durableCompleted && mealsDBExists { return true }
@@ -138,159 +135,7 @@ struct SettingsView: View {
                     Toggle(isOn: $showSimulants) { Text(l.localized("show_stimulants")) }
                 }
 
-                // AI features master toggle
-                Section {
-                    Toggle(isOn: $aiFeaturesEnabled) {
-                        Text("Enable AI features")
-                    }
-                }
-
-                // Meals DB download section
-                if aiFeaturesEnabled {
-                    Section {
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Text("Status")
-                                Spacer()
-                                Text(seederStatusText).foregroundStyle(.secondary)
-                            }
-
-                            // Completed line inline with size when available
-                            if isSeederCompletedForDisplay {
-                                let count = (seederStatusText == "Completed") ? seederTotal : durableCompletedCount
-                                HStack(spacing: 6) {
-                                    Text("Downloaded \(count) meals")
-                                    if mealsDBExists {
-                                        Text("—")
-                                            .foregroundStyle(.secondary)
-                                        Text(byteCountString(mealsDBSizeBytes))
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            }
-
-                            // Progress/counters while running/queued
-                            if isSeederRunningOrQueued {
-                                let totalText = seederTotal > 0 ? "\(seederTotal)" : "—"
-                                HStack {
-                                    Text("Downloaded: \(seederDownloaded) of \(totalText)")
-                                    Spacer()
-                                    if seederTotal > 0 {
-                                        let pct = Int((Double(seederDownloaded) / Double(seederTotal)) * 100.0)
-                                        Text("\(pct)%")
-                                    }
-                                }
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            }
-
-                            // Indeterminate while discovering totals
-                            if seederStatusText.hasPrefix("Running"), seederTotal == 0 {
-                                ProgressView()
-                                    .progressViewStyle(.circular)
-                                    .padding(.top, 4)
-                                if !seederPhase.isEmpty {
-                                    Text(seederPhase)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-
-                            // Determinate once totals are known
-                            if seederTotal > 0 && (seederDownloaded <= seederTotal) && isSeederRunningOrQueued {
-                                ProgressView(value: Double(seederDownloaded), total: Double(seederTotal))
-                                if !seederPhase.isEmpty {
-                                    Text(seederPhase)
-                                        .font(.footnote)
-                                        .foregroundStyle(.secondary)
-                                }
-                            } else if !seederPhase.isEmpty && !(seederStatusText.hasPrefix("Running") && seederTotal == 0) && isSeederRunningOrQueued {
-                                Text(seederPhase)
-                                    .font(.footnote)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            if let err = seederError {
-                                Text(err).font(.footnote).foregroundStyle(.red)
-                            }
-
-                            if networkMonitor.isConnected && (networkMonitor.isExpensive || !networkMonitor.isOnWiFi) {
-                                Text("You are not on Wi‑Fi. Bulk download will wait for Wi‑Fi and may use cellular if you proceed.")
-                                    .font(.footnote)
-                                    .foregroundStyle(.orange)
-                            }
-                        }
-
-                        HStack {
-                            // When completed/present, show "Remove downloaded meals"
-                            if (isSeederCompletedForDisplay || mealsDBExists) && !isSeederRunningOrQueued {
-                                Button(role: .destructive) {
-                                    showingMealsDeleteConfirm = true
-                                } label: {
-                                    Text("Remove downloaded meals")
-                                }
-                            } else if isSeederRunningOrQueued {
-                                Button(role: .destructive) {
-                                    Task { await MealsSeedingManager.shared.cancel() }
-                                } label: {
-                                    Text("Cancel")
-                                }
-                            } else {
-                                // Default: offer download
-                                Button {
-                                    if networkMonitor.isExpensive || !networkMonitor.isOnWiFi {
-                                        showingSeederConfirm = true
-                                    } else {
-                                        Task { await startSeeder() }
-                                    }
-                                } label: {
-                                    Text("Download Meals for AI")
-                                }
-                                .disabled(isSeederRunningOrQueued)
-                            }
-                        }
-
-                        // New: Pro upsell note for non-Pro users under the meals downloader
-                        if tier == .free {
-                            Text("Pro users get advanced machine vision and personalised feedback on their meals.")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .padding(.top, 4)
-                        }
-                    }
-                    .alert("Download Meals for AI?", isPresented: $showingSeederConfirm) {
-                        Button("Cancel", role: .cancel) { }
-                        Button("Start") {
-                            Task { await startSeeder() }
-                        }
-                    } message: {
-                        Text("This will download meals and drinks from public sources. It may be large and take time. The process will continue in the background.")
-                    }
-                    // Confirm removal of downloaded meals
-                    .alert("Remove downloaded meals?", isPresented: $showingMealsDeleteConfirm) {
-                        Button("Cancel", role: .cancel) { }
-                        Button("Remove", role: .destructive) {
-                            Task { await removeMealsDBAndReset() }
-                        }
-                    } message: {
-                        Text("This will delete the downloaded meals database from your device. You can download them again later.")
-                    }
-                    .onAppear {
-                        Task {
-                            await refreshSeederStatus()
-                            await refreshMealsDBInfo()
-                        }
-                    }
-                    .onReceive(timer) { _ in
-                        Task {
-                            await refreshSeederStatus()
-                            await refreshMealsDBInfo()
-                        }
-                    }
-                }
+                // Note: AI features toggle and Meals download section intentionally hidden for now.
 
                 // Account & Plan
                 Section(header: Text(LocalizedStringKey("account_plan_section_title"))) {
