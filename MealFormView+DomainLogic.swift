@@ -584,6 +584,7 @@ extension MealFormView {
     // MARK: - Saving
 
     func save() {
+        // unchanged...
         if meal == nil {
             let tier = Entitlements.tier(for: session)
             let maxPerDay = Entitlements.maxMealsPerDay(for: tier)
@@ -1145,12 +1146,43 @@ extension MealFormView {
 // MARK: - Private OCR-only helpers used by analyzePhoto()
 
 private func recognizeTextForWizard(in image: UIImage, languageCode: String?) async -> String? {
-    // Use the same dual-pass OCR as PhotoNutritionGuesser but via its file,
-    // by exposing a thin wrapper for our use here. We cannot access its private
-    // methods directly, so we re-call through the public interface by copying logic.
-    // Since recognizeTextDualPass is internal to PhotoNutritionGuesser, we reuse
-    // it by calling the same method names exposed via a small extension below.
-    await PhotoNutritionGuesserWizardBridge.recognizeTextDualPass(in: image, languageCode: languageCode)
+    // Use a higher-res, preprocessed image specifically for OCR in the wizard path.
+    let ocrImage = wizardOCRReadyImage(from: image, maxLongEdge: 2048)
+    return await PhotoNutritionGuesserWizardBridge.recognizeTextDualPass(in: ocrImage, languageCode: languageCode)
+}
+
+private func wizardOCRReadyImage(from source: UIImage, maxLongEdge: CGFloat) -> UIImage {
+    func downscale(_ image: UIImage, to maxLong: CGFloat) -> UIImage {
+        let size = image.size
+        let longEdge = max(size.width, size.height)
+        guard longEdge > maxLong else { return image }
+        let scale = maxLong / longEdge
+        let target = CGSize(width: floor(size.width * scale), height: floor(size.height * scale))
+        let renderer = UIGraphicsImageRenderer(size: target)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: target))
+        }
+    }
+
+    func preprocess(_ image: UIImage) -> UIImage? {
+        guard let cg = image.cgImage else { return nil }
+        let ci = CIImage(cgImage: cg)
+        let contrasted = ci.applyingFilter("CIColorControls", parameters: [
+            kCIInputSaturationKey: 0.0,
+            kCIInputContrastKey: 1.25,
+            kCIInputBrightnessKey: 0.0
+        ])
+        let sharpened = contrasted.applyingFilter("CIUnsharpMask", parameters: [
+            kCIInputRadiusKey: 1.2,
+            kCIInputIntensityKey: 0.6
+        ])
+        let context = CIContext(options: nil)
+        guard let outCG = context.createCGImage(sharpened, from: sharpened.extent) else { return nil }
+        return UIImage(cgImage: outCG, scale: image.scale, orientation: image.imageOrientation)
+    }
+
+    let hiRes = downscale(source, to: maxLongEdge)
+    return preprocess(hiRes) ?? hiRes
 }
 
 private extension PhotoNutritionGuesser {
@@ -1167,12 +1199,14 @@ private struct PhotoNutritionGuesserWizardBridge {
     static func recognizeTextDualPass(in image: UIImage, languageCode: String?) async -> String? {
         await withCheckedContinuation { continuation in
             Task {
-                // Call the same logic by leveraging public methods:
-                // there isn't a public OCR-only API, but recognizeTextDualPass is internal.
-                // We replicate its behavior by calling the two public-level recognizeText methods via this bridge.
-                // Since they are private in the original file, we fallback to an equivalent:
-                if let tFast = await _recognizeText(in: image, languageCode: languageCode, level: .fast), tFast.count > 20 {
-                    continuation.resume(returning: tFast)
+                // Run .fast and .accurate, prefer the longer output.
+                if let tFast = await _recognizeText(in: image, languageCode: languageCode, level: .fast), tFast.count > 10 {
+                    let tAcc = await _recognizeText(in: image, languageCode: languageCode, level: .accurate)
+                    if let tAcc, tAcc.count > tFast.count {
+                        continuation.resume(returning: tAcc)
+                    } else {
+                        continuation.resume(returning: tFast)
+                    }
                     return
                 }
                 let tAcc = await _recognizeText(in: image, languageCode: languageCode, level: .accurate)
@@ -1182,10 +1216,6 @@ private struct PhotoNutritionGuesserWizardBridge {
     }
 
     private static func _recognizeText(in image: UIImage, languageCode: String?, level: VNRequestTextRecognitionLevel) async -> String? {
-        // Reuse the internal method via duplication is not possible here; instead,
-        // we can route through PhotoNutritionGuesser by adding a small public wrapper if desired.
-        // For now, we call the same Vision APIs inline to keep this bridge self-contained.
-
         guard let cgImage = image.cgImage else { return nil }
 
         return await withCheckedContinuation { continuation in
@@ -1208,9 +1238,8 @@ private struct PhotoNutritionGuesserWizardBridge {
             request.recognitionLevel = level
             request.usesLanguageCorrection = true
 
-            // Build languages like PhotoNutritionGuesser does
-            let languages = PhotoNutritionGuesserWizardBridge._recognitionLanguagesFor(level: level, preferredCode: languageCode)
-            request.recognitionLanguages = languages
+            // Match PhotoNutritionGuesser’s language bias: for accurate pass without preferred code, narrow to English.
+            request.recognitionLanguages = _recognitionLanguagesFor(level: level, preferredCode: languageCode)
 
             let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
             DispatchQueue.global(qos: .userInitiated).async {
@@ -1229,6 +1258,10 @@ private struct PhotoNutritionGuesserWizardBridge {
             c = c.replacingOccurrences(of: "_", with: "-")
             return c
         }()
+
+        if normalizedPreferred == nil && level == .accurate {
+            return ["en", "en-US"]
+        }
 
         let supported: [String] = {
             let revision: Int

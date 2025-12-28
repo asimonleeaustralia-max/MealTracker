@@ -80,11 +80,12 @@ struct PhotoNutritionGuesser {
         }
 
         // 2) OCR nutrition parsing (dual-pass) on each rotation, pick the best parse
-        // Packaged item / label text: keep as-is (may imply multiple servings)
+        // Use a higher-res, preprocessed image for OCR only.
         var bestParsed: GuessResult?
         var bestParsedScore = -1
         for img in variants {
-            if let text = await recognizeTextDualPass(in: img, languageCode: languageCode) {
+            let ocrImg = ocrReadyImage(from: img, maxLongEdge: 2048)
+            if let text = await recognizeTextDualPass(in: ocrImg, languageCode: languageCode) {
                 if debugOCR {
                     print("OCR text (rotation variant):\n\(text)\n--- end OCR ---")
                 }
@@ -149,6 +150,37 @@ struct PhotoNutritionGuesser {
         return renderer.image { _ in
             image.draw(in: CGRect(origin: .zero, size: target))
         }
+    }
+
+    // Create a higher-res, preprocessed image tailored for OCR
+    private static func ocrReadyImage(from source: UIImage, maxLongEdge: CGFloat) -> UIImage {
+        let hiRes = downscaleIfNeeded(source, maxLongEdge: maxLongEdge)
+        return ocrPreprocess(hiRes) ?? hiRes
+    }
+
+    // Simple OCR preprocessing: grayscale + contrast boost + mild unsharp mask
+    private static func ocrPreprocess(_ image: UIImage) -> UIImage? {
+        guard let cg = image.cgImage else { return nil }
+        let ci = CIImage(cgImage: cg)
+
+        // 1) Desaturate and increase contrast slightly
+        let contrasted = ci
+            .applyingFilter("CIColorControls", parameters: [
+                kCIInputSaturationKey: 0.0,     // grayscale
+                kCIInputContrastKey: 1.25,      // mild boost
+                kCIInputBrightnessKey: 0.0
+            ])
+
+        // 2) Mild unsharp mask to crispen soft glyphs
+        let sharpened = contrasted
+            .applyingFilter("CIUnsharpMask", parameters: [
+                kCIInputRadiusKey: 1.2,
+                kCIInputIntensityKey: 0.6
+            ])
+
+        let context = CIContext(options: nil)
+        guard let outCG = context.createCGImage(sharpened, from: sharpened.extent) else { return nil }
+        return UIImage(cgImage: outCG, scale: image.scale, orientation: image.imageOrientation)
     }
 
     // Create 0°, 90°, 180°, 270° rotation variants
@@ -271,9 +303,18 @@ struct PhotoNutritionGuesser {
 
     // Try .fast first; if the text is empty/too short, try .accurate
     private static func recognizeTextDualPass(in image: UIImage, languageCode: String?) async -> String? {
-        if let tFast = await recognizeText(in: image, languageCode: languageCode, level: .fast), tFast.count > 20 {
-            return tFast
+        // Run .fast; if we get a small amount of text, still run .accurate and prefer the longer output.
+        async let tFastOpt = recognizeText(in: image, languageCode: languageCode, level: .fast)
+        let tFast = await tFastOpt
+
+        // Threshold reduced: anything <= 10 chars is likely noise on small labels.
+        if let tf = tFast, tf.count > 10 {
+            // Still try accurate; pick the longer result
+            let tAcc = await recognizeText(in: image, languageCode: languageCode, level: .accurate)
+            if let tAcc, tAcc.count > tf.count { return tAcc }
+            return tf
         }
+        // Fallback to accurate only
         return await recognizeText(in: image, languageCode: languageCode, level: .accurate)
     }
 
@@ -300,7 +341,7 @@ struct PhotoNutritionGuesser {
             request.recognitionLevel = level
             request.usesLanguageCorrection = true
 
-            // Accept all supported languages for the given level/revision, optionally biasing with provided code.
+            // Accept supported languages, but bias/narrow for .accurate when no preferred code is provided.
             request.recognitionLanguages = recognitionLanguagesFor(level: level, preferredCode: languageCode)
 
             let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
@@ -316,12 +357,17 @@ struct PhotoNutritionGuesser {
 
     // Build a comprehensive language list for Vision OCR, including non-Latin scripts,
     // and bias it by placing the preferred code first when available.
+    // Additionally: if no preferred code and level == .accurate, narrow to English for Western labels.
     private static func recognitionLanguagesFor(level: VNRequestTextRecognitionLevel, preferredCode: String?) -> [String] {
         let normalizedPreferred = normalizedLanguageCode(preferredCode)
 
-        // Query supported languages for the current revision and requested level.
+        // If no preferred code and we're running the accurate pass, strongly bias to English.
+        if normalizedPreferred == nil && level == .accurate {
+            return ["en", "en-US"]
+        }
+
+        // Otherwise, query supported languages and bias if preferred provided.
         let supported: [String] = {
-            // Always call the revision-based API; choose a revision based on availability.
             let revision: Int
             if #available(iOS 15.0, *) {
                 revision = VNRecognizeTextRequest.currentRevision
@@ -639,7 +685,7 @@ struct PhotoNutritionGuesser {
             "насыщенные жирные кислоты","в т.ч. насыщенные",
             "دهون مشبعة",
             "שומן רווי",
-            "संतृप्त वसा","স্যাচুরेटেড ফ্যাট",
+            "संतृप्त वसा","স্যাচুরেটেড ফ্যাট",
             "ไขมันอิ่มตัว",
             "chất béo bão hòa",
             "lemak jenuh",
@@ -743,7 +789,7 @@ struct PhotoNutritionGuesser {
         let ironKeys = ["iron","fe","железо","залізо","铁","鐵","鉄","철","حديد","ברזל","लोहा","আয়রন"]
         let potassiumKeys = ["potassium","kalium","k","калий","калій","钾","鉀","カリウム","칼륨","بوتاسيوم","אשלגן","पोटैशियम","পটাশিয়াম"]
         let zincKeys = ["zinc","zn","цинк","цинк (zn)","锌","鋅","亜鉛","아연","زنك","אבץ","जिंक","দস্তা"]
-        let magnesiumKeys = ["magnesium","mg","магний","магній","镁","鎂","マグネシウム","마그네슘","مगनيسيوم","מגנזיום","मैग्नीशियम","ম্যাগনেসিয়াম"]
+        let magnesiumKeys = ["magnesium","mg","магний","магній","镁","鎂","マグネシウム","마グネシウム","مगनيسيوم","מגנזיום","मैग्नीशियम","ম্যাগনেসিয়াম"]
 
         // Sodium and salt
         let sodiumKeys = ["sodium","na","sodio","natrium","ナトリウム","나트륨","钠","鈉","натрий","натрій","صوديوم","נתרן","सोडियम","সোডিয়াম","natrium (na)"]
@@ -760,7 +806,7 @@ struct PhotoNutritionGuesser {
             "energia","kalorien","kilokalorien","kcal",
             "energia","kcal","kalorii",
             "energia","kcal","калории","ккал",
-            "طاقة","كيلوكالوري","سعرات","سعرات حرارية","كيلو كالوري","كيلो-كالوري","kcal",
+            "طاقة","كيلوكالوري","सعرات","سعرات حرارية","كيلो كالوري","كيلो-كالوري","kcal",
             "אנרגיה","קק\"ל","קק״ל","kcal",
             "ऊर्जा","किलो कैलोरी","किलो-कैलोरी","kcal",
             "শক্তি","কিলোক্যালোরি","kcal",
@@ -1331,3 +1377,4 @@ private enum LocalizedUnits {
         words.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
     }
 }
+
