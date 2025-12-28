@@ -590,7 +590,7 @@ extension MealFormView {
             if maxPerDay < 9000 {
                 let todaysCount = Entitlements.mealsRecordedToday(in: context)
                 if todaysCount >= maxPerDay {
-                    limitErrorMessage = "Free tier allows up to \(maxPerDay) meals per day."
+                    limitErrorMessage = "Your daily limit is \(maxPerDay) saved meals."
                     showingLimitAlert = true
                     return
                 }
@@ -1262,3 +1262,4 @@ private struct PhotoNutritionGuesserWizardBridge {
         return languages
     }
 }
+
