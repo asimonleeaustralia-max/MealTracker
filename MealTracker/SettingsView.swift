@@ -137,7 +137,8 @@ struct SettingsView: View {
 
                 // Note: AI features toggle and Meals download section intentionally hidden for now.
 
-                // Account & Plan
+                // Account & Plan (hidden for now; re-enable when FUTURE_VERSION is defined)
+                #if FUTURE_VERSION
                 Section(header: Text(LocalizedStringKey("account_plan_section_title"))) {
                     HStack {
                         Text(LocalizedStringKey("access_tier"))
@@ -203,6 +204,7 @@ struct SettingsView: View {
                         }
                     }
                 }
+                #endif
 
                 // About
                 Section {
