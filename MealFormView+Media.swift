@@ -214,7 +214,7 @@ extension MealFormView {
             }
         } catch PhotoServiceError.freeTierPhotoLimitReached(let max) {
             await MainActor.run {
-                limitErrorMessage = "Free tier allows up to \(max) photos per meal."
+                limitErrorMessage = "The maximum limit is \(max) photos per meal."
                 showingLimitAlert = true
             }
         } catch {
