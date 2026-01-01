@@ -219,6 +219,11 @@ struct OpenFoodFactsClient {
             return max(0, Int((d).rounded()))
         }
 
+        func toDoubleNonNegative(_ d: Double?) -> Double? {
+            guard let d else { return nil }
+            return max(0.0, d)
+        }
+
         // Energy kcal
         let kcal: Int? = {
             if let v = nutr.energy_kcal_serving ?? nutr.energy_kcal_100g {
@@ -237,23 +242,23 @@ struct OpenFoodFactsClient {
             return nil
         }()
 
-        // Macros in grams
-        let carbs = toIntNonNegative(nutr.carbohydrates_serving ?? nutr.carbohydrates_100g)
+        // Macros in grams (preserve decimals)
+        let carbs = toDoubleNonNegative(nutr.carbohydrates_serving ?? nutr.carbohydrates_100g)
         #if DEBUG
-        if let s = nutr.carbohydrates_serving { steps.append("carbohydrates: \(s) g (serving) -> \(Int(s.rounded())) g") }
-        else if let h = nutr.carbohydrates_100g { steps.append("carbohydrates: \(h) g (100g) -> \(Int(h.rounded())) g") }
+        if let s = nutr.carbohydrates_serving { steps.append("carbohydrates: \(s) g (serving) -> \(s) g") }
+        else if let h = nutr.carbohydrates_100g { steps.append("carbohydrates: \(h) g (100g) -> \(h) g") }
         #endif
 
-        let protein = toIntNonNegative(nutr.proteins_serving ?? nutr.proteins_100g)
+        let protein = toDoubleNonNegative(nutr.proteins_serving ?? nutr.proteins_100g)
         #if DEBUG
-        if let s = nutr.proteins_serving { steps.append("protein: \(s) g (serving) -> \(Int(s.rounded())) g") }
-        else if let h = nutr.proteins_100g { steps.append("protein: \(h) g (100g) -> \(Int(h.rounded())) g") }
+        if let s = nutr.proteins_serving { steps.append("protein: \(s) g (serving) -> \(s) g") }
+        else if let h = nutr.proteins_100g { steps.append("protein: \(h) g (100g) -> \(h) g") }
         #endif
 
-        let fat = toIntNonNegative(nutr.fat_serving ?? nutr.fat_100g)
+        let fat = toDoubleNonNegative(nutr.fat_serving ?? nutr.fat_100g)
         #if DEBUG
-        if let s = nutr.fat_serving { steps.append("fat: \(s) g (serving) -> \(Int(s.rounded())) g") }
-        else if let h = nutr.fat_100g { steps.append("fat: \(h) g (100g) -> \(Int(h.rounded())) g") }
+        if let s = nutr.fat_serving { steps.append("fat: \(s) g (serving) -> \(s) g") }
+        else if let h = nutr.fat_100g { steps.append("fat: \(h) g (100g) -> \(h) g") }
         #endif
 
         // Sodium mg
@@ -274,36 +279,36 @@ struct OpenFoodFactsClient {
         }()
 
         // Sub-macros
-        let sugars = toIntNonNegative(nutr.sugars_serving ?? nutr.sugars_100g)
+        let sugars = toDoubleNonNegative(nutr.sugars_serving ?? nutr.sugars_100g)
         #if DEBUG
-        if let s = nutr.sugars_serving { steps.append("sugars: \(s) g (serving) -> \(Int(s.rounded())) g") }
-        else if let h = nutr.sugars_100g { steps.append("sugars: \(h) g (100g) -> \(Int(h.rounded())) g") }
+        if let s = nutr.sugars_serving { steps.append("sugars: \(s) g (serving) -> \(s) g") }
+        else if let h = nutr.sugars_100g { steps.append("sugars: \(h) g (100g) -> \(h) g") }
         #endif
 
-        let fibre = toIntNonNegative(nutr.fiber_serving ?? nutr.fiber_100g)
+        let fibre = toDoubleNonNegative(nutr.fiber_serving ?? nutr.fiber_100g)
         #if DEBUG
-        if let s = nutr.fiber_serving { steps.append("fibre: \(s) g (serving) -> \(Int(s.rounded())) g") }
-        else if let h = nutr.fiber_100g { steps.append("fibre: \(h) g (100g) -> \(Int(h.rounded())) g") }
+        if let s = nutr.fiber_serving { steps.append("fibre: \(s) g (serving) -> \(s) g") }
+        else if let h = nutr.fiber_100g { steps.append("fibre: \(h) g (100g) -> \(h) g") }
         #endif
 
-        let starch: Int? = nil
+        let starch: Double? = nil
 
-        // Fat breakdown
-        let monounsaturatedFat = toIntNonNegative(nutr.monounsaturated_fat_serving ?? nutr.monounsaturated_fat_100g)
-        let polyunsaturatedFat = toIntNonNegative(nutr.polyunsaturated_fat_serving ?? nutr.polyunsaturated_fat_100g)
-        let saturatedFat = toIntNonNegative(nutr.saturated_fat_serving ?? nutr.saturated_fat_100g)
-        let transFat = toIntNonNegative(nutr.trans_fat_serving ?? nutr.trans_fat_100g)
+        // Fat breakdown (grams)
+        let monounsaturatedFat = toDoubleNonNegative(nutr.monounsaturated_fat_serving ?? nutr.monounsaturated_fat_100g)
+        let polyunsaturatedFat = toDoubleNonNegative(nutr.polyunsaturated_fat_serving ?? nutr.polyunsaturated_fat_100g)
+        let saturatedFat = toDoubleNonNegative(nutr.saturated_fat_serving ?? nutr.saturated_fat_100g)
+        let transFat = toDoubleNonNegative(nutr.trans_fat_serving ?? nutr.trans_fat_100g)
         #if DEBUG
-        if let v = nutr.monounsaturated_fat_serving ?? nutr.monounsaturated_fat_100g { steps.append("mono: \(v) g -> \(Int(v.rounded())) g") }
-        if let v = nutr.polyunsaturated_fat_serving ?? nutr.polyunsaturated_fat_100g { steps.append("poly: \(v) g -> \(Int(v.rounded())) g") }
-        if let v = nutr.saturated_fat_serving ?? nutr.saturated_fat_100g { steps.append("saturated: \(v) g -> \(Int(v.rounded())) g") }
-        if let v = nutr.trans_fat_serving ?? nutr.trans_fat_100g { steps.append("trans: \(v) g -> \(Int(v.rounded())) g") }
+        if let v = nutr.monounsaturated_fat_serving ?? nutr.monounsaturated_fat_100g { steps.append("mono: \(v) g -> \(v) g") }
+        if let v = nutr.polyunsaturated_fat_serving ?? nutr.polyunsaturated_fat_100g { steps.append("poly: \(v) g -> \(v) g") }
+        if let v = nutr.saturated_fat_serving ?? nutr.saturated_fat_100g { steps.append("saturated: \(v) g -> \(v) g") }
+        if let v = nutr.trans_fat_serving ?? nutr.trans_fat_100g { steps.append("trans: \(v) g -> \(v) g") }
         #endif
 
         // Protein breakdown not provided by OFF
-        let animalProtein: Int? = nil
-        let plantProtein: Int? = nil
-        let proteinSupplements: Int? = nil
+        let animalProtein: Double? = nil
+        let plantProtein: Double? = nil
+        let proteinSupplements: Double? = nil
 
         func toMg(_ value: Double?, unit: String?, label: String) -> Int? {
             guard let value else { return nil }
@@ -391,3 +396,4 @@ struct OpenFoodFactsClient {
         return entry
     }
 }
+

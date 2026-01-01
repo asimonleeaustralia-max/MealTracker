@@ -37,6 +37,19 @@ actor DuckDBManager {
         if connection != nil { return }
 
         let dbURL = try databaseURL()
+
+        // If an existing DB is present but on an old schema, delete it (development-friendly migration)
+        if FileManager.default.fileExists(atPath: dbURL.path) {
+            // Open temporarily to inspect schema
+            let tmpDB = try Database(path: dbURL.path)
+            let tmpConn = try tmpDB.connect()
+            let needsRecreate = try needsSchemaRecreate(conn: tmpConn)
+            if needsRecreate {
+                // Close temp handles by letting them deinit out of scope and remove file
+                try? FileManager.default.removeItem(at: dbURL)
+            }
+        }
+
         // If no file at destination and a bundled DB exists, copy it first
         if !FileManager.default.fileExists(atPath: dbURL.path) {
             if let bundled = Bundle.main.url(forResource: "Barcodes", withExtension: "duckdb") {
@@ -89,6 +102,37 @@ actor DuckDBManager {
         self.connection = conn
     }
 
+    // Detect if existing schema uses INTEGER for grams-based columns; if so, trigger recreate
+    private func needsSchemaRecreate(conn: Connection) throws -> Bool {
+        // Inspect barcodes table columns; if missing or any grams column is INTEGER, we need to recreate.
+        let pragma = try conn.query("PRAGMA table_info('barcodes');")
+        var hasTable = false
+        var typeByName: [String: String] = [:]
+        while pragma.next() {
+            hasTable = true
+            let name = (pragma.get("name") as String?)?.lowercased() ?? ""
+            let type = (pragma.get("type") as String?)?.uppercased() ?? ""
+            if !name.isEmpty {
+                typeByName[name] = type
+            }
+        }
+        guard hasTable else { return false } // no table yet, no need to recreate
+
+        // Columns that should be DOUBLE (grams)
+        let gramsCols: [String] = [
+            "carbohydrates","protein","fat",
+            "sugars","starch","fibre",
+            "monounsaturatedfat","polyunsaturatedfat","saturatedfat","transfat",
+            "animalprotein","plantprotein","proteinsupplements"
+        ]
+        for col in gramsCols {
+            if let t = typeByName[col], t.contains("INT") {
+                return true
+            }
+        }
+        return false
+    }
+
     // Create table and index if not present, mirroring LocalBarcodeDB.Entry
     private func initializeSchemaIfNeeded() throws {
         try withConnection { conn in
@@ -96,20 +140,20 @@ actor DuckDBManager {
             CREATE TABLE IF NOT EXISTS barcodes (
                 code TEXT PRIMARY KEY,
                 calories INTEGER,
-                carbohydrates INTEGER,
-                protein INTEGER,
-                fat INTEGER,
+                carbohydrates DOUBLE,
+                protein DOUBLE,
+                fat DOUBLE,
                 sodiumMg INTEGER,
-                sugars INTEGER,
-                starch INTEGER,
-                fibre INTEGER,
-                monounsaturatedFat INTEGER,
-                polyunsaturatedFat INTEGER,
-                saturatedFat INTEGER,
-                transFat INTEGER,
-                animalProtein INTEGER,
-                plantProtein INTEGER,
-                proteinSupplements INTEGER,
+                sugars DOUBLE,
+                starch DOUBLE,
+                fibre DOUBLE,
+                monounsaturatedFat DOUBLE,
+                polyunsaturatedFat DOUBLE,
+                saturatedFat DOUBLE,
+                transFat DOUBLE,
+                animalProtein DOUBLE,
+                plantProtein DOUBLE,
+                proteinSupplements DOUBLE,
                 vitaminA INTEGER,
                 vitaminB INTEGER,
                 vitaminC INTEGER,
@@ -147,3 +191,4 @@ actor DuckDBManager {
 }
 
 #endif
+

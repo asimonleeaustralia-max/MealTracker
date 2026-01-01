@@ -41,6 +41,7 @@ actor BarcodeRepository {
                 guard rs.next() else { return nil }
 
                 func intOrNil(_ name: String) -> Int? { rs.get(name) as Int? }
+                func doubleOrNil(_ name: String) -> Double? { rs.get(name) as Double? }
                 func stringOrNil(_ name: String) -> String? { rs.get(name) as String? }
 
                 let codeVal = stringOrNil("code") ?? code
@@ -48,20 +49,20 @@ actor BarcodeRepository {
                 return LocalBarcodeDB.Entry(
                     code: codeVal,
                     calories: intOrNil("calories"),
-                    carbohydrates: intOrNil("carbohydrates"),
-                    protein: intOrNil("protein"),
-                    fat: intOrNil("fat"),
+                    carbohydrates: doubleOrNil("carbohydrates"),
+                    protein: doubleOrNil("protein"),
+                    fat: doubleOrNil("fat"),
                     sodiumMg: intOrNil("sodiumMg"),
-                    sugars: intOrNil("sugars"),
-                    starch: intOrNil("starch"),
-                    fibre: intOrNil("fibre"),
-                    monounsaturatedFat: intOrNil("monounsaturatedFat"),
-                    polyunsaturatedFat: intOrNil("polyunsaturatedFat"),
-                    saturatedFat: intOrNil("saturatedFat"),
-                    transFat: intOrNil("transFat"),
-                    animalProtein: intOrNil("animalProtein"),
-                    plantProtein: intOrNil("plantProtein"),
-                    proteinSupplements: intOrNil("proteinSupplements"),
+                    sugars: doubleOrNil("sugars"),
+                    starch: doubleOrNil("starch"),
+                    fibre: doubleOrNil("fibre"),
+                    monounsaturatedFat: doubleOrNil("monounsaturatedFat"),
+                    polyunsaturatedFat: doubleOrNil("polyunsaturatedFat"),
+                    saturatedFat: doubleOrNil("saturatedFat"),
+                    transFat: doubleOrNil("transFat"),
+                    animalProtein: doubleOrNil("animalProtein"),
+                    plantProtein: doubleOrNil("plantProtein"),
+                    proteinSupplements: doubleOrNil("proteinSupplements"),
                     vitaminA: intOrNil("vitaminA"),
                     vitaminB: intOrNil("vitaminB"),
                     vitaminC: intOrNil("vitaminC"),
@@ -262,9 +263,9 @@ actor BarcodeRepository {
                                       context: NSManagedObjectContext,
                                       sodiumUnit: SodiumUnit,
                                       vitaminsUnit: VitaminsUnit) {
-        func fillDoubleIfZero(_ current: Double, with v: Int?) -> Double {
+        func fillDoubleIfZero(_ current: Double, with v: Double?) -> Double {
             guard current <= 0, let v else { return current }
-            return Double(max(0, v))
+            return max(0.0, v)
         }
 
         if meal.calories <= 0, let kcal = entry.calories {
@@ -357,3 +358,4 @@ actor BarcodeRepository {
         try? context.save()
     }
 }
+

@@ -274,6 +274,13 @@ extension MealFormView {
         markGuess = true
     }
 
+    // Overload for Double? (grams), preserving decimals with cleanString
+    func applyIfEmpty(_ source: inout String, with value: Double?, markGuess: inout Bool) {
+        guard let v = value, source.isEmpty else { return }
+        source = max(0.0, v).cleanString
+        markGuess = true
+    }
+
     // Wrap analyzePhoto() to manage snapshot and undo state
     func analyzePhotoWithSnapshot() async {
         // If undo is active, ignore to avoid stacking
@@ -1295,4 +1302,3 @@ private struct PhotoNutritionGuesserWizardBridge {
         return languages
     }
 }
-

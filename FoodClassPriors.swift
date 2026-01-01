@@ -120,15 +120,15 @@ struct FoodClassPriors {
         let proteinKcal = Double(kcal) * p.protein
         let fatKcal = Double(kcal) * p.fat
 
-        let carbG = Int((carbKcal / 4.0).rounded())
-        let proteinG = Int((proteinKcal / 4.0).rounded())
-        let fatG = Int((fatKcal / 9.0).rounded())
+        let carbG = (carbKcal / 4.0).rounded()
+        let proteinG = (proteinKcal / 4.0).rounded()
+        let fatG = (fatKcal / 9.0).rounded()
 
         var g = PhotoNutritionGuesser.GuessResult()
         g.calories = max(0, kcal)
-        g.carbohydrates = max(0, carbG)
-        g.protein = max(0, proteinG)
-        g.fat = max(0, fatG)
+        g.carbohydrates = max(0.0, carbG)
+        g.protein = max(0.0, proteinG)
+        g.fat = max(0.0, fatG)
         return g
     }
 }

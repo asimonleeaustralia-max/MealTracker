@@ -15,25 +15,25 @@ import CoreImage
 struct PhotoNutritionGuesser {
 
     struct GuessResult {
-        // All fields optional; values are Ints in UI units (kcal, grams, mg)
+        // Units: kcal (Int), grams (Double), mg (Int)
         var calories: Int?
-        var carbohydrates: Int?
-        var protein: Int?
-        var fat: Int?
+        var carbohydrates: Double?
+        var protein: Double?
+        var fat: Double?
         var sodiumMg: Int?
 
-        var sugars: Int?
-        var starch: Int?
-        var fibre: Int?
+        var sugars: Double?
+        var starch: Double?
+        var fibre: Double?
 
-        var monounsaturatedFat: Int?
-        var polyunsaturatedFat: Int?
-        var saturatedFat: Int?
-        var transFat: Int?
+        var monounsaturatedFat: Double?
+        var polyunsaturatedFat: Double?
+        var saturatedFat: Double?
+        var transFat: Double?
 
-        var animalProtein: Int?
-        var plantProtein: Int?
-        var proteinSupplements: Int?
+        var animalProtein: Double?
+        var plantProtein: Double?
+        var proteinSupplements: Double?
 
         var vitaminA: Int?
         var vitaminB: Int?
@@ -455,9 +455,19 @@ struct PhotoNutritionGuesser {
             return nil
         }
 
+        // For grams: convert OCR numeric to Double (preserve decimals if present)
+        func toDouble(_ s: String?) -> Double? {
+            guard var str = s?.trimmingCharacters(in: .whitespacesAndNewlines), !str.isEmpty else { return nil }
+            str = str.replacingOccurrences(of: ",", with: ".")
+            if let v = Double(str) { return v }
+            let allowed = Set("0123456789.")
+            let filtered = String(str.filter { allowed.contains($0) })
+            return Double(filtered)
+        }
+
         // Boundary pattern: start or separator before; separator or end after
         let BSTART = "(?:(?<=^)|(?<=[\\s:：•·\\-\\(\\)\\[\\]，。、，、|/]))"
-        let BEND = "(?:(?=$)|(?=[\\s:：•·\\-\\(\\)\\[\\]，。、 、|/]))"
+        let BEND = "(?:(?=$)|(?=[\\s:：•·\\-\\(\\)\\[\\] ，。、、|/]))"
 
         // Localized unit fragments
         let grams = LocalizedUnits.gramsPattern
@@ -471,11 +481,11 @@ struct PhotoNutritionGuesser {
             words.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
         }
 
-        func parseGramValue(_ line: String, keywords: [String]) -> Int? {
+        func parseGramValue(_ line: String, keywords: [String]) -> Double? {
             let joined = alternation(keywords)
             let pattern = "\(BSTART)(?:\(joined))\(BEND)[^\\n\\r\\d]{0,20}([0-9]+[\\.,]?[0-9]*)\\s*(?:\(grams))\(BEND)"
             if let m = firstMatch(pattern, in: line) {
-                return toInt(extractNumber(from: line, group: 1, in: m))
+                return toDouble(extractNumber(from: line, group: 1, in: m))
             }
             return nil
         }
@@ -507,7 +517,7 @@ struct PhotoNutritionGuesser {
                 return mg
             }
             if let g = parseGramValue(line, keywords: sodiumKeys) {
-                return g * 1000
+                return Int(round(g * 1000.0))
             }
             // Salt line (convert g of salt to mg sodium: 1 g salt ≈ 400 mg sodium)
             if let gSalt = parseGramValue(line, keywords: saltKeys) {
@@ -570,7 +580,7 @@ struct PhotoNutritionGuesser {
             // Hebrew
             "פחמימות","מתוכן סוכרים",
             // Hindi/Bengali
-            "कार्बोहाइड्रेट","कार्ब्स","शर्करा","जिसमें शर्करा","কার্বোহাইড্রেট","কার্বস","চিনি","যার মধ্যে চিনি",
+            "कार्बोहाइड्रेट","कार्ब्स","शर्करा","जिसमें शर्करा","কার্বোহাইড্রेट","কার্বস","চিনি","যার মধ্যে চিনি",
             // Thai
             "คาร์โบไฮเดรต","คาร์บ","น้ำตาลรวม","ซึ่งน้ำตาล",
             // Vietnamese
@@ -806,7 +816,7 @@ struct PhotoNutritionGuesser {
             "energia","kalorien","kilokalorien","kcal",
             "energia","kcal","kalorii",
             "energia","kcal","калории","ккал",
-            "طاقة","كيلوكالوري","सعرات","سعرات حرارية","كيلो كالوري","كيلो-كالوري","kcal",
+            "طاقة","كيلوكалوري","सعرات","سعرات حرارية","كيلो كالوري","كيلो-كالوري","kcal",
             "אנרגיה","קק\"ל","קק״ל","kcal",
             "ऊर्जा","किलो कैलोरी","किलो-कैलोरी","kcal",
             "শক্তি","কিলোক্যালোরি","kcal",
@@ -1048,9 +1058,9 @@ struct PhotoNutritionGuesser {
         let proteinKcal = Double(kcalClamped) * macroSplit.protein
         let fatKcal = Double(kcalClamped) * macroSplit.fat
 
-        let carbG = Int((carbKcal / 4.0).rounded())
-        let proteinG = Int((proteinKcal / 4.0).rounded())
-        let fatG = Int((fatKcal / 9.0).rounded())
+        let carbG = (carbKcal / 4.0)
+        let proteinG = (proteinKcal / 4.0)
+        let fatG = (fatKcal / 9.0)
 
         var guess = GuessResult()
         guess.calories = max(50, kcalClamped)
@@ -1377,4 +1387,3 @@ private enum LocalizedUnits {
         words.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
     }
 }
-

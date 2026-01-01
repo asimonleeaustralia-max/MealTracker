@@ -14,26 +14,26 @@ struct LocalBarcodeDB {
         let code: String // UPC/EAN as digits, no spaces
 
         // Per-serving or per-package values (you decide how you populate JSON)
-        // All values are in the same units your UI expects to display (kcal for calories, grams for macros, mg for sodium, mg base for vitamins/minerals).
+        // Units: kcal for calories (Int), grams for macros (Double), mg for sodium and vitamins/minerals (Int, mg base).
         let calories: Int?
-        let carbohydrates: Int?
-        let protein: Int?
-        let fat: Int?
+        let carbohydrates: Double?
+        let protein: Double?
+        let fat: Double?
         let sodiumMg: Int?
 
-        // Optional subfields
-        let sugars: Int?
-        let starch: Int?
-        let fibre: Int?
+        // Optional subfields (grams as Double)
+        let sugars: Double?
+        let starch: Double?
+        let fibre: Double?
 
-        let monounsaturatedFat: Int?
-        let polyunsaturatedFat: Int?
-        let saturatedFat: Int?
-        let transFat: Int?
+        let monounsaturatedFat: Double?
+        let polyunsaturatedFat: Double?
+        let saturatedFat: Double?
+        let transFat: Double?
 
-        let animalProtein: Int?
-        let plantProtein: Int?
-        let proteinSupplements: Int?
+        let animalProtein: Double?
+        let plantProtein: Double?
+        let proteinSupplements: Double?
 
         // Optional vitamins (mg base)
         let vitaminA: Int?
