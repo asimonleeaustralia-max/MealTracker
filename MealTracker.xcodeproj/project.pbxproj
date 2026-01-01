@@ -17,6 +17,8 @@
 		C3636E1C2EFE0C9100665602 /* MealFormView+Media.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3636E1B2EFE0C9100665602 /* MealFormView+Media.swift */; };
 		C3636E1E2EFE0CF200665602 /* MealFormView+DomainLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3636E1D2EFE0CF200665602 /* MealFormView+DomainLogic.swift */; };
 		C3636E8D2EFF6AFA00665602 /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3636E8C2EFF6AFA00665602 /* AboutView.swift */; };
+		C3639B392F0675D200CF6365 /* BarcodeLogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3639B382F0675D200CF6365 /* BarcodeLogStore.swift */; };
+		C3639B3B2F0675D500CF6365 /* BarcodeLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3639B3A2F0675D500CF6365 /* BarcodeLogView.swift */; };
 		C37001F92EF7AA680085904C /* SettingsTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = C37001F82EF7AA680085904C /* SettingsTypes.swift */; };
 		C37001FC2EF936C90085904C /* DuckDBManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C37001FB2EF936C90085904C /* DuckDBManager.swift */; };
 		C37001FE2EF936CD0085904C /* BarcodeRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = C37001FD2EF936CD0085904C /* BarcodeRepository.swift */; };
@@ -55,6 +57,8 @@
 		C3636E1B2EFE0C9100665602 /* MealFormView+Media.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MealFormView+Media.swift"; sourceTree = "<group>"; };
 		C3636E1D2EFE0CF200665602 /* MealFormView+DomainLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MealFormView+DomainLogic.swift"; sourceTree = "<group>"; };
 		C3636E8C2EFF6AFA00665602 /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
+		C3639B382F0675D200CF6365 /* BarcodeLogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeLogStore.swift; sourceTree = "<group>"; };
+		C3639B3A2F0675D500CF6365 /* BarcodeLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeLogView.swift; sourceTree = "<group>"; };
 		C37001F82EF7AA680085904C /* SettingsTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTypes.swift; sourceTree = "<group>"; };
 		C37001FB2EF936C90085904C /* DuckDBManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuckDBManager.swift; sourceTree = "<group>"; };
 		C37001FD2EF936CD0085904C /* BarcodeRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeRepository.swift; sourceTree = "<group>"; };
@@ -148,6 +152,8 @@
 				C3636E1B2EFE0C9100665602 /* MealFormView+Media.swift */,
 				C3636E1D2EFE0CF200665602 /* MealFormView+DomainLogic.swift */,
 				C3636E8C2EFF6AFA00665602 /* AboutView.swift */,
+				C3639B382F0675D200CF6365 /* BarcodeLogStore.swift */,
+				C3639B3A2F0675D500CF6365 /* BarcodeLogView.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -252,6 +258,7 @@
 				C38106602ED29E5A00C796E0 /* PhotoNutritionGuesser.swift in Sources */,
 				C37002002EFA818E0085904C /* OpenFoodFactsClient.swift in Sources */,
 				C3636E1C2EFE0C9100665602 /* MealFormView+Media.swift in Sources */,
+				C3639B3B2F0675D500CF6365 /* BarcodeLogView.swift in Sources */,
 				C370026F2EFB97220085904C /* TheCocktailDBClient.swift in Sources */,
 				C370024A2EFB93450085904C /* MealsSeeder.swift in Sources */,
 				C34176E22ED2795200C73645 /* PhotoService.swift in Sources */,
@@ -264,6 +271,7 @@
 				C3C2B9732ED44E8500E9D4F4 /* FoodClassPriors.swift in Sources */,
 				C37002292EFB90990085904C /* MealsRepository.swift in Sources */,
 				C376B3542EE98CFC0003C83B /* DateSyncService.swift in Sources */,
+				C3639B392F0675D200CF6365 /* BarcodeLogStore.swift in Sources */,
 				C34176DE2ED2794A00C73645 /* ImageResizer.swift in Sources */,
 				C393070B2EEE62F80017E7A0 /* MealTrackerAppShortcuts.swift in Sources */,
 				C37002252EFA8B7C0085904C /* AppDelegate.swift in Sources */,

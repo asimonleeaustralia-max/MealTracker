@@ -9,417 +9,290 @@
 
 import Foundation
 
+// MARK: - Minimal Open Food Facts models (only fields used below)
+
+struct Product: Codable {
+    let code: String?
+    let product_name: String?
+    let nutriments: Nutriments?
+}
+
+struct Nutriments: Codable {
+    // Energy (kcal preferred; kJ fallback)
+    let energy_kcal_serving: Double?
+    let energy_kcal_100g: Double?
+    let energy_serving: Double?    // kJ per serving
+    let energy_100g: Double?       // kJ per 100 g/ml
+
+    // Macros (g)
+    let carbohydrates_serving: Double?
+    let carbohydrates_100g: Double?
+    let proteins_serving: Double?
+    let proteins_100g: Double?
+    let fat_serving: Double?
+    let fat_100g: Double?
+
+    // Sodium/salt (g). OFF commonly encodes sodium in grams.
+    let sodium_serving: Double?
+    let sodium_100g: Double?
+    let salt_serving: Double?
+    let salt_100g: Double?
+
+    // Sub-macros (g)
+    let sugars_serving: Double?
+    let sugars_100g: Double?
+    let fiber_serving: Double?
+    let fiber_100g: Double?
+
+    // Fats breakdown (g)
+    let monounsaturated_fat_serving: Double?
+    let monounsaturated_fat_100g: Double?
+    let polyunsaturated_fat_serving: Double?
+    let polyunsaturated_fat_100g: Double?
+    let saturated_fat_serving: Double?
+    let saturated_fat_100g: Double?
+    let trans_fat_serving: Double?
+    let trans_fat_100g: Double?
+
+    // Minerals (serving/100g) with units (mg/µg typically in unit fields)
+    let calcium_serving: Double?
+    let calcium_100g: Double?
+    let calcium_unit: String?
+
+    let iron_serving: Double?
+    let iron_100g: Double?
+    let iron_unit: String?
+
+    let potassium_serving: Double?
+    let potassium_100g: Double?
+    let potassium_unit: String?
+
+    let zinc_serving: Double?
+    let zinc_100g: Double?
+    let zinc_unit: String?
+
+    let magnesium_serving: Double?
+    let magnesium_100g: Double?
+    let magnesium_unit: String?
+
+    // Vitamins (serving/100g) with units
+    let vitamin_a_serving: Double?
+    let vitamin_a_100g: Double?
+    let vitamin_a_unit: String?
+
+    let vitamin_c_serving: Double?
+    let vitamin_c_100g: Double?
+    let vitamin_c_unit: String?
+
+    let vitamin_d_serving: Double?
+    let vitamin_d_100g: Double?
+    let vitamin_d_unit: String?
+
+    let vitamin_e_serving: Double?
+    let vitamin_e_100g: Double?
+    let vitamin_e_unit: String?
+
+    let vitamin_k_serving: Double?
+    let vitamin_k_100g: Double?
+    let vitamin_k_unit: String?
+}
+
 struct OpenFoodFactsClient {
 
-    // MARK: - Lossy numeric decoding helpers
-
-    // Decode Double? from Double/Int/String (accepts "1.2", "1,2", trims, ignores non-numeric tails)
-    private static func decodeLossyDouble(from container: KeyedDecodingContainer<Nutriments.CodingKeys>, forKey key: Nutriments.CodingKeys) -> Double? {
-        // Try Double
-        if let v = try? container.decodeIfPresent(Double.self, forKey: key) {
-            return v
-        }
-        // Try Int
-        if let v = try? container.decodeIfPresent(Int.self, forKey: key) {
-            return Double(v)
-        }
-        // Try String -> Double
-        if let s = try? container.decodeIfPresent(String.self, forKey: key) {
-            return parseLooseDouble(s)
-        }
-        return nil
+    // Normalize barcode string similarly to LocalBarcodeDB and BarcodeRepository
+    private static func normalizedCode(_ code: String) -> String {
+        code.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: " ", with: "")
     }
 
-    private static func decodeLossyDouble(from container: KeyedDecodingContainer<Product.CodingKeys>, forKey key: Product.CodingKeys) -> Double? {
-        if let v = try? container.decodeIfPresent(Double.self, forKey: key) {
-            return v
-        }
-        if let v = try? container.decodeIfPresent(Int.self, forKey: key) {
-            return Double(v)
-        }
-        if let s = try? container.decodeIfPresent(String.self, forKey: key) {
-            return parseLooseDouble(s)
-        }
-        return nil
-    }
-
-    // Very permissive numeric parser: handles "1,23", " 1.23 ", "1.23g", "trace", etc.
-    private static func parseLooseDouble(_ raw: String?) -> Double? {
-        guard var s = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return nil }
-        // Common textual tokens that mean "very small" -> treat as ~0
-        let lower = s.lowercased()
-        if lower == "trace" || lower == "<0.1" || lower == "< 0.1" { return 0.0 }
-        // Replace comma decimal with dot; keep digits, one dot, and optional leading minus
-        s = s.replacingOccurrences(of: ",", with: ".")
-        var result = ""
-        var seenDot = false
-        var seenDigit = false
-        for (i, ch) in s.enumerated() {
-            if ch.isNumber {
-                result.append(ch)
-                seenDigit = true
-            } else if ch == "." {
-                if !seenDot {
-                    seenDot = true
-                    result.append(ch)
-                } else {
-                    break
-                }
-            } else if ch == "-" && i == 0 {
-                result.append(ch)
-            } else if ch.isWhitespace {
-                if seenDigit { break }
-            } else {
-                if seenDigit { break }
-            }
-        }
-        if result == "" || result == "-" || result == "." || result == "-." { return nil }
-        return Double(result)
-    }
-
-    struct Response: Decodable {
+    // Networking: fetch product by barcode from OFF (v2 with v1 fallback)
+    struct V2Response: Decodable {
         let status: Int?
+        let status_verbose: String?
         let product: Product?
     }
 
-    struct Product: Decodable {
-        let code: String?
-        let product_name: String?
-        let categories: String?
-        let serving_size: String?
-        let serving_quantity: Double? // Often missing; not always reliable
-        let nutriments: Nutriments?
-
-        enum CodingKeys: String, CodingKey {
-            case code, product_name, categories, serving_size, serving_quantity, nutriments
-        }
-
-        init(code: String?, product_name: String?, categories: String?, serving_size: String?, serving_quantity: Double?, nutriments: Nutriments?) {
-            self.code = code
-            self.product_name = product_name
-            self.categories = categories
-            self.serving_size = serving_size
-            self.serving_quantity = serving_quantity
-            self.nutriments = nutriments
-        }
-
-        init(from decoder: Decoder) throws {
-            let c = try decoder.container(keyedBy: CodingKeys.self)
-            self.code = try? c.decodeIfPresent(String.self, forKey: .code)
-            self.product_name = try? c.decodeIfPresent(String.self, forKey: .product_name)
-            self.categories = try? c.decodeIfPresent(String.self, forKey: .categories)
-            self.serving_size = try? c.decodeIfPresent(String.self, forKey: .serving_size)
-            self.serving_quantity = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .serving_quantity)
-            self.nutriments = try? c.decodeIfPresent(Nutriments.self, forKey: .nutriments)
-        }
+    struct V1Response: Decodable {
+        let status: Int?
+        let status_verbose: String?
+        let product: Product?
     }
 
-    // OFF nutriments keys are very wide; we only decode what we need.
-    struct Nutriments: Decodable {
-        // Energy
-        let energy_kcal_serving: Double?
-        let energy_kcal_100g: Double?
-        let energy_serving: Double?     // sometimes kJ
-        let energy_100g: Double?        // sometimes kJ
-        let energy_unit: String?
+    static func fetchProduct(by rawCode: String, logger: ((String) -> Void)? = nil) async throws -> Product {
+        let code = normalizedCode(rawCode)
 
-        // Macros
-        let carbohydrates_serving: Double?
-        let carbohydrates_100g: Double?
-        let proteins_serving: Double?
-        let proteins_100g: Double?
-        let fat_serving: Double?
-        let fat_100g: Double?
-
-        // Sub-macros
-        let sugars_serving: Double?
-        let sugars_100g: Double?
-        let fiber_serving: Double?
-        let fiber_100g: Double?
-
-        // Fats breakdown
-        let saturated_fat_serving: Double?
-        let saturated_fat_100g: Double?
-        let trans_fat_serving: Double?
-        let trans_fat_100g: Double?
-        let monounsaturated_fat_serving: Double?
-        let monounsaturated_fat_100g: Double?
-        let polyunsaturated_fat_serving: Double?
-        let polyunsaturated_fat_100g: Double?
-
-        // Sodium/salt (OFF mostly provides salt)
-        let sodium_serving: Double?
-        let sodium_100g: Double?
-        let salt_serving: Double?
-        let salt_100g: Double?
-
-        // Minerals
-        let calcium_serving: Double?
-        let calcium_100g: Double?
-        let iron_serving: Double?
-        let iron_100g: Double?
-        let potassium_serving: Double?
-        let potassium_100g: Double?
-        let zinc_serving: Double?
-        let zinc_100g: Double?
-        let magnesium_serving: Double?
-        let magnesium_100g: Double?
-
-        // Vitamins
-        let vitamin_a_serving: Double?
-        let vitamin_a_100g: Double?
-        let vitamin_c_serving: Double?
-        let vitamin_c_100g: Double?
-        let vitamin_d_serving: Double?
-        let vitamin_d_100g: Double?
-        let vitamin_e_serving: Double?
-        let vitamin_e_100g: Double?
-        let vitamin_k_serving: Double?
-        let vitamin_k_100g: Double?
-
-        // Units
-        let vitamin_a_unit: String?
-        let vitamin_c_unit: String?
-        let vitamin_d_unit: String?
-        let vitamin_e_unit: String?
-        let vitamin_k_unit: String?
-        let calcium_unit: String?
-        let iron_unit: String?
-        let potassium_unit: String?
-        let zinc_unit: String?
-        let magnesium_unit: String?
-
-        enum CodingKeys: String, CodingKey {
-            case energy_kcal_serving, energy_kcal_100g, energy_serving, energy_100g, energy_unit
-            case carbohydrates_serving, carbohydrates_100g, proteins_serving, proteins_100g, fat_serving, fat_100g
-            case sugars_serving, sugars_100g, fiber_serving, fiber_100g
-            case saturated_fat_serving, saturated_fat_100g, trans_fat_serving, trans_fat_100g, monounsaturated_fat_serving, monounsaturated_fat_100g, polyunsaturated_fat_serving, polyunsaturated_fat_100g
-            case sodium_serving, sodium_100g, salt_serving, salt_100g
-            case calcium_serving, calcium_100g, iron_serving, iron_100g, potassium_serving, potassium_100g, zinc_serving, zinc_100g, magnesium_serving, magnesium_100g
-            case vitamin_a_serving, vitamin_a_100g, vitamin_c_serving, vitamin_c_100g, vitamin_d_serving, vitamin_d_100g, vitamin_e_serving, vitamin_e_100g, vitamin_k_serving, vitamin_k_100g
-            case vitamin_a_unit, vitamin_c_unit, vitamin_d_unit, vitamin_e_unit, vitamin_k_unit, calcium_unit, iron_unit, potassium_unit, zinc_unit, magnesium_unit
+        // Try v2 first
+        if let prod = try await fetchProductV2(code: code, logger: logger) {
+            return prod
+        }
+        // Fallback to v1 if v2 not found
+        if let prod = try await fetchProductV1(code: code, logger: logger) {
+            return prod
         }
 
-        init(from decoder: Decoder) throws {
-            let c = try decoder.container(keyedBy: CodingKeys.self)
-
-            // Energy
-            self.energy_kcal_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .energy_kcal_serving)
-            self.energy_kcal_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .energy_kcal_100g)
-            self.energy_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .energy_serving)
-            self.energy_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .energy_100g)
-            self.energy_unit = try? c.decodeIfPresent(String.self, forKey: .energy_unit)
-
-            // Macros
-            self.carbohydrates_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .carbohydrates_serving)
-            self.carbohydrates_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .carbohydrates_100g)
-            self.proteins_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .proteins_serving)
-            self.proteins_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .proteins_100g)
-            self.fat_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .fat_serving)
-            self.fat_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .fat_100g)
-
-            // Sub-macros
-            self.sugars_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .sugars_serving)
-            self.sugars_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .sugars_100g)
-            self.fiber_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .fiber_serving)
-            self.fiber_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .fiber_100g)
-
-            // Fats breakdown
-            self.saturated_fat_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .saturated_fat_serving)
-            self.saturated_fat_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .saturated_fat_100g)
-            self.trans_fat_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .trans_fat_serving)
-            self.trans_fat_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .trans_fat_100g)
-            self.monounsaturated_fat_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .monounsaturated_fat_serving)
-            self.monounsaturated_fat_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .monounsaturated_fat_100g)
-            self.polyunsaturated_fat_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .polyunsaturated_fat_serving)
-            self.polyunsaturated_fat_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .polyunsaturated_fat_100g)
-
-            // Sodium/salt
-            self.sodium_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .sodium_serving)
-            self.sodium_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .sodium_100g)
-            self.salt_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .salt_serving)
-            self.salt_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .salt_100g)
-
-            // Minerals
-            self.calcium_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .calcium_serving)
-            self.calcium_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .calcium_100g)
-            self.iron_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .iron_serving)
-            self.iron_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .iron_100g)
-            self.potassium_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .potassium_serving)
-            self.potassium_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .potassium_100g)
-            self.zinc_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .zinc_serving)
-            self.zinc_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .zinc_100g)
-            self.magnesium_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .magnesium_serving)
-            self.magnesium_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .magnesium_100g)
-
-            // Vitamins
-            self.vitamin_a_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .vitamin_a_serving)
-            self.vitamin_a_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .vitamin_a_100g)
-            self.vitamin_c_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .vitamin_c_serving)
-            self.vitamin_c_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .vitamin_c_100g)
-            self.vitamin_d_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .vitamin_d_serving)
-            self.vitamin_d_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .vitamin_d_100g)
-            self.vitamin_e_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .vitamin_e_serving)
-            self.vitamin_e_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .vitamin_e_100g)
-            self.vitamin_k_serving = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .vitamin_k_serving)
-            self.vitamin_k_100g = OpenFoodFactsClient.decodeLossyDouble(from: c, forKey: .vitamin_k_100g)
-
-            // Units
-            self.vitamin_a_unit = try? c.decodeIfPresent(String.self, forKey: .vitamin_a_unit)
-            self.vitamin_c_unit = try? c.decodeIfPresent(String.self, forKey: .vitamin_c_unit)
-            self.vitamin_d_unit = try? c.decodeIfPresent(String.self, forKey: .vitamin_d_unit)
-            self.vitamin_e_unit = try? c.decodeIfPresent(String.self, forKey: .vitamin_e_unit)
-            self.vitamin_k_unit = try? c.decodeIfPresent(String.self, forKey: .vitamin_k_unit)
-            self.calcium_unit = try? c.decodeIfPresent(String.self, forKey: .calcium_unit)
-            self.iron_unit = try? c.decodeIfPresent(String.self, forKey: .iron_unit)
-            self.potassium_unit = try? c.decodeIfPresent(String.self, forKey: .potassium_unit)
-            self.zinc_unit = try? c.decodeIfPresent(String.self, forKey: .zinc_unit)
-            self.magnesium_unit = try? c.decodeIfPresent(String.self, forKey: .magnesium_unit)
-        }
+        let err = NSError(domain: "OpenFoodFactsClient", code: 404, userInfo: [NSLocalizedDescriptionKey: "Product \(code) not found"])
+        #if DEBUG
+        if let logger { logger("OFF: not found \(code)") }
+        await BarcodeLogStore.shared.append("OFF: not found \(code)")
+        #endif
+        throw err
     }
 
-    enum OFFError: Error, LocalizedError {
-        case notFound
-        case invalidResponse(String) // include brief reason
-
-        var errorDescription: String? {
-            switch self {
-            case .notFound:
-                return "Product not found"
-            case .invalidResponse(let reason):
-                return reason
-            }
+    private static func fetchProductV2(code: String, logger: ((String) -> Void)?) async throws -> Product? {
+        guard let url = URL(string: "https://world.openfoodfacts.org/api/v2/product/\(code).json") else {
+            return nil
         }
-    }
-
-    // Fetch a product by barcode from OFF
-    static func fetchProduct(by barcode: String) async throws -> Product {
-        let normalized = barcode.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: " ", with: "")
-        guard let url = URL(string: "https://world.openfoodfacts.org/api/v2/product/\(normalized).json") else {
-            throw OFFError.invalidResponse("Invalid URL")
+        let (data, resp) = try await URLSession.shared.data(from: url)
+        guard let http = resp as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
+            return nil
         }
-        var req = URLRequest(url: url)
-        req.timeoutInterval = 15
-
-        let (data, resp) = try await URLSession.shared.data(for: req)
-        guard let http = resp as? HTTPURLResponse else {
-            throw OFFError.invalidResponse("No HTTP response")
-        }
-        guard 200..<300 ~= http.statusCode else {
-            // Log a small payload preview to help diagnose server-side errors
-            let preview = Self.previewUTF8(data, limit: 500)
-            throw OFFError.invalidResponse("HTTP \(http.statusCode). Payload: \(preview)")
-        }
-
         do {
-            let decoded = try JSONDecoder().decode(Response.self, from: data)
-            guard decoded.status == 1, let product = decoded.product else {
-                throw OFFError.notFound
+            let decoded = try JSONDecoder().decode(V2Response.self, from: data)
+            if let status = decoded.status, status == 1 {
+                return decoded.product
+            } else {
+                let msg = "OFF v2: status \(decoded.status ?? -1) \(decoded.status_verbose ?? "") for code \(code)"
+                logger?(msg)
+                #if DEBUG
+                await BarcodeLogStore.shared.append(msg)
+                #endif
+                return nil
             }
-            return product
         } catch {
-            // Decode failed: include URL and payload preview for diagnostics
-            let preview = Self.previewUTF8(data, limit: 500)
-            let ct = http.value(forHTTPHeaderField: "Content-Type") ?? "unknown"
-            let reason = "Decode failed for \(url.absoluteString). Content-Type: \(ct). Payload: \(preview)"
-            throw OFFError.invalidResponse(reason)
+            let msg = "OFF v2: decode error for \(code): \(error.localizedDescription)"
+            logger?(msg)
+            #if DEBUG
+            await BarcodeLogStore.shared.append(msg)
+            #endif
+            return nil
         }
     }
 
-    // Map OFF Product -> LocalBarcodeDB.Entry with per-serving preference when sensible
+    private static func fetchProductV1(code: String, logger: ((String) -> Void)?) async throws -> Product? {
+        guard let url = URL(string: "https://world.openfoodfacts.org/api/v0/product/\(code).json") else {
+            return nil
+        }
+        let (data, resp) = try await URLSession.shared.data(from: url)
+        guard let http = resp as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
+            return nil
+        }
+        do {
+            let decoded = try JSONDecoder().decode(V1Response.self, from: data)
+            if let status = decoded.status, status == 1 {
+                return decoded.product
+            } else {
+                let msg = "OFF v1: status \(decoded.status ?? -1) \(decoded.status_verbose ?? "") for code \(code)"
+                logger?(msg)
+                #if DEBUG
+                await BarcodeLogStore.shared.append(msg)
+                #endif
+                return nil
+            }
+        } catch {
+            let msg = "OFF v1: decode error for \(code): \(error.localizedDescription)"
+            logger?(msg)
+            #if DEBUG
+            await BarcodeLogStore.shared.append(msg)
+            #endif
+            return nil
+        }
+    }
+
+    // Map OFF Product -> LocalBarcodeDB.Entry (units: kcal, g, mg)
     static func mapToEntry(from product: Product) -> LocalBarcodeDB.Entry? {
-        guard let code = product.code ?? product.product_name ?? product.nutriments?.energy_kcal_100g.map({ _ in product.code ?? "" }) else {
-            return nil
-        }
-        let n = product.nutriments
+        guard let nutr = product.nutriments else { return nil }
 
-        // Helper: choose per-serving if present and sensible, else per-100g/100ml
-        func pick(_ serving: Double?, _ per100: Double?) -> Int? {
-            if let s = serving, s > 0 {
-                return Int((s).rounded())
-            }
-            if let p = per100, p > 0 {
-                return Int((p).rounded())
-            }
-            return nil
+        func toIntNonNegative(_ d: Double?) -> Int? {
+            guard let d else { return nil }
+            return max(0, Int((d).rounded()))
         }
 
-        // Energy: OFF sometimes reports energy in kJ; prefer kcal if present.
-        let kcalServing = n?.energy_kcal_serving
-        let kcal100g = n?.energy_kcal_100g
-        var calories: Int? = pick(kcalServing, kcal100g)
-        if calories == nil {
-            // Try converting kJ if kcal missing
-            let kJServing = n?.energy_serving
-            let kJ100g = n?.energy_100g
-            if let kJ = kJServing ?? kJ100g {
-                calories = Int((kJ / 4.184).rounded())
+        // Energy kcal: prefer kcal fields; fall back to kJ -> kcal
+        let kcal: Int? = {
+            if let v = nutr.energy_kcal_serving ?? nutr.energy_kcal_100g {
+                return toIntNonNegative(v)
             }
-        }
-
-        // Macros (g)
-        let carbs = pick(n?.carbohydrates_serving, n?.carbohydrates_100g)
-        let protein = pick(n?.proteins_serving, n?.proteins_100g)
-        let fat = pick(n?.fat_serving, n?.fat_100g)
-
-        // Sodium: prefer sodium directly; else convert salt(g) -> sodium mg ≈ g * 400
-        let sodiumMg: Int? = {
-            if let s = n?.sodium_serving ?? n?.sodium_100g, s > 0 {
-                // OFF sodium is in g per 100g/serving; convert g -> mg
-                return Int((s * 1000.0).rounded())
-            }
-            if let salt = n?.salt_serving ?? n?.salt_100g, salt > 0 {
-                return Int((salt * 400.0).rounded())
+            if let kj = nutr.energy_serving ?? nutr.energy_100g {
+                return toIntNonNegative(kj / 4.184)
             }
             return nil
         }()
 
-        // Sub-macros (g)
-        let sugars = pick(n?.sugars_serving, n?.sugars_100g)
-        let fibre = pick(n?.fiber_serving, n?.fiber_100g)
-        let starch: Int? = nil // OFF rarely provides starch explicitly
+        // Macros in grams
+        let carbs = toIntNonNegative(nutr.carbohydrates_serving ?? nutr.carbohydrates_100g)
+        let protein = toIntNonNegative(nutr.proteins_serving ?? nutr.proteins_100g)
+        let fat = toIntNonNegative(nutr.fat_serving ?? nutr.fat_100g)
 
-        // Fats breakdown (g)
-        let monounsaturatedFat = pick(n?.monounsaturated_fat_serving, n?.monounsaturated_fat_100g)
-        let polyunsaturatedFat = pick(n?.polyunsaturated_fat_serving, n?.polyunsaturated_fat_100g)
-        let saturatedFat = pick(n?.saturated_fat_serving, n?.saturated_fat_100g)
-        let transFat = pick(n?.trans_fat_serving, n?.trans_fat_100g)
+        // Sodium mg: OFF gives sodium (g) or salt (g). Convert g->mg; salt g -> mg sodium (~400 mg per g salt)
+        let sodiumMg: Int? = {
+            if let sG = nutr.sodium_serving ?? nutr.sodium_100g {
+                return toIntNonNegative(sG * 1000.0)
+            }
+            if let saltG = nutr.salt_serving ?? nutr.salt_100g {
+                return toIntNonNegative(saltG * 400.0) // 1 g salt ≈ 400 mg sodium
+            }
+            return nil
+        }()
 
-        // Proteins breakdown not available from OFF
+        // Sub-macros in grams
+        let sugars = toIntNonNegative(nutr.sugars_serving ?? nutr.sugars_100g)
+        let fibre = toIntNonNegative(nutr.fiber_serving ?? nutr.fiber_100g)
+
+        // Starch is not commonly provided by OFF; keep nil (no field in Nutriments). Leave as nil.
+        let starch: Int? = nil
+
+        // Fat breakdown in grams
+        let monounsaturatedFat = toIntNonNegative(nutr.monounsaturated_fat_serving ?? nutr.monounsaturated_fat_100g)
+        let polyunsaturatedFat = toIntNonNegative(nutr.polyunsaturated_fat_serving ?? nutr.polyunsaturated_fat_100g)
+        let saturatedFat = toIntNonNegative(nutr.saturated_fat_serving ?? nutr.saturated_fat_100g)
+        let transFat = toIntNonNegative(nutr.trans_fat_serving ?? nutr.trans_fat_100g)
+
+        // Protein breakdown not provided by OFF
         let animalProtein: Int? = nil
         let plantProtein: Int? = nil
         let proteinSupplements: Int? = nil
 
-        // Minerals (mg)
-        func mgFrom(_ serving: Double?, _ per100: Double?, unit: String?) -> Int? {
-            let raw = serving ?? per100
-            guard let v = raw, v > 0 else { return nil }
+        // Helper: convert vitamin/mineral value with its unit to mg
+        func toMg(_ value: Double?, unit: String?) -> Int? {
+            guard let value else { return nil }
             let u = (unit ?? "").lowercased()
             if u.contains("µg") || u.contains("mcg") || u.contains("ug") {
-                // micrograms -> mg
-                return Int((v / 1000.0).rounded())
+                return toIntNonNegative(value / 1000.0)
             }
-            // Assume mg otherwise; OFF often reports mg already
-            return Int((v).rounded())
+            // Default assume mg if unit missing or says mg
+            return toIntNonNegative(value)
         }
 
-        let calcium = mgFrom(n?.calcium_serving, n?.calcium_100g, unit: n?.calcium_unit)
-        let iron = mgFrom(n?.iron_serving, n?.iron_100g, unit: n?.iron_unit)
-        let potassium = mgFrom(n?.potassium_serving, n?.potassium_100g, unit: n?.potassium_unit)
-        let zinc = mgFrom(n?.zinc_serving, n?.zinc_100g, unit: n?.zinc_unit)
-        let magnesium = mgFrom(n?.magnesium_serving, n?.magnesium_100g, unit: n?.magnesium_unit)
-
         // Vitamins (mg base)
-        let vitaminA = mgFrom(n?.vitamin_a_serving, n?.vitamin_a_100g, unit: n?.vitamin_a_unit)
-        let vitaminB: Int? = nil // OFF aggregates B vitamins separately; skipping
-        let vitaminC = mgFrom(n?.vitamin_c_serving, n?.vitamin_c_100g, unit: n?.vitamin_c_unit)
-        let vitaminD = mgFrom(n?.vitamin_d_serving, n?.vitamin_d_100g, unit: n?.vitamin_d_unit)
-        let vitaminE = mgFrom(n?.vitamin_e_serving, n?.vitamin_e_100g, unit: n?.vitamin_e_unit)
-        let vitaminK = mgFrom(n?.vitamin_k_serving, n?.vitamin_k_100g, unit: n?.vitamin_k_unit)
+        let vitaminA = toMg(nutr.vitamin_a_serving ?? nutr.vitamin_a_100g, unit: nutr.vitamin_a_unit)
+        let vitaminB: Int? = nil // OFF has many B subtypes; without a single field, keep nil.
+        let vitaminC = toMg(nutr.vitamin_c_serving ?? nutr.vitamin_c_100g, unit: nutr.vitamin_c_unit)
+        let vitaminD = toMg(nutr.vitamin_d_serving ?? nutr.vitamin_d_100g, unit: nutr.vitamin_d_unit)
+        let vitaminE = toMg(nutr.vitamin_e_serving ?? nutr.vitamin_e_100g, unit: nutr.vitamin_e_unit)
+        let vitaminK = toMg(nutr.vitamin_k_serving ?? nutr.vitamin_k_100g, unit: nutr.vitamin_k_unit)
+
+        // Minerals (mg base)
+        let calcium = toMg(nutr.calcium_serving ?? nutr.calcium_100g, unit: nutr.calcium_unit)
+        let iron = toMg(nutr.iron_serving ?? nutr.iron_100g, unit: nutr.iron_unit)
+        let potassium = toMg(nutr.potassium_serving ?? nutr.potassium_100g, unit: nutr.potassium_unit)
+        let zinc = toMg(nutr.zinc_serving ?? nutr.zinc_100g, unit: nutr.zinc_unit)
+        let magnesium = toMg(nutr.magnesium_serving ?? nutr.magnesium_100g, unit: nutr.magnesium_unit)
+
+        // If nothing meaningful, return nil
+        let hasAny =
+            kcal != nil || carbs != nil || protein != nil || fat != nil || sodiumMg != nil ||
+            sugars != nil || fibre != nil || monounsaturatedFat != nil || polyunsaturatedFat != nil ||
+            saturatedFat != nil || transFat != nil || vitaminA != nil || vitaminC != nil ||
+            vitaminD != nil || vitaminE != nil || vitaminK != nil || calcium != nil || iron != nil ||
+            potassium != nil || zinc != nil || magnesium != nil
+
+        guard hasAny else { return nil }
+
+        let code = normalizedCode(product.code ?? "")
 
         return LocalBarcodeDB.Entry(
-            code: normalizedCode(code),
-            calories: calories,
+            code: code.isEmpty ? (product.code ?? "") : code,
+            calories: kcal,
             carbohydrates: carbs,
             protein: protein,
             fat: fat,
@@ -447,20 +320,4 @@ struct OpenFoodFactsClient {
             magnesium: magnesium
         )
     }
-
-    private static func normalizedCode(_ raw: String?) -> String {
-        (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: " ", with: "")
-    }
-
-    // Render a short, safe UTF-8 preview of the response body for diagnostics
-    private static func previewUTF8(_ data: Data, limit: Int) -> String {
-        if data.isEmpty { return "<empty>" }
-        let prefix = data.prefix(limit)
-        if let s = String(data: prefix, encoding: .utf8) {
-            return s.replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: "\r", with: " ")
-        }
-        // Fallback: hex preview if not UTF-8
-        return prefix.map { String(format: "%02x", $0) }.joined()
-    }
 }
-

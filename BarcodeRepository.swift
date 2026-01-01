@@ -170,21 +170,49 @@ actor BarcodeRepository {
 
         // 1) Local lookup
         if let local = await lookup(code: code) {
-            logger?("Local barcode DB hit for \(code)")
+            let msg = "Local barcode DB hit for \(code)"
+            logger?(msg)
+            #if DEBUG
+            await BarcodeLogStore.shared.append(msg)
+            #endif
             await MainActor.run {
                 applyEntryToMealForm(entry: local, meal: meal, context: context, sodiumUnit: sodiumUnit, vitaminsUnit: vitaminsUnit)
             }
         } else {
-            logger?("Local barcode DB miss for \(code)")
+            let msg = "Local barcode DB miss for \(code)"
+            logger?(msg)
+            #if DEBUG
+            await BarcodeLogStore.shared.append(msg)
+            #endif
         }
 
         // 2) Open Food Facts
         do {
-            logger?("OFF: fetching product \(code)…")
-            let product = try await OpenFoodFactsClient.fetchProduct(by: code)
-            logger?("OFF: product found for \(code)")
+            let startMsg = "OFF: fetching product \(code)…"
+            logger?(startMsg)
+            #if DEBUG
+            await BarcodeLogStore.shared.append(startMsg)
+            #endif
+
+            let product = try await OpenFoodFactsClient.fetchProduct(by: code, logger: { s in
+                logger?(s)
+                #if DEBUG
+                Task { await BarcodeLogStore.shared.append(s) }
+                #endif
+            })
+
+            let foundMsg = "OFF: product found for \(code)"
+            logger?(foundMsg)
+            #if DEBUG
+            await BarcodeLogStore.shared.append(foundMsg)
+            #endif
+
             if let offEntry = OpenFoodFactsClient.mapToEntry(from: product) {
-                logger?("OFF: mapped nutriments -> upserting and applying")
+                let mapMsg = "OFF: mapped nutriments -> upserting and applying"
+                logger?(mapMsg)
+                #if DEBUG
+                await BarcodeLogStore.shared.append(mapMsg)
+                #endif
                 // Upsert into DuckDB
                 try? await upsert(entry: offEntry)
                 // Apply to meal (fill empty-only)
@@ -192,10 +220,18 @@ actor BarcodeRepository {
                     applyEntryToMealForm(entry: offEntry, meal: meal, context: context, sodiumUnit: sodiumUnit, vitaminsUnit: vitaminsUnit)
                 }
             } else {
-                logger?("OFF: mapping returned no usable nutriments")
+                let noMapMsg = "OFF: mapping returned no usable nutriments"
+                logger?(noMapMsg)
+                #if DEBUG
+                await BarcodeLogStore.shared.append(noMapMsg)
+                #endif
             }
         } catch {
-            logger?("OFF: error for \(code): \(error.localizedDescription)")
+            let errMsg = "OFF: error for \(code): \(error.localizedDescription)"
+            logger?(errMsg)
+            #if DEBUG
+            await BarcodeLogStore.shared.append(errMsg)
+            #endif
             // OFF not found or network error — ignore silently for normal flow
         }
     }
