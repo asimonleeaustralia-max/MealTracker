@@ -3,7 +3,7 @@
 //  MealTracker
 //
 //  DuckDB-backed repository for barcode -> nutrition lookups.
-//  Returns LocalBarcodeDB.Entry so existing code paths can reuse PhotoNutritionGuesser.map(entry:).
+//  Emits structured barcode log events around normalization, local lookup, and upsert.
 //
 
 import Foundation
@@ -40,12 +40,8 @@ actor BarcodeRepository {
                 let rs = try conn.query(sql, code)
                 guard rs.next() else { return nil }
 
-                func intOrNil(_ name: String) -> Int? {
-                    return rs.get(name) as Int?
-                }
-                func stringOrNil(_ name: String) -> String? {
-                    return rs.get(name) as String?
-                }
+                func intOrNil(_ name: String) -> Int? { rs.get(name) as Int? }
+                func stringOrNil(_ name: String) -> String? { rs.get(name) as String? }
 
                 let codeVal = stringOrNil("code") ?? code
 
@@ -93,64 +89,86 @@ actor BarcodeRepository {
 
     // Upsert a barcode entry into DuckDB using INSERT ... ON CONFLICT DO UPDATE.
     func upsert(entry e: LocalBarcodeDB.Entry) async throws {
+        #if DEBUG
+        await BarcodeLogStore.shared.appendEvent(
+            .init(stage: .upsertAttempt,
+                  codeRaw: e.code,
+                  codeNormalized: e.code,
+                  entry: e)
+        )
+        #endif
+
         #if canImport(DuckDB)
-        try await DuckDBManager.shared.withConnection { conn in
-            let sql = """
-            INSERT INTO barcodes (
-                code,
-                calories, carbohydrates, protein, fat, sodiumMg,
-                sugars, starch, fibre,
-                monounsaturatedFat, polyunsaturatedFat, saturatedFat, transFat,
-                animalProtein, plantProtein, proteinSupplements,
-                vitaminA, vitaminB, vitaminC, vitaminD, vitaminE, vitaminK,
-                calcium, iron, potassium, zinc, magnesium
-            ) VALUES (
-                ?, ?, ?, ?, ?, ?,
-                ?, ?, ?,
-                ?, ?, ?, ?,
-                ?, ?, ?,
-                ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?
+        do {
+            try await DuckDBManager.shared.withConnection { conn in
+                let sql = """
+                INSERT INTO barcodes (
+                    code,
+                    calories, carbohydrates, protein, fat, sodiumMg,
+                    sugars, starch, fibre,
+                    monounsaturatedFat, polyunsaturatedFat, saturatedFat, transFat,
+                    animalProtein, plantProtein, proteinSupplements,
+                    vitaminA, vitaminB, vitaminC, vitaminD, vitaminE, vitaminK,
+                    calcium, iron, potassium, zinc, magnesium
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?,
+                    ?, ?, ?, ?,
+                    ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?
+                )
+                ON CONFLICT(code) DO UPDATE SET
+                    calories = excluded.calories,
+                    carbohydrates = excluded.carbohydrates,
+                    protein = excluded.protein,
+                    fat = excluded.fat,
+                    sodiumMg = excluded.sodiumMg,
+                    sugars = excluded.sugars,
+                    starch = excluded.starch,
+                    fibre = excluded.fibre,
+                    monounsaturatedFat = excluded.monounsaturatedFat,
+                    polyunsaturatedFat = excluded.polyunsaturatedFat,
+                    saturatedFat = excluded.saturatedFat,
+                    transFat = excluded.transFat,
+                    animalProtein = excluded.animalProtein,
+                    plantProtein = excluded.plantProtein,
+                    proteinSupplements = excluded.proteinSupplements,
+                    vitaminA = excluded.vitaminA,
+                    vitaminB = excluded.vitaminB,
+                    vitaminC = excluded.vitaminC,
+                    vitaminD = excluded.vitaminD,
+                    vitaminE = excluded.vitaminE,
+                    vitaminK = excluded.vitaminK,
+                    calcium = excluded.calcium,
+                    iron = excluded.iron,
+                    potassium = excluded.potassium,
+                    zinc = excluded.zinc,
+                    magnesium = excluded.magnesium;
+                """
+                _ = try conn.query(
+                    sql,
+                    e.code,
+                    e.calories, e.carbohydrates, e.protein, e.fat, e.sodiumMg,
+                    e.sugars, e.starch, e.fibre,
+                    e.monounsaturatedFat, e.polyunsaturatedFat, e.saturatedFat, e.transFat,
+                    e.animalProtein, e.plantProtein, e.proteinSupplements,
+                    e.vitaminA, e.vitaminB, e.vitaminC, e.vitaminD, e.vitaminE, e.vitaminK,
+                    e.calcium, e.iron, e.potassium, e.zinc, e.magnesium
+                )
+            }
+            #if DEBUG
+            await BarcodeLogStore.shared.appendEvent(
+                .init(stage: .upsertSuccess, codeRaw: e.code, codeNormalized: e.code, entry: e)
             )
-            ON CONFLICT(code) DO UPDATE SET
-                calories = excluded.calories,
-                carbohydrates = excluded.carbohydrates,
-                protein = excluded.protein,
-                fat = excluded.fat,
-                sodiumMg = excluded.sodiumMg,
-                sugars = excluded.sugars,
-                starch = excluded.starch,
-                fibre = excluded.fibre,
-                monounsaturatedFat = excluded.monounsaturatedFat,
-                polyunsaturatedFat = excluded.polyunsaturatedFat,
-                saturatedFat = excluded.saturatedFat,
-                transFat = excluded.transFat,
-                animalProtein = excluded.animalProtein,
-                plantProtein = excluded.plantProtein,
-                proteinSupplements = excluded.proteinSupplements,
-                vitaminA = excluded.vitaminA,
-                vitaminB = excluded.vitaminB,
-                vitaminC = excluded.vitaminC,
-                vitaminD = excluded.vitaminD,
-                vitaminE = excluded.vitaminE,
-                vitaminK = excluded.vitaminK,
-                calcium = excluded.calcium,
-                iron = excluded.iron,
-                potassium = excluded.potassium,
-                zinc = excluded.zinc,
-                magnesium = excluded.magnesium;
-            """
-            // Bind positionally; nils should map to SQL NULL
-            _ = try conn.query(
-                sql,
-                e.code,
-                e.calories, e.carbohydrates, e.protein, e.fat, e.sodiumMg,
-                e.sugars, e.starch, e.fibre,
-                e.monounsaturatedFat, e.polyunsaturatedFat, e.saturatedFat, e.transFat,
-                e.animalProtein, e.plantProtein, e.proteinSupplements,
-                e.vitaminA, e.vitaminB, e.vitaminC, e.vitaminD, e.vitaminE, e.vitaminK,
-                e.calcium, e.iron, e.potassium, e.zinc, e.magnesium
+            #endif
+        } catch {
+            #if DEBUG
+            await BarcodeLogStore.shared.appendEvent(
+                .init(stage: .upsertFailure, codeRaw: e.code, codeNormalized: e.code, entry: e, error: error.localizedDescription)
             )
+            #endif
+            throw error
         }
         #else
         // No-op on targets without DuckDB
@@ -168,12 +186,20 @@ actor BarcodeRepository {
                               logger: ((String) -> Void)? = nil) async {
         let code = normalize(rawCode)
 
+        #if DEBUG
+        await BarcodeLogStore.shared.appendEvent(
+            .init(stage: .normalizeCode, codeRaw: rawCode, codeNormalized: code)
+        )
+        #endif
+
         // 1) Local lookup
         if let local = await lookup(code: code) {
             let msg = "Local barcode DB hit for \(code)"
             logger?(msg)
             #if DEBUG
-            await BarcodeLogStore.shared.append(msg)
+            await BarcodeLogStore.shared.appendEvent(
+                .init(stage: .localLookupHit, codeRaw: rawCode, codeNormalized: code, entry: local)
+            )
             #endif
             await MainActor.run {
                 applyEntryToMealForm(entry: local, meal: meal, context: context, sodiumUnit: sodiumUnit, vitaminsUnit: vitaminsUnit)
@@ -182,7 +208,9 @@ actor BarcodeRepository {
             let msg = "Local barcode DB miss for \(code)"
             logger?(msg)
             #if DEBUG
-            await BarcodeLogStore.shared.append(msg)
+            await BarcodeLogStore.shared.appendEvent(
+                .init(stage: .localLookupMiss, codeRaw: rawCode, codeNormalized: code)
+            )
             #endif
         }
 
@@ -190,29 +218,17 @@ actor BarcodeRepository {
         do {
             let startMsg = "OFF: fetching product \(code)…"
             logger?(startMsg)
-            #if DEBUG
-            await BarcodeLogStore.shared.append(startMsg)
-            #endif
 
             let product = try await OpenFoodFactsClient.fetchProduct(by: code, logger: { s in
                 logger?(s)
-                #if DEBUG
-                Task { await BarcodeLogStore.shared.append(s) }
-                #endif
             })
 
             let foundMsg = "OFF: product found for \(code)"
             logger?(foundMsg)
-            #if DEBUG
-            await BarcodeLogStore.shared.append(foundMsg)
-            #endif
 
             if let offEntry = OpenFoodFactsClient.mapToEntry(from: product) {
                 let mapMsg = "OFF: mapped nutriments -> upserting and applying"
                 logger?(mapMsg)
-                #if DEBUG
-                await BarcodeLogStore.shared.append(mapMsg)
-                #endif
                 // Upsert into DuckDB
                 try? await upsert(entry: offEntry)
                 // Apply to meal (fill empty-only)
@@ -223,16 +239,19 @@ actor BarcodeRepository {
                 let noMapMsg = "OFF: mapping returned no usable nutriments"
                 logger?(noMapMsg)
                 #if DEBUG
-                await BarcodeLogStore.shared.append(noMapMsg)
+                await BarcodeLogStore.shared.appendEvent(
+                    .init(stage: .offMapStart, codeRaw: rawCode, codeNormalized: code, error: "No usable nutriments")
+                )
                 #endif
             }
         } catch {
             let errMsg = "OFF: error for \(code): \(error.localizedDescription)"
             logger?(errMsg)
             #if DEBUG
-            await BarcodeLogStore.shared.append(errMsg)
+            await BarcodeLogStore.shared.appendEvent(
+                .init(stage: .offDecodeError, codeRaw: rawCode, codeNormalized: code, error: errMsg)
+            )
             #endif
-            // OFF not found or network error — ignore silently for normal flow
         }
     }
 
@@ -243,13 +262,11 @@ actor BarcodeRepository {
                                       context: NSManagedObjectContext,
                                       sodiumUnit: SodiumUnit,
                                       vitaminsUnit: VitaminsUnit) {
-        // Helper closures to fill if empty in Core Data model (numbers are Double storage)
         func fillDoubleIfZero(_ current: Double, with v: Int?) -> Double {
             guard current <= 0, let v else { return current }
             return Double(max(0, v))
         }
 
-        // Calories stored in kcal; only fill if zero
         if meal.calories <= 0, let kcal = entry.calories {
             meal.calories = Double(max(0, kcal))
             meal.caloriesIsGuess = false
@@ -264,13 +281,11 @@ actor BarcodeRepository {
         meal.fat = fillDoubleIfZero(meal.fat, with: entry.fat)
         if entry.fat != nil { meal.fatIsGuess = meal.fatIsGuess && meal.fat > 0 ? false : meal.fatIsGuess }
 
-        // Sodium is stored in mg; UI unit varies — but Meal stores mg, so fill mg directly.
         if meal.sodium <= 0, let mg = entry.sodiumMg {
             meal.sodium = Double(max(0, mg))
             meal.sodiumIsGuess = false
         }
 
-        // Sub-macros
         meal.sugars = fillDoubleIfZero(meal.sugars, with: entry.sugars)
         if entry.sugars != nil { meal.sugarsIsGuess = meal.sugarsIsGuess && meal.sugars > 0 ? false : meal.sugarsIsGuess }
 
@@ -280,7 +295,6 @@ actor BarcodeRepository {
         meal.fibre = fillDoubleIfZero(meal.fibre, with: entry.fibre)
         if entry.fibre != nil { meal.fibreIsGuess = meal.fibreIsGuess && meal.fibre > 0 ? false : meal.fibreIsGuess }
 
-        // Fats breakdown
         meal.monounsaturatedFat = fillDoubleIfZero(meal.monounsaturatedFat, with: entry.monounsaturatedFat)
         if entry.monounsaturatedFat != nil { meal.monounsaturatedFatIsGuess = meal.monounsaturatedFatIsGuess && meal.monounsaturatedFat > 0 ? false : meal.monounsaturatedFatIsGuess }
 
@@ -293,7 +307,6 @@ actor BarcodeRepository {
         meal.transFat = fillDoubleIfZero(meal.transFat, with: entry.transFat)
         if entry.transFat != nil { meal.transFatIsGuess = meal.transFatIsGuess && meal.transFat > 0 ? false : meal.transFatIsGuess }
 
-        // Protein breakdown not provided by OFF; still fill if present
         meal.animalProtein = fillDoubleIfZero(meal.animalProtein, with: entry.animalProtein)
         if entry.animalProtein != nil { meal.animalProteinIsGuess = meal.animalProteinIsGuess && meal.animalProtein > 0 ? false : meal.animalProteinIsGuess }
 
@@ -303,7 +316,6 @@ actor BarcodeRepository {
         meal.proteinSupplements = fillDoubleIfZero(meal.proteinSupplements, with: entry.proteinSupplements)
         if entry.proteinSupplements != nil { meal.proteinSupplementsIsGuess = meal.proteinSupplementsIsGuess && meal.proteinSupplements > 0 ? false : meal.proteinSupplementsIsGuess }
 
-        // Vitamins/minerals stored in mg base
         func fillVitaminMineral(_ current: Double, with mg: Int?) -> Double {
             guard current <= 0, let mg else { return current }
             return Double(max(0, mg))
@@ -342,8 +354,6 @@ actor BarcodeRepository {
         meal.magnesium = fillVitaminMineral(meal.magnesium, with: entry.magnesium)
         if entry.magnesium != nil { meal.magnesiumIsGuess = meal.magnesiumIsGuess && meal.magnesium > 0 ? false : meal.magnesiumIsGuess }
 
-        // Persist
         try? context.save()
     }
 }
-

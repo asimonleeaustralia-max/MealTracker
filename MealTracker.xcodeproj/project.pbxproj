@@ -19,6 +19,7 @@
 		C3636E8D2EFF6AFA00665602 /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3636E8C2EFF6AFA00665602 /* AboutView.swift */; };
 		C3639B392F0675D200CF6365 /* BarcodeLogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3639B382F0675D200CF6365 /* BarcodeLogStore.swift */; };
 		C3639B3B2F0675D500CF6365 /* BarcodeLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3639B3A2F0675D500CF6365 /* BarcodeLogView.swift */; };
+		C3639B3D2F067A0100CF6365 /* BarcodeLogEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3639B3C2F067A0100CF6365 /* BarcodeLogEvent.swift */; };
 		C37001F92EF7AA680085904C /* SettingsTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = C37001F82EF7AA680085904C /* SettingsTypes.swift */; };
 		C37001FC2EF936C90085904C /* DuckDBManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C37001FB2EF936C90085904C /* DuckDBManager.swift */; };
 		C37001FE2EF936CD0085904C /* BarcodeRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = C37001FD2EF936CD0085904C /* BarcodeRepository.swift */; };
@@ -59,6 +60,7 @@
 		C3636E8C2EFF6AFA00665602 /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		C3639B382F0675D200CF6365 /* BarcodeLogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeLogStore.swift; sourceTree = "<group>"; };
 		C3639B3A2F0675D500CF6365 /* BarcodeLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeLogView.swift; sourceTree = "<group>"; };
+		C3639B3C2F067A0100CF6365 /* BarcodeLogEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeLogEvent.swift; sourceTree = "<group>"; };
 		C37001F82EF7AA680085904C /* SettingsTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTypes.swift; sourceTree = "<group>"; };
 		C37001FB2EF936C90085904C /* DuckDBManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuckDBManager.swift; sourceTree = "<group>"; };
 		C37001FD2EF936CD0085904C /* BarcodeRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeRepository.swift; sourceTree = "<group>"; };
@@ -154,6 +156,7 @@
 				C3636E8C2EFF6AFA00665602 /* AboutView.swift */,
 				C3639B382F0675D200CF6365 /* BarcodeLogStore.swift */,
 				C3639B3A2F0675D500CF6365 /* BarcodeLogView.swift */,
+				C3639B3C2F067A0100CF6365 /* BarcodeLogEvent.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -257,6 +260,7 @@
 				C37002232EFA85E70085904C /* ParquetDownloadManager.swift in Sources */,
 				C38106602ED29E5A00C796E0 /* PhotoNutritionGuesser.swift in Sources */,
 				C37002002EFA818E0085904C /* OpenFoodFactsClient.swift in Sources */,
+				C3639B3D2F067A0100CF6365 /* BarcodeLogEvent.swift in Sources */,
 				C3636E1C2EFE0C9100665602 /* MealFormView+Media.swift in Sources */,
 				C3639B3B2F0675D500CF6365 /* BarcodeLogView.swift in Sources */,
 				C370026F2EFB97220085904C /* TheCocktailDBClient.swift in Sources */,

@@ -2,7 +2,7 @@
 //  BarcodeLogStore.swift
 //  MealTracker
 //
-//  Debug-only in-memory ring buffer for verbose barcode logging.
+//  DEBUG-only structured log for barcode events, with a legacy string projection for simple views.
 //
 
 import Foundation
@@ -12,41 +12,77 @@ import Combine
 actor BarcodeLogStore {
     static let shared = BarcodeLogStore()
 
-    private var lines: [String] = []
+    // Structured events
+    private var events: [BarcodeLogEvent] = []
     private let capacity: Int = 1000
 
-    // Use a PassthroughSubject to notify SwiftUI views on changes
-    private let subject = PassthroughSubject<[String], Never>()
+    // Publisher for UI (structured)
+    private let eventsSubject = PassthroughSubject<[BarcodeLogEvent], Never>()
+    // Legacy publisher for string lines (derived)
+    private let linesSubject = PassthroughSubject<[String], Never>()
 
-    // Public publisher (erased)
-    nonisolated var publisher: AnyPublisher<[String], Never> {
-        subject.eraseToAnyPublisher()
-    }
+    // Public publishers (erased)
+    nonisolated var eventsPublisher: AnyPublisher<[BarcodeLogEvent], Never> { eventsSubject.eraseToAnyPublisher() }
+    nonisolated var publisher: AnyPublisher<[String], Never> { linesSubject.eraseToAnyPublisher() }
 
-    func append(_ message: String) {
-        let ts = Date()
-        let df = DateFormatter()
-        df.dateFormat = "HH:mm:ss.SSS"
-        let formatted = "[\(df.string(from: ts))] \(message)"
-        lines.append(formatted)
-        if lines.count > capacity {
-            lines.removeFirst(lines.count - capacity)
+    // Append a structured event
+    func appendEvent(_ event: BarcodeLogEvent) {
+        events.append(event)
+        if events.count > capacity {
+            events.removeFirst(events.count - capacity)
         }
-        subject.send(lines)
+        eventsSubject.send(events)
+        linesSubject.send(events.map { Self.line(for: $0) })
     }
 
+    // Convenience to append a simple message (kept for existing call sites)
+    func append(_ message: String) {
+        let evt = BarcodeLogEvent(stage: .offConversion, // neutral stage for freeform
+                                  codeRaw: nil,
+                                  codeNormalized: nil,
+                                  sourceJSON: nil,
+                                  conversions: [message],
+                                  entry: nil,
+                                  error: nil)
+        appendEvent(evt)
+    }
+
+    // Snapshot helpers
     func snapshot() -> [String] {
-        lines
+        events.map { Self.line(for: $0) }
+    }
+
+    func snapshotEvents() -> [BarcodeLogEvent] {
+        events
     }
 
     func clear() {
-        lines.removeAll(keepingCapacity: true)
-        subject.send(lines)
+        events.removeAll(keepingCapacity: true)
+        eventsSubject.send(events)
+        linesSubject.send([])
     }
 
     func lineCount() -> Int {
-        lines.count
+        events.count
+    }
+
+    // MARK: - Formatting
+
+    private static func line(for e: BarcodeLogEvent) -> String {
+        let df = DateFormatter()
+        df.dateFormat = "HH:mm:ss.SSS"
+        var parts: [String] = []
+        parts.append("[\(df.string(from: e.timestamp))]")
+        parts.append(e.stage.rawValue)
+        if let c = e.codeNormalized, !c.isEmpty {
+            parts.append("code=\(c)")
+        } else if let c = e.codeRaw, !c.isEmpty {
+            parts.append("raw=\(c)")
+        }
+        if let err = e.error, !err.isEmpty {
+            parts.append("error=\(err)")
+        }
+        return parts.joined(separator: " ")
     }
 }
 #endif
-

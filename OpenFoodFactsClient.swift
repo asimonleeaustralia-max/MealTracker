@@ -3,8 +3,7 @@
 //  MealTracker
 //
 //  Minimal OFF client to fetch product nutriments by barcode.
-//  Prefers per-serving values when available and sensible; otherwise falls back to per-100g/100ml.
-//  Maps into LocalBarcodeDB.Entry units (kcal, grams, mg).
+//  Emits structured barcode log events with source payloads and conversion steps.
 //
 
 import Foundation
@@ -99,7 +98,6 @@ struct Nutriments: Codable {
 
 struct OpenFoodFactsClient {
 
-    // Normalize barcode string similarly to LocalBarcodeDB and BarcodeRepository
     private static func normalizedCode(_ code: String) -> String {
         code.trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: " ", with: "")
@@ -122,39 +120,41 @@ struct OpenFoodFactsClient {
         let code = normalizedCode(rawCode)
 
         // Try v2 first
-        if let prod = try await fetchProductV2(code: code, logger: logger) {
-            return prod
-        }
+        if let prod = try await fetchProductV2(code: code, logger: logger) { return prod }
         // Fallback to v1 if v2 not found
-        if let prod = try await fetchProductV1(code: code, logger: logger) {
-            return prod
-        }
+        if let prod = try await fetchProductV1(code: code, logger: logger) { return prod }
 
         let err = NSError(domain: "OpenFoodFactsClient", code: 404, userInfo: [NSLocalizedDescriptionKey: "Product \(code) not found"])
         #if DEBUG
-        if let logger { logger("OFF: not found \(code)") }
-        await BarcodeLogStore.shared.append("OFF: not found \(code)")
+        logger?("OFF: not found \(code)")
+        await BarcodeLogStore.shared.appendEvent(
+            .init(stage: .offDecodeError, codeRaw: rawCode, codeNormalized: code, error: "OFF not found")
+        )
         #endif
         throw err
     }
 
     private static func fetchProductV2(code: String, logger: ((String) -> Void)?) async throws -> Product? {
-        guard let url = URL(string: "https://world.openfoodfacts.org/api/v2/product/\(code).json") else {
-            return nil
-        }
+        guard let url = URL(string: "https://world.openfoodfacts.org/api/v2/product/\(code).json") else { return nil }
         let (data, resp) = try await URLSession.shared.data(from: url)
-        guard let http = resp as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
-            return nil
-        }
+        guard let http = resp as? HTTPURLResponse, 200..<300 ~= http.statusCode else { return nil }
         do {
             let decoded = try JSONDecoder().decode(V2Response.self, from: data)
-            if let status = decoded.status, status == 1 {
-                return decoded.product
+            if let status = decoded.status, status == 1, let product = decoded.product {
+                #if DEBUG
+                let src = BarcodeLogPretty.compactJSON(product) ?? ""
+                await BarcodeLogStore.shared.appendEvent(
+                    .init(stage: .offFetchV2, codeRaw: product.code, codeNormalized: normalizedCode(product.code ?? code), sourceJSON: src)
+                )
+                #endif
+                return product
             } else {
                 let msg = "OFF v2: status \(decoded.status ?? -1) \(decoded.status_verbose ?? "") for code \(code)"
                 logger?(msg)
                 #if DEBUG
-                await BarcodeLogStore.shared.append(msg)
+                await BarcodeLogStore.shared.appendEvent(
+                    .init(stage: .offDecodeError, codeRaw: code, codeNormalized: code, error: msg)
+                )
                 #endif
                 return nil
             }
@@ -162,29 +162,35 @@ struct OpenFoodFactsClient {
             let msg = "OFF v2: decode error for \(code): \(error.localizedDescription)"
             logger?(msg)
             #if DEBUG
-            await BarcodeLogStore.shared.append(msg)
+            await BarcodeLogStore.shared.appendEvent(
+                .init(stage: .offDecodeError, codeRaw: code, codeNormalized: code, error: msg)
+            )
             #endif
             return nil
         }
     }
 
     private static func fetchProductV1(code: String, logger: ((String) -> Void)?) async throws -> Product? {
-        guard let url = URL(string: "https://world.openfoodfacts.org/api/v0/product/\(code).json") else {
-            return nil
-        }
+        guard let url = URL(string: "https://world.openfoodfacts.org/api/v0/product/\(code).json") else { return nil }
         let (data, resp) = try await URLSession.shared.data(from: url)
-        guard let http = resp as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
-            return nil
-        }
+        guard let http = resp as? HTTPURLResponse, 200..<300 ~= http.statusCode else { return nil }
         do {
             let decoded = try JSONDecoder().decode(V1Response.self, from: data)
-            if let status = decoded.status, status == 1 {
-                return decoded.product
+            if let status = decoded.status, status == 1, let product = decoded.product {
+                #if DEBUG
+                let src = BarcodeLogPretty.compactJSON(product) ?? ""
+                await BarcodeLogStore.shared.appendEvent(
+                    .init(stage: .offFetchV1, codeRaw: product.code, codeNormalized: normalizedCode(product.code ?? code), sourceJSON: src)
+                )
+                #endif
+                return product
             } else {
                 let msg = "OFF v1: status \(decoded.status ?? -1) \(decoded.status_verbose ?? "") for code \(code)"
                 logger?(msg)
                 #if DEBUG
-                await BarcodeLogStore.shared.append(msg)
+                await BarcodeLogStore.shared.appendEvent(
+                    .init(stage: .offDecodeError, codeRaw: code, codeNormalized: code, error: msg)
+                )
                 #endif
                 return nil
             }
@@ -192,27 +198,40 @@ struct OpenFoodFactsClient {
             let msg = "OFF v1: decode error for \(code): \(error.localizedDescription)"
             logger?(msg)
             #if DEBUG
-            await BarcodeLogStore.shared.append(msg)
+            await BarcodeLogStore.shared.appendEvent(
+                .init(stage: .offDecodeError, codeRaw: code, codeNormalized: code, error: msg)
+            )
             #endif
             return nil
         }
     }
 
-    // Map OFF Product -> LocalBarcodeDB.Entry (units: kcal, g, mg)
+    // Map OFF Product -> LocalBarcodeDB.Entry (units: kcal, g, mg), emitting conversion steps
     static func mapToEntry(from product: Product) -> LocalBarcodeDB.Entry? {
         guard let nutr = product.nutriments else { return nil }
+
+        #if DEBUG
+        var steps: [String] = []
+        #endif
 
         func toIntNonNegative(_ d: Double?) -> Int? {
             guard let d else { return nil }
             return max(0, Int((d).rounded()))
         }
 
-        // Energy kcal: prefer kcal fields; fall back to kJ -> kcal
+        // Energy kcal
         let kcal: Int? = {
             if let v = nutr.energy_kcal_serving ?? nutr.energy_kcal_100g {
+                #if DEBUG
+                if let s = nutr.energy_kcal_serving { steps.append("energy: \(s) kcal (serving) -> \(Int(s.rounded())) kcal") }
+                else if let h = nutr.energy_kcal_100g { steps.append("energy: \(h) kcal (100g) -> \(Int(h.rounded())) kcal") }
+                #endif
                 return toIntNonNegative(v)
             }
             if let kj = nutr.energy_serving ?? nutr.energy_100g {
+                #if DEBUG
+                steps.append("energy: \(kj) kJ -> \(Int((kj / 4.184).rounded())) kcal")
+                #endif
                 return toIntNonNegative(kj / 4.184)
             }
             return nil
@@ -220,65 +239,102 @@ struct OpenFoodFactsClient {
 
         // Macros in grams
         let carbs = toIntNonNegative(nutr.carbohydrates_serving ?? nutr.carbohydrates_100g)
-        let protein = toIntNonNegative(nutr.proteins_serving ?? nutr.proteins_100g)
-        let fat = toIntNonNegative(nutr.fat_serving ?? nutr.fat_100g)
+        #if DEBUG
+        if let s = nutr.carbohydrates_serving { steps.append("carbohydrates: \(s) g (serving) -> \(Int(s.rounded())) g") }
+        else if let h = nutr.carbohydrates_100g { steps.append("carbohydrates: \(h) g (100g) -> \(Int(h.rounded())) g") }
+        #endif
 
-        // Sodium mg: OFF gives sodium (g) or salt (g). Convert g->mg; salt g -> mg sodium (~400 mg per g salt)
+        let protein = toIntNonNegative(nutr.proteins_serving ?? nutr.proteins_100g)
+        #if DEBUG
+        if let s = nutr.proteins_serving { steps.append("protein: \(s) g (serving) -> \(Int(s.rounded())) g") }
+        else if let h = nutr.proteins_100g { steps.append("protein: \(h) g (100g) -> \(Int(h.rounded())) g") }
+        #endif
+
+        let fat = toIntNonNegative(nutr.fat_serving ?? nutr.fat_100g)
+        #if DEBUG
+        if let s = nutr.fat_serving { steps.append("fat: \(s) g (serving) -> \(Int(s.rounded())) g") }
+        else if let h = nutr.fat_100g { steps.append("fat: \(h) g (100g) -> \(Int(h.rounded())) g") }
+        #endif
+
+        // Sodium mg
         let sodiumMg: Int? = {
             if let sG = nutr.sodium_serving ?? nutr.sodium_100g {
+                #if DEBUG
+                steps.append("sodium: \(sG) g -> \(Int((sG * 1000).rounded())) mg")
+                #endif
                 return toIntNonNegative(sG * 1000.0)
             }
             if let saltG = nutr.salt_serving ?? nutr.salt_100g {
-                return toIntNonNegative(saltG * 400.0) // 1 g salt ≈ 400 mg sodium
+                #if DEBUG
+                steps.append("salt: \(saltG) g -> sodium ≈ \(Int((saltG * 400.0).rounded())) mg (1 g salt ≈ 400 mg sodium)")
+                #endif
+                return toIntNonNegative(saltG * 400.0)
             }
             return nil
         }()
 
-        // Sub-macros in grams
+        // Sub-macros
         let sugars = toIntNonNegative(nutr.sugars_serving ?? nutr.sugars_100g)
-        let fibre = toIntNonNegative(nutr.fiber_serving ?? nutr.fiber_100g)
+        #if DEBUG
+        if let s = nutr.sugars_serving { steps.append("sugars: \(s) g (serving) -> \(Int(s.rounded())) g") }
+        else if let h = nutr.sugars_100g { steps.append("sugars: \(h) g (100g) -> \(Int(h.rounded())) g") }
+        #endif
 
-        // Starch is not commonly provided by OFF; keep nil (no field in Nutriments). Leave as nil.
+        let fibre = toIntNonNegative(nutr.fiber_serving ?? nutr.fiber_100g)
+        #if DEBUG
+        if let s = nutr.fiber_serving { steps.append("fibre: \(s) g (serving) -> \(Int(s.rounded())) g") }
+        else if let h = nutr.fiber_100g { steps.append("fibre: \(h) g (100g) -> \(Int(h.rounded())) g") }
+        #endif
+
         let starch: Int? = nil
 
-        // Fat breakdown in grams
+        // Fat breakdown
         let monounsaturatedFat = toIntNonNegative(nutr.monounsaturated_fat_serving ?? nutr.monounsaturated_fat_100g)
         let polyunsaturatedFat = toIntNonNegative(nutr.polyunsaturated_fat_serving ?? nutr.polyunsaturated_fat_100g)
         let saturatedFat = toIntNonNegative(nutr.saturated_fat_serving ?? nutr.saturated_fat_100g)
         let transFat = toIntNonNegative(nutr.trans_fat_serving ?? nutr.trans_fat_100g)
+        #if DEBUG
+        if let v = nutr.monounsaturated_fat_serving ?? nutr.monounsaturated_fat_100g { steps.append("mono: \(v) g -> \(Int(v.rounded())) g") }
+        if let v = nutr.polyunsaturated_fat_serving ?? nutr.polyunsaturated_fat_100g { steps.append("poly: \(v) g -> \(Int(v.rounded())) g") }
+        if let v = nutr.saturated_fat_serving ?? nutr.saturated_fat_100g { steps.append("saturated: \(v) g -> \(Int(v.rounded())) g") }
+        if let v = nutr.trans_fat_serving ?? nutr.trans_fat_100g { steps.append("trans: \(v) g -> \(Int(v.rounded())) g") }
+        #endif
 
         // Protein breakdown not provided by OFF
         let animalProtein: Int? = nil
         let plantProtein: Int? = nil
         let proteinSupplements: Int? = nil
 
-        // Helper: convert vitamin/mineral value with its unit to mg
-        func toMg(_ value: Double?, unit: String?) -> Int? {
+        func toMg(_ value: Double?, unit: String?, label: String) -> Int? {
             guard let value else { return nil }
             let u = (unit ?? "").lowercased()
             if u.contains("µg") || u.contains("mcg") || u.contains("ug") {
+                #if DEBUG
+                steps.append("\(label): \(value) µg -> \(Int((value / 1000.0).rounded())) mg")
+                #endif
                 return toIntNonNegative(value / 1000.0)
             }
-            // Default assume mg if unit missing or says mg
+            #if DEBUG
+            steps.append("\(label): \(value) mg -> \(Int(value.rounded())) mg")
+            #endif
             return toIntNonNegative(value)
         }
 
-        // Vitamins (mg base)
-        let vitaminA = toMg(nutr.vitamin_a_serving ?? nutr.vitamin_a_100g, unit: nutr.vitamin_a_unit)
-        let vitaminB: Int? = nil // OFF has many B subtypes; without a single field, keep nil.
-        let vitaminC = toMg(nutr.vitamin_c_serving ?? nutr.vitamin_c_100g, unit: nutr.vitamin_c_unit)
-        let vitaminD = toMg(nutr.vitamin_d_serving ?? nutr.vitamin_d_100g, unit: nutr.vitamin_d_unit)
-        let vitaminE = toMg(nutr.vitamin_e_serving ?? nutr.vitamin_e_100g, unit: nutr.vitamin_e_unit)
-        let vitaminK = toMg(nutr.vitamin_k_serving ?? nutr.vitamin_k_100g, unit: nutr.vitamin_k_unit)
+        // Vitamins
+        let vitaminA = toMg(nutr.vitamin_a_serving ?? nutr.vitamin_a_100g, unit: nutr.vitamin_a_unit, label: "vitaminA")
+        let vitaminB: Int? = nil
+        let vitaminC = toMg(nutr.vitamin_c_serving ?? nutr.vitamin_c_100g, unit: nutr.vitamin_c_unit, label: "vitaminC")
+        let vitaminD = toMg(nutr.vitamin_d_serving ?? nutr.vitamin_d_100g, unit: nutr.vitamin_d_unit, label: "vitaminD")
+        let vitaminE = toMg(nutr.vitamin_e_serving ?? nutr.vitamin_e_100g, unit: nutr.vitamin_e_unit, label: "vitaminE")
+        let vitaminK = toMg(nutr.vitamin_k_serving ?? nutr.vitamin_k_100g, unit: nutr.vitamin_k_unit, label: "vitaminK")
 
-        // Minerals (mg base)
-        let calcium = toMg(nutr.calcium_serving ?? nutr.calcium_100g, unit: nutr.calcium_unit)
-        let iron = toMg(nutr.iron_serving ?? nutr.iron_100g, unit: nutr.iron_unit)
-        let potassium = toMg(nutr.potassium_serving ?? nutr.potassium_100g, unit: nutr.potassium_unit)
-        let zinc = toMg(nutr.zinc_serving ?? nutr.zinc_100g, unit: nutr.zinc_unit)
-        let magnesium = toMg(nutr.magnesium_serving ?? nutr.magnesium_100g, unit: nutr.magnesium_unit)
+        // Minerals
+        let calcium = toMg(nutr.calcium_serving ?? nutr.calcium_100g, unit: nutr.calcium_unit, label: "calcium")
+        let iron = toMg(nutr.iron_serving ?? nutr.iron_100g, unit: nutr.iron_unit, label: "iron")
+        let potassium = toMg(nutr.potassium_serving ?? nutr.potassium_100g, unit: nutr.potassium_unit, label: "potassium")
+        let zinc = toMg(nutr.zinc_serving ?? nutr.zinc_100g, unit: nutr.zinc_unit, label: "zinc")
+        let magnesium = toMg(nutr.magnesium_serving ?? nutr.magnesium_100g, unit: nutr.magnesium_unit, label: "magnesium")
 
-        // If nothing meaningful, return nil
         let hasAny =
             kcal != nil || carbs != nil || protein != nil || fat != nil || sodiumMg != nil ||
             sugars != nil || fibre != nil || monounsaturatedFat != nil || polyunsaturatedFat != nil ||
@@ -290,7 +346,7 @@ struct OpenFoodFactsClient {
 
         let code = normalizedCode(product.code ?? "")
 
-        return LocalBarcodeDB.Entry(
+        let entry = LocalBarcodeDB.Entry(
             code: code.isEmpty ? (product.code ?? "") : code,
             calories: kcal,
             carbohydrates: carbs,
@@ -319,5 +375,19 @@ struct OpenFoodFactsClient {
             zinc: zinc,
             magnesium: magnesium
         )
+
+        #if DEBUG
+        Task {
+            await BarcodeLogStore.shared.appendEvent(
+                .init(stage: .offMapResult,
+                      codeRaw: product.code,
+                      codeNormalized: code.isEmpty ? (product.code ?? "") : code,
+                      conversions: steps,
+                      entry: entry)
+            )
+        }
+        #endif
+
+        return entry
     }
 }
