@@ -364,47 +364,38 @@ struct MealFormView: View {
 
             formContent(l: l)
                 .modifier(CompactSectionSpacing())
-
-            // DEBUG-only wizard progress + API log
-            #if DEBUG
-            if aiFeaturesEnabled, !galleryItems.isEmpty {
-                Section {
-                    if let progress = wizardProgress, !progress.isEmpty {
-                        Text("Wizard: \(progress)")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    if let err = analyzeError, !err.isEmpty {
-                        Text("Wizard Error: \(err)")
-                            .font(.caption2)
-                            .foregroundStyle(.red)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    if !wizardDebugLog.isEmpty {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Wizard Debug Log")
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                            ForEach(Array(wizardDebugLog.suffix(50)).indices, id: \.self) { idx in
-                                Text(wizardDebugLog[idx])
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .textSelection(.enabled)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 4)
-                    }
-                }
-                .padding(.horizontal)
-                .padding(.bottom, 8)
-            }
-            #endif
         }
-        // Attach toolbars directly here, avoiding conditional logic inside the builder.
-        // Apply two separate toolbar modifiers guarded by availability.
-        .modifier(ToolbarShim(l: l, isEditing: isEditing, isValid: isValid, forceEnableSave: forceEnableSave, showingSettings: $showingSettings, showingDeleteConfirm: $showingDeleteConfirm, dismiss: dismiss, save: save))
+        // Toolbar: Cancel (leading), Settings + Delete (editing) + Save (trailing)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(l.localized("cancel")) {
+                    dismiss()
+                }
+                .accessibilityIdentifier("toolbar_cancel")
+            }
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button {
+                    showingSettings = true
+                } label: {
+                    Image(systemName: "gearshape")
+                }
+                .accessibilityIdentifier("toolbar_settings")
+
+                if isEditing {
+                    Button(role: .destructive) {
+                        showingDeleteConfirm = true
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .accessibilityIdentifier("toolbar_delete")
+                }
+                Button(l.localized("save")) {
+                    save()
+                }
+                .disabled(!(isValid || forceEnableSave))
+                .accessibilityIdentifier("toolbar_save")
+            }
+        }
         .sheet(isPresented: $showingSettings) {
             SettingsView()
                 .environmentObject(session)
