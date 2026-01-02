@@ -293,23 +293,46 @@ struct MealFormView: View {
     // MARK: - Wizard status (short, top-left)
     private var wizardStatusText: String {
         guard aiFeaturesEnabled, !galleryItems.isEmpty else { return "" }
+
+        // While analyzing, show progress or generic message
         if isAnalyzing {
             if let progress = wizardProgress, !progress.isEmpty {
                 return progress
             }
             return "Analyzing…"
         }
-        if let err = analyzeError, !err.isEmpty { return err }
-        // Prefer showing the last detected barcode when available
-        if let code = lastDetectedBarcode, !code.isEmpty {
-            return "Barcode: \(code)"
+
+        // Show errors immediately if present
+        if let err = analyzeError, !err.isEmpty {
+            return err
         }
+
+        // After wizard completes: prefer product name, else barcode, else applied tag
+        let product = meal?.productName?.trimmingCharacters(in: .whitespacesAndNewlines)
         if wizardCanUndo {
+            if let product, !product.isEmpty {
+                return product
+            }
+            if let code = lastDetectedBarcode, !code.isEmpty {
+                return "Barcode: \(code)"
+            }
             if let tag = meal?.photoGuesserType, !tag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return "Applied: \(tag)"
             }
             return "Applied"
         }
+
+        // If not in undo state but we still have a product name after completion, show it
+        if let product, !product.isEmpty {
+            return product
+        }
+
+        // Fallback to transient barcode if available
+        if let code = lastDetectedBarcode, !code.isEmpty {
+            return "Barcode: \(code)"
+        }
+
+        // Otherwise pass through any remaining progress text, or nothing
         if let progress = wizardProgress, !progress.isEmpty {
             return progress
         }
@@ -1057,3 +1080,4 @@ extension MealFormView {
         return true
     }
 }
+
