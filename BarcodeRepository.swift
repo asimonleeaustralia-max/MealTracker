@@ -240,13 +240,38 @@ actor BarcodeRepository {
             }
 
             if let offEntry = OpenFoodFactsClient.mapToEntry(from: product) {
-                let mapMsg = "OFF: mapped nutriments -> upserting and applying"
-                logger?(mapMsg)
-                // Upsert into DuckDB
-                try? await upsert(entry: offEntry)
+                let (sanitized, dropped) = sanitize(entry: offEntry)
+
+                if !dropped.isEmpty {
+                    let msg = "OFF: sanitized entry (dropped: \(dropped.joined(separator: ", ")))"
+                    logger?(msg)
+                    #if DEBUG
+                    await BarcodeLogStore.shared.appendEvent(
+                        .init(stage: .offMapResult,
+                              codeRaw: rawCode,
+                              codeNormalized: code,
+                              conversions: ["Dropped red fields: \(dropped.joined(separator: ", "))"],
+                              entry: sanitized)
+                    )
+                    #endif
+                } else {
+                    #if DEBUG
+                    await BarcodeLogStore.shared.appendEvent(
+                        .init(stage: .offMapResult,
+                              codeRaw: rawCode,
+                              codeNormalized: code,
+                              conversions: ["No red fields dropped"],
+                              entry: sanitized)
+                    )
+                    #endif
+                }
+
+                // Upsert into DuckDB with safe fields only
+                try? await upsert(entry: sanitized)
+
                 // Apply to meal (fill empty-only)
                 await MainActor.run {
-                    applyEntryToMealForm(entry: offEntry, meal: meal, context: context, sodiumUnit: sodiumUnit, vitaminsUnit: vitaminsUnit)
+                    applyEntryToMealForm(entry: sanitized, meal: meal, context: context, sodiumUnit: sodiumUnit, vitaminsUnit: vitaminsUnit)
                 }
             } else {
                 let noMapMsg = "OFF: mapping returned no usable nutriments"
@@ -375,3 +400,60 @@ actor BarcodeRepository {
     }
 }
 
+// MARK: - Sanitization using UI thresholds (per-field omission)
+private extension BarcodeRepository {
+    // Returns a copy of the entry with any “red” fields nilled out, and the list of dropped field keys.
+    func sanitize(entry e: LocalBarcodeDB.Entry) -> (LocalBarcodeDB.Entry, [String]) {
+        var dropped: [String] = []
+
+        func keepInt(_ value: Int?, thresholds: ValidationThresholds, key: String) -> Int? {
+            guard let v = value else { return nil }
+            if thresholds.severity(for: v) == .stupid { dropped.append(key); return nil }
+            return max(0, v)
+        }
+
+        func keepDouble(_ value: Double?, thresholds: ValidationThresholds, key: String) -> Double? {
+            guard let v = value else { return nil }
+            if thresholds.severityDouble(v) == .stupid { dropped.append(key); return nil }
+            return max(0.0, v)
+        }
+
+        // Build sanitized entry
+        let sanitized = LocalBarcodeDB.Entry(
+            code: e.code,
+            calories: keepInt(e.calories, thresholds: .calories, key: "calories"),
+            carbohydrates: keepDouble(e.carbohydrates, thresholds: .grams, key: "carbohydrates"),
+            protein: keepDouble(e.protein, thresholds: .grams, key: "protein"),
+            fat: keepDouble(e.fat, thresholds: .grams, key: "fat"),
+            sodiumMg: keepInt(e.sodiumMg, thresholds: .sodiumMg, key: "sodiumMg"),
+
+            sugars: keepDouble(e.sugars, thresholds: .grams, key: "sugars"),
+            starch: keepDouble(e.starch, thresholds: .grams, key: "starch"),
+            fibre: keepDouble(e.fibre, thresholds: .grams, key: "fibre"),
+
+            monounsaturatedFat: keepDouble(e.monounsaturatedFat, thresholds: .grams, key: "monounsaturatedFat"),
+            polyunsaturatedFat: keepDouble(e.polyunsaturatedFat, thresholds: .grams, key: "polyunsaturatedFat"),
+            saturatedFat: keepDouble(e.saturatedFat, thresholds: .grams, key: "saturatedFat"),
+            transFat: keepDouble(e.transFat, thresholds: .grams, key: "transFat"),
+
+            animalProtein: keepDouble(e.animalProtein, thresholds: .grams, key: "animalProtein"),
+            plantProtein: keepDouble(e.plantProtein, thresholds: .grams, key: "plantProtein"),
+            proteinSupplements: keepDouble(e.proteinSupplements, thresholds: .grams, key: "proteinSupplements"),
+
+            vitaminA: keepDouble(e.vitaminA, thresholds: .vitaminMineralMg, key: "vitaminA"),
+            vitaminB: keepDouble(e.vitaminB, thresholds: .vitaminMineralMg, key: "vitaminB"),
+            vitaminC: keepDouble(e.vitaminC, thresholds: .vitaminMineralMg, key: "vitaminC"),
+            vitaminD: keepDouble(e.vitaminD, thresholds: .vitaminMineralMg, key: "vitaminD"),
+            vitaminE: keepDouble(e.vitaminE, thresholds: .vitaminMineralMg, key: "vitaminE"),
+            vitaminK: keepDouble(e.vitaminK, thresholds: .vitaminMineralMg, key: "vitaminK"),
+
+            calcium: keepInt(e.calcium, thresholds: .vitaminMineralMg, key: "calcium"),
+            iron: keepInt(e.iron, thresholds: .vitaminMineralMg, key: "iron"),
+            potassium: keepDouble(e.potassium, thresholds: .vitaminMineralMg, key: "potassium"),
+            zinc: keepInt(e.zinc, thresholds: .vitaminMineralMg, key: "zinc"),
+            magnesium: keepInt(e.magnesium, thresholds: .vitaminMineralMg, key: "magnesium")
+        )
+
+        return (sanitized, dropped)
+    }
+}
