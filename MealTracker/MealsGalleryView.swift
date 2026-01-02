@@ -207,6 +207,21 @@ private struct MealTile: View {
         return !meal.objectID.isTemporaryID && ctx.registeredObject(for: meal.objectID) != nil
     }
 
+    // Combined title: base title plus product name if present
+    private var combinedTitle: String {
+        let base = meal.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let prod = meal.productName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let prod, !prod.isEmpty {
+            // Add a period if the base doesn’t already end with punctuation
+            if base.isEmpty {
+                return prod
+            }
+            let needsDot = !(base.hasSuffix(".") || base.hasSuffix("!") || base.hasSuffix("?"))
+            return needsDot ? "\(base). \(prod)" : "\(base) \(prod)"
+        }
+        return base
+    }
+
     var body: some View {
         // Defensive: avoid touching properties if the object is deleted or contextless
         if meal.isDeleted || meal.managedObjectContext == nil {
@@ -301,8 +316,8 @@ private struct MealTile: View {
                     }
                 }
 
-                // Title
-                Text(meal.title)
+                // Title (with product name appended when available)
+                Text(combinedTitle)
                     .font(.headline)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
@@ -451,3 +466,4 @@ private struct MacroCircle: View {
         .accessibilityLabel("\(shortLabel) \(value) \(unit)")
     }
 }
+

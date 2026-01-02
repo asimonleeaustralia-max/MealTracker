@@ -42,6 +42,7 @@
         <attribute name="polyunsaturatedFatIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="potassium" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="potassiumIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="productName" optional="YES" attributeType="String"/>
         <attribute name="protein" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="proteinIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="proteinSupplements" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>

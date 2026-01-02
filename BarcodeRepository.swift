@@ -227,6 +227,18 @@ actor BarcodeRepository {
             let foundMsg = "OFF: product found for \(code)"
             logger?(foundMsg)
 
+            // NEW: Save product_name onto the Meal if present
+            if let rawName = product.product_name?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !rawName.isEmpty {
+                await MainActor.run {
+                    // Only set if empty or different; keep latest from OFF
+                    if meal.productName != rawName {
+                        meal.productName = rawName
+                        try? context.save()
+                    }
+                }
+            }
+
             if let offEntry = OpenFoodFactsClient.mapToEntry(from: product) {
                 let mapMsg = "OFF: mapped nutriments -> upserting and applying"
                 logger?(mapMsg)

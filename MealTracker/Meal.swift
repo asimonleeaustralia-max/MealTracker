@@ -123,6 +123,9 @@ class Meal: NSManagedObject, Identifiable {
     // Examples: "barcode", "ocr", "featureprint", "visual"
     @NSManaged var photoGuesserType: String?
 
+    // New: optional product name returned by barcode API (e.g., Open Food Facts)
+    @NSManaged var productName: String?
+
     // Ensure defaults for brand new inserts so `id` is never nil in the store
     override func awakeFromInsert() {
         super.awakeFromInsert()
