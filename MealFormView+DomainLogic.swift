@@ -517,11 +517,13 @@ extension MealFormView {
                 applyIfEmpty(&proteinSupplements, with: parsed.proteinSupplements, markGuess: &proteinSupplementsIsGuess)
 
                 // vitamins/minerals: parsed in mg base, convert to UI unit
-                func setVitaminUI(_ target: inout String, _ valueMg: Int?, _ flag: inout Bool) {
+                func setVitaminUI(_ target: inout String, _ valueMg: Double?, _ flag: inout Bool) {
                     guard target.isEmpty, let mg = valueMg else { return }
                     switch vitaminsUnit {
-                    case .milligrams: target = String(max(0, mg))
-                    case .micrograms: target = String(max(0, mg * 1000))
+                    case .milligrams:
+                        target = String(max(0, Int(mg.rounded())))
+                    case .micrograms:
+                        target = String(max(0, Int((mg * 1000.0).rounded())))
                     }
                     flag = true
                 }
@@ -532,11 +534,32 @@ extension MealFormView {
                 setVitaminUI(&vitaminE, parsed.vitaminE, &vitaminEIsGuess)
                 setVitaminUI(&vitaminK, parsed.vitaminK, &vitaminKIsGuess)
 
-                setVitaminUI(&calcium, parsed.calcium, &calciumIsGuess)
-                setVitaminUI(&iron, parsed.iron, &ironIsGuess)
-                setVitaminUI(&potassium, parsed.potassium, &potassiumIsGuess)
-                setVitaminUI(&zinc, parsed.zinc, &zincIsGuess)
-                setVitaminUI(&magnesium, parsed.magnesium, &magnesiumIsGuess)
+                func setMineralUIInt(_ target: inout String, _ valueMg: Int?, _ flag: inout Bool) {
+                    guard target.isEmpty, let mg = valueMg else { return }
+                    switch vitaminsUnit {
+                    case .milligrams:
+                        target = String(max(0, mg))
+                    case .micrograms:
+                        target = String(max(0, mg * 1000))
+                    }
+                    flag = true
+                }
+                func setMineralUIDouble(_ target: inout String, _ valueMg: Double?, _ flag: inout Bool) {
+                    guard target.isEmpty, let mg = valueMg else { return }
+                    switch vitaminsUnit {
+                    case .milligrams:
+                        target = String(max(0, Int(mg.rounded())))
+                    case .micrograms:
+                        target = String(max(0, Int((mg * 1000.0).rounded())))
+                    }
+                    flag = true
+                }
+
+                setMineralUIInt(&calcium, parsed.calcium, &calciumIsGuess)
+                setMineralUIInt(&iron, parsed.iron, &ironIsGuess)
+                setMineralUIDouble(&potassium, parsed.potassium, &potassiumIsGuess)
+                setMineralUIInt(&zinc, parsed.zinc, &zincIsGuess)
+                setMineralUIInt(&magnesium, parsed.magnesium, &magnesiumIsGuess)
 
                 recomputeConsistency(resetPrevMismatch: false)
             }

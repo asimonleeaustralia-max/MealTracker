@@ -63,15 +63,15 @@ actor BarcodeRepository {
                     animalProtein: doubleOrNil("animalProtein"),
                     plantProtein: doubleOrNil("plantProtein"),
                     proteinSupplements: doubleOrNil("proteinSupplements"),
-                    vitaminA: intOrNil("vitaminA"),
-                    vitaminB: intOrNil("vitaminB"),
-                    vitaminC: intOrNil("vitaminC"),
-                    vitaminD: intOrNil("vitaminD"),
-                    vitaminE: intOrNil("vitaminE"),
-                    vitaminK: intOrNil("vitaminK"),
+                    vitaminA: doubleOrNil("vitaminA"),
+                    vitaminB: doubleOrNil("vitaminB"),
+                    vitaminC: doubleOrNil("vitaminC"),
+                    vitaminD: doubleOrNil("vitaminD"),
+                    vitaminE: doubleOrNil("vitaminE"),
+                    vitaminK: doubleOrNil("vitaminK"),
                     calcium: intOrNil("calcium"),
                     iron: intOrNil("iron"),
-                    potassium: intOrNil("potassium"),
+                    potassium: doubleOrNil("potassium"),
                     zinc: intOrNil("zinc"),
                     magnesium: intOrNil("magnesium")
                 )
@@ -329,42 +329,46 @@ actor BarcodeRepository {
         meal.proteinSupplements = fillDoubleIfZero(meal.proteinSupplements, with: entry.proteinSupplements)
         if entry.proteinSupplements != nil { meal.proteinSupplementsIsGuess = meal.proteinSupplementsIsGuess && meal.proteinSupplements > 0 ? false : meal.proteinSupplementsIsGuess }
 
-        func fillVitaminMineral(_ current: Double, with mg: Int?) -> Double {
+        func fillVitaminMineralDouble(_ current: Double, with mg: Double?) -> Double {
+            guard current <= 0, let mg else { return current }
+            return max(0.0, mg)
+        }
+        func fillVitaminMineralInt(_ current: Double, with mg: Int?) -> Double {
             guard current <= 0, let mg else { return current }
             return Double(max(0, mg))
         }
 
-        meal.vitaminA = fillVitaminMineral(meal.vitaminA, with: entry.vitaminA)
+        meal.vitaminA = fillVitaminMineralDouble(meal.vitaminA, with: entry.vitaminA)
         if entry.vitaminA != nil { meal.vitaminAIsGuess = meal.vitaminAIsGuess && meal.vitaminA > 0 ? false : meal.vitaminAIsGuess }
 
-        meal.vitaminB = fillVitaminMineral(meal.vitaminB, with: entry.vitaminB)
+        meal.vitaminB = fillVitaminMineralDouble(meal.vitaminB, with: entry.vitaminB)
         if entry.vitaminB != nil { meal.vitaminBIsGuess = meal.vitaminBIsGuess && meal.vitaminB > 0 ? false : meal.vitaminBIsGuess }
 
-        meal.vitaminC = fillVitaminMineral(meal.vitaminC, with: entry.vitaminC)
+        meal.vitaminC = fillVitaminMineralDouble(meal.vitaminC, with: entry.vitaminC)
         if entry.vitaminC != nil { meal.vitaminCIsGuess = meal.vitaminCIsGuess && meal.vitaminC > 0 ? false : meal.vitaminCIsGuess }
 
-        meal.vitaminD = fillVitaminMineral(meal.vitaminD, with: entry.vitaminD)
+        meal.vitaminD = fillVitaminMineralDouble(meal.vitaminD, with: entry.vitaminD)
         if entry.vitaminD != nil { meal.vitaminDIsGuess = meal.vitaminDIsGuess && meal.vitaminD > 0 ? false : meal.vitaminDIsGuess }
 
-        meal.vitaminE = fillVitaminMineral(meal.vitaminE, with: entry.vitaminE)
+        meal.vitaminE = fillVitaminMineralDouble(meal.vitaminE, with: entry.vitaminE)
         if entry.vitaminE != nil { meal.vitaminEIsGuess = meal.vitaminEIsGuess && meal.vitaminE > 0 ? false : meal.vitaminEIsGuess }
 
-        meal.vitaminK = fillVitaminMineral(meal.vitaminK, with: entry.vitaminK)
+        meal.vitaminK = fillVitaminMineralDouble(meal.vitaminK, with: entry.vitaminK)
         if entry.vitaminK != nil { meal.vitaminKIsGuess = meal.vitaminKIsGuess && meal.vitaminK > 0 ? false : meal.vitaminKIsGuess }
 
-        meal.calcium = fillVitaminMineral(meal.calcium, with: entry.calcium)
+        meal.calcium = fillVitaminMineralInt(meal.calcium, with: entry.calcium)
         if entry.calcium != nil { meal.calciumIsGuess = meal.calciumIsGuess && meal.calcium > 0 ? false : meal.calciumIsGuess }
 
-        meal.iron = fillVitaminMineral(meal.iron, with: entry.iron)
+        meal.iron = fillVitaminMineralInt(meal.iron, with: entry.iron)
         if entry.iron != nil { meal.ironIsGuess = meal.ironIsGuess && meal.iron > 0 ? false : meal.ironIsGuess }
 
-        meal.potassium = fillVitaminMineral(meal.potassium, with: entry.potassium)
+        meal.potassium = fillVitaminMineralDouble(meal.potassium, with: entry.potassium)
         if entry.potassium != nil { meal.potassiumIsGuess = meal.potassiumIsGuess && meal.potassium > 0 ? false : meal.potassiumIsGuess }
 
-        meal.zinc = fillVitaminMineral(meal.zinc, with: entry.zinc)
+        meal.zinc = fillVitaminMineralInt(meal.zinc, with: entry.zinc)
         if entry.zinc != nil { meal.zincIsGuess = meal.zincIsGuess && meal.zinc > 0 ? false : meal.zincIsGuess }
 
-        meal.magnesium = fillVitaminMineral(meal.magnesium, with: entry.magnesium)
+        meal.magnesium = fillVitaminMineralInt(meal.magnesium, with: entry.magnesium)
         if entry.magnesium != nil { meal.magnesiumIsGuess = meal.magnesiumIsGuess && meal.magnesium > 0 ? false : meal.magnesiumIsGuess }
 
         try? context.save()

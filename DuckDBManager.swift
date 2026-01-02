@@ -104,7 +104,7 @@ actor DuckDBManager {
 
     // Detect if existing schema uses INTEGER for grams-based columns; if so, trigger recreate
     private func needsSchemaRecreate(conn: Connection) throws -> Bool {
-        // Inspect barcodes table columns; if missing or any grams column is INTEGER, we need to recreate.
+        // Inspect barcodes table columns; if missing or any grams/vitamin/potassium column has wrong type, recreate.
         let pragma = try conn.query("PRAGMA table_info('barcodes');")
         var hasTable = false
         var typeByName: [String: String] = [:]
@@ -130,6 +130,20 @@ actor DuckDBManager {
                 return true
             }
         }
+
+        // Vitamins that should now be DOUBLE (mg with decimals preserved)
+        let vitaminCols: [String] = ["vitamina","vitaminb","vitaminc","vitamind","vitamine","vitamink"]
+        for col in vitaminCols {
+            if let t = typeByName[col], t.contains("INT") {
+                return true
+            }
+        }
+
+        // Potassium should now be DOUBLE
+        if let t = typeByName["potassium"], t.contains("INT") {
+            return true
+        }
+
         return false
     }
 
@@ -154,15 +168,15 @@ actor DuckDBManager {
                 animalProtein DOUBLE,
                 plantProtein DOUBLE,
                 proteinSupplements DOUBLE,
-                vitaminA INTEGER,
-                vitaminB INTEGER,
-                vitaminC INTEGER,
-                vitaminD INTEGER,
-                vitaminE INTEGER,
-                vitaminK INTEGER,
+                vitaminA DOUBLE,
+                vitaminB DOUBLE,
+                vitaminC DOUBLE,
+                vitaminD DOUBLE,
+                vitaminE DOUBLE,
+                vitaminK DOUBLE,
                 calcium INTEGER,
                 iron INTEGER,
-                potassium INTEGER,
+                potassium DOUBLE,
                 zinc INTEGER,
                 magnesium INTEGER
             );

@@ -310,35 +310,42 @@ struct OpenFoodFactsClient {
         let plantProtein: Double? = nil
         let proteinSupplements: Double? = nil
 
-        func toMg(_ value: Double?, unit: String?, label: String) -> Int? {
+        // New: Double-preserving mg converter (µg -> mg by /1000.0, no rounding)
+        func toMgDouble(_ value: Double?, unit: String?, label: String) -> Double? {
             guard let value else { return nil }
             let u = (unit ?? "").lowercased()
             if u.contains("µg") || u.contains("mcg") || u.contains("ug") {
                 #if DEBUG
-                steps.append("\(label): \(value) µg -> \(Int((value / 1000.0).rounded())) mg")
+                steps.append("\(label): \(value) µg -> \(value / 1000.0) mg")
                 #endif
-                return toIntNonNegative(value / 1000.0)
+                return max(0.0, value / 1000.0)
             }
             #if DEBUG
-            steps.append("\(label): \(value) mg -> \(Int(value.rounded())) mg")
+            steps.append("\(label): \(value) mg -> \(value) mg")
             #endif
-            return toIntNonNegative(value)
+            return max(0.0, value)
         }
 
-        // Vitamins
-        let vitaminA = toMg(nutr.vitamin_a_serving ?? nutr.vitamin_a_100g, unit: nutr.vitamin_a_unit, label: "vitaminA")
-        let vitaminB: Int? = nil
-        let vitaminC = toMg(nutr.vitamin_c_serving ?? nutr.vitamin_c_100g, unit: nutr.vitamin_c_unit, label: "vitaminC")
-        let vitaminD = toMg(nutr.vitamin_d_serving ?? nutr.vitamin_d_100g, unit: nutr.vitamin_d_unit, label: "vitaminD")
-        let vitaminE = toMg(nutr.vitamin_e_serving ?? nutr.vitamin_e_100g, unit: nutr.vitamin_e_unit, label: "vitaminE")
-        let vitaminK = toMg(nutr.vitamin_k_serving ?? nutr.vitamin_k_100g, unit: nutr.vitamin_k_unit, label: "vitaminK")
+        // Vitamins (Double? mg)
+        let vitaminA = toMgDouble(nutr.vitamin_a_serving ?? nutr.vitamin_a_100g, unit: nutr.vitamin_a_unit, label: "vitaminA")
+        let vitaminB: Double? = nil
+        let vitaminC = toMgDouble(nutr.vitamin_c_serving ?? nutr.vitamin_c_100g, unit: nutr.vitamin_c_unit, label: "vitaminC")
+        let vitaminD = toMgDouble(nutr.vitamin_d_serving ?? nutr.vitamin_d_100g, unit: nutr.vitamin_d_unit, label: "vitaminD")
+        let vitaminE = toMgDouble(nutr.vitamin_e_serving ?? nutr.vitamin_e_100g, unit: nutr.vitamin_e_unit, label: "vitaminE")
+        let vitaminK = toMgDouble(nutr.vitamin_k_serving ?? nutr.vitamin_k_100g, unit: nutr.vitamin_k_unit, label: "vitaminK")
 
-        // Minerals
-        let calcium = toMg(nutr.calcium_serving ?? nutr.calcium_100g, unit: nutr.calcium_unit, label: "calcium")
-        let iron = toMg(nutr.iron_serving ?? nutr.iron_100g, unit: nutr.iron_unit, label: "iron")
-        let potassium = toMg(nutr.potassium_serving ?? nutr.potassium_100g, unit: nutr.potassium_unit, label: "potassium")
-        let zinc = toMg(nutr.zinc_serving ?? nutr.zinc_100g, unit: nutr.zinc_unit, label: "zinc")
-        let magnesium = toMg(nutr.magnesium_serving ?? nutr.magnesium_100g, unit: nutr.magnesium_unit, label: "magnesium")
+        // Minerals (mg), with potassium now Double?
+        // Keep other minerals as Int? unless/ until you want them fractional too.
+        func toMgInt(_ value: Double?, unit: String?, label: String) -> Int? {
+            guard let v = toMgDouble(value, unit: unit, label: label) else { return nil }
+            return max(0, Int(v.rounded()))
+        }
+
+        let calcium = toMgInt(nutr.calcium_serving ?? nutr.calcium_100g, unit: nutr.calcium_unit, label: "calcium")
+        let iron = toMgInt(nutr.iron_serving ?? nutr.iron_100g, unit: nutr.iron_unit, label: "iron")
+        let potassium = toMgDouble(nutr.potassium_serving ?? nutr.potassium_100g, unit: nutr.potassium_unit, label: "potassium")
+        let zinc = toMgInt(nutr.zinc_serving ?? nutr.zinc_100g, unit: nutr.zinc_unit, label: "zinc")
+        let magnesium = toMgInt(nutr.magnesium_serving ?? nutr.magnesium_100g, unit: nutr.magnesium_unit, label: "magnesium")
 
         let hasAny =
             kcal != nil || carbs != nil || protein != nil || fat != nil || sodiumMg != nil ||

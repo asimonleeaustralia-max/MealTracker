@@ -15,7 +15,7 @@ import CoreImage
 struct PhotoNutritionGuesser {
 
     struct GuessResult {
-        // Units: kcal (Int), grams (Double), mg (Int)
+        // Units: kcal (Int), grams (Double), mg (Int for sodium; Double for vitamins and potassium)
         var calories: Int?
         var carbohydrates: Double?
         var protein: Double?
@@ -35,16 +35,18 @@ struct PhotoNutritionGuesser {
         var plantProtein: Double?
         var proteinSupplements: Double?
 
-        var vitaminA: Int?
-        var vitaminB: Int?
-        var vitaminC: Int?
-        var vitaminD: Int?
-        var vitaminE: Int?
-        var vitaminK: Int?
+        // Vitamins now Double? mg
+        var vitaminA: Double?
+        var vitaminB: Double?
+        var vitaminC: Double?
+        var vitaminD: Double?
+        var vitaminE: Double?
+        var vitaminK: Double?
 
+        // Minerals: potassium Double? mg; others stay Int? for now
         var calcium: Int?
         var iron: Int?
-        var potassium: Int?
+        var potassium: Double?
         var zinc: Int?
         var magnesium: Int?
     }
@@ -526,6 +528,16 @@ struct PhotoNutritionGuesser {
             return Double(filtered)
         }
 
+        // For mg values we want Double for vitamins/potassium
+        func toDoubleMg(_ s: String?) -> Double? {
+            guard var str = s?.trimmingCharacters(in: .whitespacesAndNewlines), !str.isEmpty else { return nil }
+            str = str.replacingOccurrences(of: ",", with: ".")
+            if let v = Double(str) { return v }
+            let allowed = Set("0123456789.")
+            let filtered = String(str.filter { allowed.contains($0) })
+            return Double(filtered)
+        }
+
         // Boundary pattern: start or separator before; separator or end after
         let BSTART = "(?:(?<=^)|(?<=[\\s:：•·\\-\\(\\)\\[\\]，。、，、|/]))"
         let BEND = "(?:(?=$)|(?=[\\s:：•·\\-\\(\\)\\[\\] ，。、、|/]))"
@@ -551,7 +563,8 @@ struct PhotoNutritionGuesser {
             return nil
         }
 
-        func parseMilligramValue(_ line: String, keywords: [String]) -> Int? {
+        // Return Int? mg (for sodium and minerals that remain Int)
+        func parseMilligramValueInt(_ line: String, keywords: [String]) -> Int? {
             let joined = alternation(keywords)
             let pattern = "\(BSTART)(?:\(joined))\(BEND)[^\\n\\r\\d]{0,20}([0-9]+[\\.,]?[0-9]*)\\s*(?:\(milligrams))\(BEND)"
             if let m = firstMatch(pattern, in: line) {
@@ -560,12 +573,22 @@ struct PhotoNutritionGuesser {
             return nil
         }
 
-        func parseMicrogramValue(_ line: String, keywords: [String]) -> Int? {
+        // Return Double? mg (for vitamins and potassium)
+        func parseMilligramValueDouble(_ line: String, keywords: [String]) -> Double? {
+            let joined = alternation(keywords)
+            let pattern = "\(BSTART)(?:\(joined))\(BEND)[^\\n\\r\\d]{0,20}([0-9]+[\\.,]?[0-9]*)\\s*(?:\(milligrams))\(BEND)"
+            if let m = firstMatch(pattern, in: line) {
+                return toDoubleMg(extractNumber(from: line, group: 1, in: m))
+            }
+            return nil
+        }
+
+        // µg -> mg as Int? (for minerals that remain Int)
+        func parseMicrogramValueInt(_ line: String, keywords: [String]) -> Int? {
             let joined = alternation(keywords)
             let pattern = "\(BSTART)(?:\(joined))\(BEND)[^\\n\\r\\d]{0,20}([0-9]+[\\.,]?[0-9]*)\\s*(?:\(micrograms))\(BEND)"
             if let m = firstMatch(pattern, in: line) {
                 if let micro = toInt(extractNumber(from: line, group: 1, in: m)) {
-                    // convert µg to mg
                     let mg = Int(round(Double(micro) / 1000.0))
                     return mg
                 }
@@ -573,8 +596,21 @@ struct PhotoNutritionGuesser {
             return nil
         }
 
+        // µg -> mg as Double? (for vitamins and potassium)
+        func parseMicrogramValueDouble(_ line: String, keywords: [String]) -> Double? {
+            let joined = alternation(keywords)
+            let pattern = "\(BSTART)(?:\(joined))\(BEND)[^\\n\\r\\d]{0,20}([0-9]+[\\.,]?[0-9]*)\\s*(?:\(micrograms))\(BEND)"
+            if let m = firstMatch(pattern, in: line) {
+                if let microStr = extractNumber(from: line, group: 1, in: m) {
+                    let micro = toDoubleMg(microStr) ?? 0.0
+                    return micro / 1000.0
+                }
+            }
+            return nil
+        }
+
         func parseSodiumOrSalt(_ line: String) -> Int? {
-            if let mg = parseMilligramValue(line, keywords: sodiumKeys) {
+            if let mg = parseMilligramValueInt(line, keywords: sodiumKeys) {
                 return mg
             }
             if let g = parseGramValue(line, keywords: sodiumKeys) {
@@ -717,7 +753,7 @@ struct PhotoNutritionGuesser {
             "балластные вещества","клетчатка","харчові волокна",
             "ألياف","الياف",
             "סיבים תזונתיים","סיבים",
-            "रेशा","फाइबर","আঁশ","ফাইবার",
+            "रेशा","फाइबर","আঁশ","ফাইबर",
             "ใยอาหาร",
             "chất xơ",
             "serat",
@@ -854,11 +890,11 @@ struct PhotoNutritionGuesser {
         let vitCKeys = ["vitamin c","vit c","ascorbic","ascorbate","ácido ascórbico","витамин c","维生素c","維生素c","ビタミンc","비타민c","فيتامين c","ויטמין c","विटामिन c","ভিটামিন c"]
         let vitDKeys = ["vitamin d","vit d","cholecalciferol","витамин d","维生素d","維生素d","ビタミンd","비타민d","فيتامين d","ויטמין d","विटामिन d","ভিটামিন d"]
         let vitEKeys = ["vitamin e","vit e","tocopherol","витамин e","维生素e","維生素e","ビタミンe","비타민e","فيتامين e","ויטמין e","विटामिन e","ভিটামিন e"]
-        let vitKKeys = ["vitamin k","vit k","phylloquinone","menaquinone","витамин k","维生素k","維生素k","ビタミンk","비타민k","فيتامين k","ויטמין k","विटामिन k","ভিটামিন k"]
+        let vitKKeys = ["vitamin k","vit k","phylloquinone","menaquinone","витамин k","维生素k","維生素k","ビタミンk","비타민k","فيتامين k","ויטמין k","विटामिन k","ভिटামিন k"]
 
         let calciumKeys = ["calcium","ca","кальций","кальций (ca)","钙","鈣","カルシウム","칼슘","كالسيوم","סידן","कैल्शियम","ক্যালসিয়াম"]
         let ironKeys = ["iron","fe","железо","залізо","铁","鐵","鉄","철","حديد","ברזל","लोहा","আয়রন"]
-        let potassiumKeys = ["potassium","kalium","k","калий","калій","钾","鉀","カリウム","칼륨","بوتاسيوم","אשלגן","पोटैशियम","পটাশিয়াম"]
+        let potassiumKeys = ["potassium","kalium","k","калий","калій","钾","鉀","カリウム","칼륨","بوتاسيوم","אשלגן","पोटैशियम","पटाशियम","পটাশিয়াম"]
         let zincKeys = ["zinc","zn","цинк","цинк (zn)","锌","鋅","亜鉛","아연","زنك","אבץ","जिंक","দস্তা"]
         let magnesiumKeys = ["magnesium","mg","магний","магній","镁","鎂","マグネシウム","마グネシウム","مगनيسيوم","מגנזיום","मैग्नीशियम","ম্যাগনেসিয়াম"]
 
@@ -877,7 +913,7 @@ struct PhotoNutritionGuesser {
             "energia","kalorien","kilokalorien","kcal",
             "energia","kcal","kalorii",
             "energia","kcal","калории","ккал",
-            "طاقة","كيلوكالوري","सعرات","سعرات حرارية","كيلو كالوري","كيلو-كالوري","kcal",
+            "طاقة","كيلوكالوري","सعرات","سعرات حرارية","كيلو كالوري","كيلو-कालोरी","kcal",
             "אנרגיה","קק\"ל","קק״ל","kcal",
             "ऊर्जा","किलो कैलोरी","किलो-कैलोरी","kcal",
             "শক্তি","কিলোক্যালোরি","kcal",
@@ -960,83 +996,83 @@ struct PhotoNutritionGuesser {
                 result.polyunsaturatedFat = v
             }
 
-            // Vitamins (mg or µg → mg)
+            // Vitamins (mg or µg → mg) as Double
             if result.vitaminA == nil {
-                if let mg = parseMilligramValue(line, keywords: vitAKeys) {
+                if let mg = parseMilligramValueDouble(line, keywords: vitAKeys) {
                     result.vitaminA = mg
-                } else if let mgFromMicro = parseMicrogramValue(line, keywords: vitAKeys) {
+                } else if let mgFromMicro = parseMicrogramValueDouble(line, keywords: vitAKeys) {
                     result.vitaminA = mgFromMicro
                 }
             }
             if result.vitaminB == nil {
-                if let mg = parseMilligramValue(line, keywords: vitBKeys) {
+                if let mg = parseMilligramValueDouble(line, keywords: vitBKeys) {
                     result.vitaminB = mg
-                } else if let mgFromMicro = parseMicrogramValue(line, keywords: vitBKeys) {
+                } else if let mgFromMicro = parseMicrogramValueDouble(line, keywords: vitBKeys) {
                     result.vitaminB = mgFromMicro
                 }
             }
             if result.vitaminC == nil {
-                if let mg = parseMilligramValue(line, keywords: vitCKeys) {
+                if let mg = parseMilligramValueDouble(line, keywords: vitCKeys) {
                     result.vitaminC = mg
-                } else if let mgFromMicro = parseMicrogramValue(line, keywords: vitCKeys) {
+                } else if let mgFromMicro = parseMicrogramValueDouble(line, keywords: vitCKeys) {
                     result.vitaminC = mgFromMicro
                 }
             }
             if result.vitaminD == nil {
-                if let mg = parseMilligramValue(line, keywords: vitDKeys) {
+                if let mg = parseMilligramValueDouble(line, keywords: vitDKeys) {
                     result.vitaminD = mg
-                } else if let mgFromMicro = parseMicrogramValue(line, keywords: vitDKeys) {
+                } else if let mgFromMicro = parseMicrogramValueDouble(line, keywords: vitDKeys) {
                     result.vitaminD = mgFromMicro
                 }
             }
             if result.vitaminE == nil {
-                if let mg = parseMilligramValue(line, keywords: vitEKeys) {
+                if let mg = parseMilligramValueDouble(line, keywords: vitEKeys) {
                     result.vitaminE = mg
-                } else if let mgFromMicro = parseMicrogramValue(line, keywords: vitEKeys) {
+                } else if let mgFromMicro = parseMicrogramValueDouble(line, keywords: vitEKeys) {
                     result.vitaminE = mgFromMicro
                 }
             }
             if result.vitaminK == nil {
-                if let mg = parseMilligramValue(line, keywords: vitKKeys) {
+                if let mg = parseMilligramValueDouble(line, keywords: vitKKeys) {
                     result.vitaminK = mg
-                } else if let mgFromMicro = parseMicrogramValue(line, keywords: vitKKeys) {
+                } else if let mgFromMicro = parseMicrogramValueDouble(line, keywords: vitKKeys) {
                     result.vitaminK = mgFromMicro
                 }
             }
 
             // Minerals (mg or µg → mg)
             if result.calcium == nil {
-                if let mg = parseMilligramValue(line, keywords: calciumKeys) {
+                if let mg = parseMilligramValueInt(line, keywords: calciumKeys) {
                     result.calcium = mg
-                } else if let mgFromMicro = parseMicrogramValue(line, keywords: calciumKeys) {
+                } else if let mgFromMicro = parseMicrogramValueInt(line, keywords: calciumKeys) {
                     result.calcium = mgFromMicro
                 }
             }
             if result.iron == nil {
-                if let mg = parseMilligramValue(line, keywords: ironKeys) {
+                if let mg = parseMilligramValueInt(line, keywords: ironKeys) {
                     result.iron = mg
-                } else if let mgFromMicro = parseMicrogramValue(line, keywords: ironKeys) {
+                } else if let mgFromMicro = parseMicrogramValueInt(line, keywords: ironKeys) {
                     result.iron = mgFromMicro
                 }
             }
             if result.potassium == nil {
-                if let mg = parseMilligramValue(line, keywords: potassiumKeys) {
+                if let mg = parseMilligramValueDouble(line, keywords: potassiumKeys) {
                     result.potassium = mg
-                } else if let mgFromMicro = parseMicrogramValue(line, keywords: potassiumKeys) {
+                } else if let mgFromMicro = parseMicrogramValueDouble(line, keywords: potassiumKeys) {
                     result.potassium = mgFromMicro
                 }
             }
             if result.zinc == nil {
-                if let mg = parseMilligramValue(line, keywords: zincKeys) {
+                if let mg = parseMilligramValueInt(line, keywords: zincKeys) {
                     result.zinc = mg
-                } else if let mgFromMicro = parseMicrogramValue(line, keywords: zincKeys) {
+                } else if let mgFromMicro = parseMicrogramValueInt(line, keywords: zincKeys) {
                     result.zinc = mgFromMicro
                 }
             }
             if result.magnesium == nil {
-                if let mg = parseMilligramValue(line, keywords: magnesiumKeys) {
+                if let mg = parseMilligramValueInt(line, keywords: magnesiumKeys) {
                     result.magnesium = mg
-                } else if let mgFromMicro = parseMicrogramValue(line, keywords: magnesiumKeys) {
+                } else if let mgFromMicro = parseMicrogramValueInt(line, keywords: magnesiumKeys) {
                     result.magnesium = mgFromMicro
                 }
             }
@@ -1129,7 +1165,7 @@ struct PhotoNutritionGuesser {
         guess.protein = max(0, proteinG)
         guess.fat = max(0, fatG)
 
-        // Minimal vitamin/mineral fallback (mg), category-based conservative values (unchanged)
+        // Minimal vitamin/mineral fallback (mg), category-based conservative values
         switch category {
         case .dessertOrCake:
             guess.vitaminA = 0; guess.vitaminB = 0; guess.vitaminC = 0; guess.vitaminD = 0; guess.vitaminE = 0; guess.vitaminK = 0
@@ -1433,14 +1469,14 @@ private enum LocalizedUnits {
     // kcal
     static let kcalPattern: String = {
         alternation([
-            "kcal","ккал","千卡","大卡","キロカロリー","킬로칼로리","กิโลแคลอรี","كيلوكالوري","קק\"ל","קק״ל"
+            "kcal","ккал","千卡","大卡","kcal","キロカロリー","킬로칼로리","กิโลแคลอรี","كيلوكالوري","קק\"ל","קק״ל"
         ])
     }()
 
     // kJ
     static let kjPattern: String = {
         alternation([
-            "kj","кдж","千焦","キロジュール","킬로줄","กิโลจูล","كيلوجول","ק\"ג'","קג׳"
+            "kj","кдж","千焦","キロジュール","킬로줄","กิโลจูล","كيلوجול","ק\"ג'","קג׳"
         ])
     }()
 
@@ -1448,3 +1484,4 @@ private enum LocalizedUnits {
         words.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
     }
 }
+
