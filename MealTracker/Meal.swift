@@ -43,6 +43,10 @@ class Meal: NSManagedObject, Identifiable {
     @NSManaged var taurine: Double
     @NSManaged var taurineIsGuess: Bool
 
+    // Supplement: Creatine (milligrams) and accuracy flag [NEW]
+    @NSManaged var creatine: Double
+    @NSManaged var creatineIsGuess: Bool
+
     // Existing attributes
     @NSManaged var starch: Double
     @NSManaged var sugars: Double
@@ -214,4 +218,3 @@ extension Meal {
         try? context.save()
     }
 }
-

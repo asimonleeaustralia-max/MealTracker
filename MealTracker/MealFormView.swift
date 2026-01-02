@@ -57,6 +57,8 @@ struct MealFormView: View {
     @State var caffeine: String = ""
     // Taurine (milligrams) [NEW]
     @State var taurine: String = ""
+    // Creatine (milligrams) [NEW]
+    @State var creatine: String = ""
 
     // Added missing nutrient fields
     @State var starch: String = ""
@@ -105,6 +107,8 @@ struct MealFormView: View {
     @State var caffeineIsGuess = true
     // Taurine accuracy flag [NEW]
     @State var taurineIsGuess = true
+    // Creatine accuracy flag [NEW]
+    @State var creatineIsGuess = true
     @State var starchIsGuess = true
     @State var sugarsIsGuess = true
     @State var fibreIsGuess = true
@@ -743,6 +747,8 @@ struct MealFormView: View {
                     MetricField(titleKey: "theobromine", text: numericBindingInt($theobromine), isGuess: $theobromineIsGuess, keyboard: .numberPad, manager: l, unitSuffix: "mg", validator: { ValidationThresholds.vitaminMineralMg.severity(for: $0) })
                     MetricField(titleKey: "caffeine", text: numericBindingInt($caffeine), isGuess: $caffeineIsGuess, keyboard: .numberPad, manager: l, unitSuffix: "mg", validator: { ValidationThresholds.vitaminMineralMg.severity(for: $0) })
                     MetricField(titleKey: "taurine", text: numericBindingInt($taurine), isGuess: $taurineIsGuess, keyboard: .numberPad, manager: l, unitSuffix: "mg", validator: { ValidationThresholds.vitaminMineralMg.severity(for: $0) })
+                    // Creatine in mg [NEW]
+                    MetricField(titleKey: "creatine", text: numericBindingInt($creatine), isGuess: $creatineIsGuess, keyboard: .numberPad, manager: l, unitSuffix: "mg", validator: { ValidationThresholds.vitaminMineralMg.severity(for: $0) })
                 }
             }
 
@@ -866,12 +872,13 @@ struct MealFormView: View {
             m.sodium = i(sodium)
         }
 
-        // Stimulants
+        // Stimulants/Supplements
         m.alcohol = d(alcohol) // grams
         m.nicotine = i(nicotine) // mg
         m.theobromine = i(theobromine) // mg
         m.caffeine = i(caffeine) // mg
         m.taurine = i(taurine) // mg
+        m.creatine = i(creatine) // mg [NEW]
 
         // Sub-macros (grams)
         m.starch = d(starch)
@@ -928,6 +935,7 @@ struct MealFormView: View {
         m.theobromineIsGuess = theobromineIsGuess
         m.caffeineIsGuess = caffeineIsGuess
         m.taurineIsGuess = taurineIsGuess
+        m.creatineIsGuess = creatineIsGuess // [NEW]
 
         m.starchIsGuess = starchIsGuess
         m.sugarsIsGuess = sugarsIsGuess
@@ -1062,8 +1070,8 @@ extension MealFormView {
             guard isEmptyOrPositiveInt(sodium) else { return false }
         }
 
-        // Stimulants (mg-only, integer UI)
-        let stimulantsIntFields = [nicotine, theobromine, caffeine, taurine]
+        // Stimulants/Supplements (mg-only, integer UI)
+        let stimulantsIntFields = [nicotine, theobromine, caffeine, taurine, creatine]
         guard stimulantsIntFields.allSatisfy(isEmptyOrPositiveInt) else { return false }
 
         // Vitamins/minerals validation depends on vitaminsUnit
@@ -1080,4 +1088,3 @@ extension MealFormView {
         return true
     }
 }
-

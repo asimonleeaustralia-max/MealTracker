@@ -13,6 +13,8 @@
         <attribute name="caloriesIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="carbohydrates" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="carbohydratesIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="creatine" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="creatineIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="date" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="fat" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="fatIsGuess" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
