@@ -28,6 +28,8 @@ struct MealFormView: View {
     @AppStorage("showSimulants") var showSimulants: Bool = false
     // New: AI features master toggle (matches SettingsView)
     @AppStorage("aiFeaturesEnabled") var aiFeaturesEnabled: Bool = false
+    // New: creatine visibility (default off)
+    @AppStorage("showCreatine") var showCreatine: Bool = false
 
     // Fetch active people (non-soft-deleted)
     @FetchRequest(fetchRequest: Person.fetchAllRequest())
@@ -747,7 +749,12 @@ struct MealFormView: View {
                     MetricField(titleKey: "theobromine", text: numericBindingInt($theobromine), isGuess: $theobromineIsGuess, keyboard: .numberPad, manager: l, unitSuffix: "mg", validator: { ValidationThresholds.vitaminMineralMg.severity(for: $0) })
                     MetricField(titleKey: "caffeine", text: numericBindingInt($caffeine), isGuess: $caffeineIsGuess, keyboard: .numberPad, manager: l, unitSuffix: "mg", validator: { ValidationThresholds.vitaminMineralMg.severity(for: $0) })
                     MetricField(titleKey: "taurine", text: numericBindingInt($taurine), isGuess: $taurineIsGuess, keyboard: .numberPad, manager: l, unitSuffix: "mg", validator: { ValidationThresholds.vitaminMineralMg.severity(for: $0) })
-                    // Creatine in mg [NEW]
+                }
+            }
+
+            // Creatine (optional, its own section)
+            if showCreatine {
+                Section(header: Text(l.localized("creatine_section_title"))) {
                     MetricField(titleKey: "creatine", text: numericBindingInt($creatine), isGuess: $creatineIsGuess, keyboard: .numberPad, manager: l, unitSuffix: "mg", validator: { ValidationThresholds.vitaminMineralMg.severity(for: $0) })
                 }
             }
@@ -1070,9 +1077,12 @@ extension MealFormView {
             guard isEmptyOrPositiveInt(sodium) else { return false }
         }
 
-        // Stimulants/Supplements (mg-only, integer UI)
-        let stimulantsIntFields = [nicotine, theobromine, caffeine, taurine, creatine]
+        // Stimulants (mg-only, integer UI) — creatine removed here
+        let stimulantsIntFields = [nicotine, theobromine, caffeine, taurine]
         guard stimulantsIntFields.allSatisfy(isEmptyOrPositiveInt) else { return false }
+
+        // Creatine (mg-only, integer UI)
+        guard isEmptyOrPositiveInt(creatine) else { return false }
 
         // Vitamins/minerals validation depends on vitaminsUnit
         if vitaminsUnit == .milligrams {
@@ -1088,3 +1098,4 @@ extension MealFormView {
         return true
     }
 }
+

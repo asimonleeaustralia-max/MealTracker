@@ -20,6 +20,8 @@ struct SettingsView: View {
     @AppStorage("aiFeedbackSeverity") private var aiFeedbackSeverity: AIFeedbackSeverity = .balanced
     // Keep storage but do not show any UI for it for now.
     @AppStorage("aiFeaturesEnabled") private var aiFeaturesEnabled: Bool = false
+    // New: creatine visibility (default off)
+    @AppStorage("showCreatine") private var showCreatine: Bool = false
 
     @State private var syncedDateText: String = "—"
     @State private var isSyncing: Bool = false
@@ -137,6 +139,8 @@ struct SettingsView: View {
                     }
                     Toggle(isOn: $showMinerals) { Text(l.localized("show_minerals")) }
                     Toggle(isOn: $showSimulants) { Text(l.localized("show_stimulants")) }
+                    // Localized: Creatine visibility toggle (default off)
+                    Toggle(isOn: $showCreatine) { Text(l.localized("show_creatine")) }
                 }
 
                 #if DEBUG
@@ -409,3 +413,4 @@ struct SettingsView: View {
         }
     }
 }
+
