@@ -60,6 +60,8 @@ extension MealFormView {
             theobromine = Int(meal.theobromine).description
             caffeine = Int(meal.caffeine).description
             taurine = Int(meal.taurine).description
+            // Creatine (mg, integer UI)
+            creatine = Int(meal.creatine).description
             starch = meal.starch.cleanString
             sugars = meal.sugars.cleanString
             fibre = meal.fibre.cleanString
@@ -100,6 +102,8 @@ extension MealFormView {
             theobromineIsGuess = meal.theobromineIsGuess
             caffeineIsGuess = meal.caffeineIsGuess
             taurineIsGuess = meal.taurineIsGuess
+            // Creatine accuracy flag
+            creatineIsGuess = meal.creatineIsGuess
             starchIsGuess = meal.starchIsGuess
             sugarsIsGuess = meal.sugarsIsGuess
             fibreIsGuess = meal.fibreIsGuess
@@ -151,6 +155,8 @@ extension MealFormView {
             theobromine = zeroToEmpty(theobromine)
             caffeine = zeroToEmpty(caffeine)
             taurine = zeroToEmpty(taurine)
+            // Creatine normalization
+            creatine = zeroToEmpty(creatine)
 
             starch = zeroToEmpty(starch)
             sugars = zeroToEmpty(sugars)
