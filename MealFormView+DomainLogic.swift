@@ -433,24 +433,33 @@ extension MealFormView {
                             if transFat.isEmpty, meal.transFat > 0 { transFat = meal.transFat.cleanString; transFatIsGuess = false }
 
                             // Vitamins/minerals in UI units
-                            func toUI(_ mg: Double) -> String {
+                            func toUIVitamin(_ mg: Double) -> String {
+                                // Use the same logic as mgToUIText in Media file
                                 switch vitaminsUnit {
-                                case .milligrams: return Int(mg).description
-                                case .micrograms: return Int((mg * 1000.0).rounded()).description
+                                case .milligrams:
+                                    let nf = NumberFormatter()
+                                    nf.locale = Locale.current
+                                    nf.minimumFractionDigits = 0
+                                    nf.maximumFractionDigits = 3
+                                    nf.minimumIntegerDigits = 1
+                                    return nf.string(from: NSNumber(value: mg)) ?? mg.cleanString
+                                case .micrograms:
+                                    return Int((mg * 1000.0).rounded()).description
                                 }
                             }
-                            if vitaminA.isEmpty, meal.vitaminA > 0 { vitaminA = toUI(meal.vitaminA); vitaminAIsGuess = false }
-                            if vitaminB.isEmpty, meal.vitaminB > 0 { vitaminB = toUI(meal.vitaminB); vitaminBIsGuess = false }
-                            if vitaminC.isEmpty, meal.vitaminC > 0 { vitaminC = toUI(meal.vitaminC); vitaminCIsGuess = false }
-                            if vitaminD.isEmpty, meal.vitaminD > 0 { vitaminD = toUI(meal.vitaminD); vitaminDIsGuess = false }
-                            if vitaminE.isEmpty, meal.vitaminE > 0 { vitaminE = toUI(meal.vitaminE); vitaminEIsGuess = false }
-                            if vitaminK.isEmpty, meal.vitaminK > 0 { vitaminK = toUI(meal.vitaminK); vitaminKIsGuess = false }
+                            if vitaminA.isEmpty, meal.vitaminA > 0 { vitaminA = toUIVitamin(meal.vitaminA); vitaminAIsGuess = false }
+                            if vitaminB.isEmpty, meal.vitaminB > 0 { vitaminB = toUIVitamin(meal.vitaminB); vitaminBIsGuess = false }
+                            if vitaminC.isEmpty, meal.vitaminC > 0 { vitaminC = toUIVitamin(meal.vitaminC); vitaminCIsGuess = false }
+                            if vitaminD.isEmpty, meal.vitaminD > 0 { vitaminD = toUIVitamin(meal.vitaminD); vitaminDIsGuess = false }
+                            if vitaminE.isEmpty, meal.vitaminE > 0 { vitaminE = toUIVitamin(meal.vitaminE); vitaminEIsGuess = false }
+                            if vitaminK.isEmpty, meal.vitaminK > 0 { vitaminK = toUIVitamin(meal.vitaminK); vitaminKIsGuess = false }
 
-                            if calcium.isEmpty, meal.calcium > 0 { calcium = toUI(meal.calcium); calciumIsGuess = false }
-                            if iron.isEmpty, meal.iron > 0 { iron = toUI(meal.iron); ironIsGuess = false }
-                            if potassium.isEmpty, meal.potassium > 0 { potassium = toUI(meal.potassium); potassiumIsGuess = false }
-                            if zinc.isEmpty, meal.zinc > 0 { zinc = toUI(meal.zinc); zincIsGuess = false }
-                            if magnesium.isEmpty, meal.magnesium > 0 { magnesium = toUI(meal.magnesium); magnesiumIsGuess = false }
+                            // Minerals: keep Int for mg-based ones; potassium is Double mg -> preserve decimals
+                            if calcium.isEmpty, meal.calcium > 0 { calcium = toUIVitamin(meal.calcium); calciumIsGuess = false }
+                            if iron.isEmpty, meal.iron > 0 { iron = toUIVitamin(meal.iron); ironIsGuess = false }
+                            if potassium.isEmpty, meal.potassium > 0 { potassium = toUIVitamin(meal.potassium); potassiumIsGuess = false }
+                            if zinc.isEmpty, meal.zinc > 0 { zinc = toUIVitamin(meal.zinc); zincIsGuess = false }
+                            if magnesium.isEmpty, meal.magnesium > 0 { magnesium = toUIVitamin(meal.magnesium); magnesiumIsGuess = false }
 
                             recomputeConsistency(resetPrevMismatch: false)
                             forceEnableSave = true
@@ -521,7 +530,13 @@ extension MealFormView {
                     guard target.isEmpty, let mg = valueMg else { return }
                     switch vitaminsUnit {
                     case .milligrams:
-                        target = String(max(0, Int(mg.rounded())))
+                        // Preserve decimals up to 3 places
+                        let nf = NumberFormatter()
+                        nf.locale = Locale.current
+                        nf.minimumFractionDigits = 0
+                        nf.maximumFractionDigits = 3
+                        nf.minimumIntegerDigits = 1
+                        target = nf.string(from: NSNumber(value: mg)) ?? mg.cleanString
                     case .micrograms:
                         target = String(max(0, Int((mg * 1000.0).rounded())))
                     }
@@ -548,7 +563,13 @@ extension MealFormView {
                     guard target.isEmpty, let mg = valueMg else { return }
                     switch vitaminsUnit {
                     case .milligrams:
-                        target = String(max(0, Int(mg.rounded())))
+                        // Preserve decimals for potassium (Double mg)
+                        let nf = NumberFormatter()
+                        nf.locale = Locale.current
+                        nf.minimumFractionDigits = 0
+                        nf.maximumFractionDigits = 3
+                        nf.minimumIntegerDigits = 1
+                        target = nf.string(from: NSNumber(value: mg)) ?? mg.cleanString
                     case .micrograms:
                         target = String(max(0, Int((mg * 1000.0).rounded())))
                     }
@@ -580,41 +601,6 @@ extension MealFormView {
             // If anything non-empty now, allow save button
             forceEnableSave = true
         }
-    }
-
-    // MARK: - Validation
-
-    var isValid: Bool {
-        guard let cal = Int(calories), cal > 0 else { return false }
-        // Grams fields should accept Double; mg/µg remain Int.
-        // calories handled above.
-        // sodium: if grams -> Double; if mg -> Int (but UI restricts to Int anyway).
-        func isEmptyOrPositiveDouble(_ s: String) -> Bool {
-            guard !s.isEmpty else { return true }
-            let v = Double(s.replacingOccurrences(of: ",", with: ".")) ?? -1
-            return v > 0
-        }
-        func isEmptyOrPositiveInt(_ s: String) -> Bool {
-            guard !s.isEmpty else { return true }
-            return (Int(s) ?? -1) > 0
-        }
-
-        // grams-based
-        let gramsFields = [carbohydrates, protein, fat, sugars, starch, fibre, monounsaturatedFat, polyunsaturatedFat, saturatedFat, transFat, omega3, omega6, alcohol, animalProtein, plantProtein, proteinSupplements]
-        guard gramsFields.allSatisfy(isEmptyOrPositiveDouble) else { return false }
-
-        // sodium depends on unit
-        if sodiumUnit == .grams {
-            guard isEmptyOrPositiveDouble(sodium) else { return false }
-        } else {
-            guard isEmptyOrPositiveInt(sodium) else { return false }
-        }
-
-        // mg-based stimulants
-        let mgFields = [nicotine, theobromine, caffeine, taurine, vitaminA, vitaminB, vitaminC, vitaminD, vitaminE, vitaminK, calcium, iron, potassium, zinc, magnesium]
-        guard mgFields.allSatisfy(isEmptyOrPositiveInt) else { return false }
-
-        return true
     }
 
     // MARK: - Consistency and helper text
@@ -691,14 +677,7 @@ extension MealFormView {
         // we approximate by running accurate pass here; analyzePhoto already tries rotations.
         // For better reuse you can expose a public API; for now, reuse the accurate pass logic here.
         // We’ll leverage the same Vision request via PhotoNutritionGuesser.recognitionLanguagesFor.
-        // For simplicity, we call into the private dual-pass via a helper approach: re-run the accurate pass here.
-        // However, PhotoNutritionGuesser already exposes recognizeTextDualPass internally only.
-        // We can just call the public guess() path for OCR, but that also does other steps.
-        // To keep this focused, we just replicate a single accurate pass using Vision directly here if needed.
-        // Since we already have a working, tested recognizer in PhotoNutritionGuesser, call its dual-pass via a small shim:
-        // Create an ocr-ready image and call its internal function equivalents that are public here.
-        // We don’t have direct access to private fns; so we emulate: run fast, then accurate, pick longer.
-        // To keep this small, do a single accurate pass using Vision via the same technique PhotoNutritionGuesser uses.
+        // For simplicity, we call into the private dual-pass via a helper approach: re-run the accurate pass using Vision directly here if needed.
 
         // Reuse PhotoNutritionGuesser’s preprocessing
         let variants = PhotoNutritionGuesser.rotationVariants(of: image)

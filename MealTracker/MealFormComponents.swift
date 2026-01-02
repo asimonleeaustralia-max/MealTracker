@@ -684,9 +684,11 @@ extension View {
     }
 }
 
+// Updated: VitaminsGroupView now switches input mode based on vitaminsUnit
 struct VitaminsGroupView: View {
     let manager: LocalizationManager
     let unitSuffix: String
+    let vitaminsUnit: VitaminsUnit
 
     @Binding var aText: String
     @Binding var aIsGuess: Bool
@@ -703,12 +705,21 @@ struct VitaminsGroupView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            MetricField(titleKey: "vitamin_a", text: $aText, isGuess: $aIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .milligrams) })
-            MetricField(titleKey: "vitamin_b", text: $bText, isGuess: $bIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .milligrams) })
-            MetricField(titleKey: "vitamin_c", text: $cText, isGuess: $cIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .milligrams) })
-            MetricField(titleKey: "vitamin_d", text: $dText, isGuess: $dIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .milligrams) })
-            MetricField(titleKey: "vitamin_e", text: $eText, isGuess: $eIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .milligrams) })
-            MetricField(titleKey: "vitamin_k", text: $kText, isGuess: $kIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .milligrams) })
+            if vitaminsUnit == .milligrams {
+                MetricField(titleKey: "vitamin_a", text: $aText, isGuess: $aIsGuess, keyboard: .decimalPad, manager: manager, unitSuffix: unitSuffix, doubleValidator: { ValidationThresholds.vitaminMineralMg.severityDouble($0) })
+                MetricField(titleKey: "vitamin_b", text: $bText, isGuess: $bIsGuess, keyboard: .decimalPad, manager: manager, unitSuffix: unitSuffix, doubleValidator: { ValidationThresholds.vitaminMineralMg.severityDouble($0) })
+                MetricField(titleKey: "vitamin_c", text: $cText, isGuess: $cIsGuess, keyboard: .decimalPad, manager: manager, unitSuffix: unitSuffix, doubleValidator: { ValidationThresholds.vitaminMineralMg.severityDouble($0) })
+                MetricField(titleKey: "vitamin_d", text: $dText, isGuess: $dIsGuess, keyboard: .decimalPad, manager: manager, unitSuffix: unitSuffix, doubleValidator: { ValidationThresholds.vitaminMineralMg.severityDouble($0) })
+                MetricField(titleKey: "vitamin_e", text: $eText, isGuess: $eIsGuess, keyboard: .decimalPad, manager: manager, unitSuffix: unitSuffix, doubleValidator: { ValidationThresholds.vitaminMineralMg.severityDouble($0) })
+                MetricField(titleKey: "vitamin_k", text: $kText, isGuess: $kIsGuess, keyboard: .decimalPad, manager: manager, unitSuffix: unitSuffix, doubleValidator: { ValidationThresholds.vitaminMineralMg.severityDouble($0) })
+            } else {
+                MetricField(titleKey: "vitamin_a", text: $aText, isGuess: $aIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .micrograms) })
+                MetricField(titleKey: "vitamin_b", text: $bText, isGuess: $bIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .micrograms) })
+                MetricField(titleKey: "vitamin_c", text: $cText, isGuess: $cIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .micrograms) })
+                MetricField(titleKey: "vitamin_d", text: $dText, isGuess: $dIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .micrograms) })
+                MetricField(titleKey: "vitamin_e", text: $eText, isGuess: $eIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .micrograms) })
+                MetricField(titleKey: "vitamin_k", text: $kText, isGuess: $kIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .micrograms) })
+            }
         }
     }
 }
@@ -721,6 +732,44 @@ extension ValidationThresholds {
         case .micrograms: mg = Int(Double(uiValue) / 1000.0)
         }
         return severity(for: mg)
+    }
+}
+
+// Updated: MineralsGroupView switches with vitaminsUnit too
+struct MineralsGroupView: View {
+    let manager: LocalizationManager
+    let unitSuffix: String
+    let vitaminsUnit: VitaminsUnit
+
+    @Binding var calciumText: String
+    @Binding var calciumIsGuess: Bool
+    @Binding var ironText: String
+    @Binding var ironIsGuess: Bool
+    @Binding var potassiumText: String
+    @Binding var potassiumIsGuess: Bool
+    @Binding var zincText: String
+    @Binding var zincIsGuess: Bool
+    @Binding var magnesiumText: String
+    @Binding var magnesiumIsGuess: Bool
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if vitaminsUnit == .milligrams {
+                // mg mode: allow decimals
+                MetricField(titleKey: "calcium", text: $calciumText, isGuess: $calciumIsGuess, keyboard: .decimalPad, manager: manager, unitSuffix: unitSuffix, doubleValidator: { ValidationThresholds.vitaminMineralMg.severityDouble($0) })
+                MetricField(titleKey: "iron", text: $ironText, isGuess: $ironIsGuess, keyboard: .decimalPad, manager: manager, unitSuffix: unitSuffix, doubleValidator: { ValidationThresholds.vitaminMineralMg.severityDouble($0) })
+                MetricField(titleKey: "potassium", text: $potassiumText, isGuess: $potassiumIsGuess, keyboard: .decimalPad, manager: manager, unitSuffix: unitSuffix, doubleValidator: { ValidationThresholds.vitaminMineralMg.severityDouble($0) })
+                MetricField(titleKey: "zinc", text: $zincText, isGuess: $zincIsGuess, keyboard: .decimalPad, manager: manager, unitSuffix: unitSuffix, doubleValidator: { ValidationThresholds.vitaminMineralMg.severityDouble($0) })
+                MetricField(titleKey: "magnesium", text: $magnesiumText, isGuess: $magnesiumIsGuess, keyboard: .decimalPad, manager: manager, unitSuffix: unitSuffix, doubleValidator: { ValidationThresholds.vitaminMineralMg.severityDouble($0) })
+            } else {
+                // µg mode: integers
+                MetricField(titleKey: "calcium", text: $calciumText, isGuess: $calciumIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .micrograms) })
+                MetricField(titleKey: "iron", text: $ironText, isGuess: $ironIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .micrograms) })
+                MetricField(titleKey: "potassium", text: $potassiumText, isGuess: $potassiumIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .micrograms) })
+                MetricField(titleKey: "zinc", text: $zincText, isGuess: $zincIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .micrograms) })
+                MetricField(titleKey: "magnesium", text: $magnesiumText, isGuess: $magnesiumIsGuess, keyboard: .numberPad, manager: manager, unitSuffix: unitSuffix, validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .micrograms) })
+            }
+        }
     }
 }
 
@@ -815,72 +864,6 @@ struct FatSubFields: View {
     }
 }
 
-struct MineralsGroupView: View {
-    let manager: LocalizationManager
-    let unitSuffix: String
-
-    @Binding var calciumText: String
-    @Binding var calciumIsGuess: Bool
-    @Binding var ironText: String
-    @Binding var ironIsGuess: Bool
-    @Binding var potassiumText: String
-    @Binding var potassiumIsGuess: Bool
-    @Binding var zincText: String
-    @Binding var zincIsGuess: Bool
-    @Binding var magnesiumText: String
-    @Binding var magnesiumIsGuess: Bool
-
-    var body: some View {
-        VStack(spacing: 0) {
-            MetricField(
-                titleKey: "calcium",
-                text: $calciumText,
-                isGuess: $calciumIsGuess,
-                keyboard: .numberPad,
-                manager: manager,
-                unitSuffix: unitSuffix,
-                validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .milligrams) }
-            )
-            MetricField(
-                titleKey: "iron",
-                text: $ironText,
-                isGuess: $ironIsGuess,
-                keyboard: .numberPad,
-                manager: manager,
-                unitSuffix: unitSuffix,
-                validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .milligrams) }
-            )
-            MetricField(
-                titleKey: "potassium",
-                text: $potassiumText,
-                isGuess: $potassiumIsGuess,
-                keyboard: .numberPad,
-                manager: manager,
-                unitSuffix: unitSuffix,
-                validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .milligrams) }
-            )
-            MetricField(
-                titleKey: "zinc",
-                text: $zincText,
-                isGuess: $zincIsGuess,
-                keyboard: .numberPad,
-                manager: manager,
-                unitSuffix: unitSuffix,
-                validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .milligrams) }
-            )
-            MetricField(
-                titleKey: "magnesium",
-                text: $magnesiumText,
-                isGuess: $magnesiumIsGuess,
-                keyboard: .numberPad,
-                manager: manager,
-                unitSuffix: unitSuffix,
-                validator: { ValidationThresholds.vitaminMineralMg.severityForVitaminsUI($0, unit: .milligrams) }
-            )
-        }
-    }
-}
-
 extension Double {
     var cleanString: String {
         truncatingRemainder(dividingBy: 1) == 0 ? String(Int(self)) : String(self)
@@ -903,4 +886,3 @@ struct CompactSectionSpacing: ViewModifier {
         }
     }
 }
-

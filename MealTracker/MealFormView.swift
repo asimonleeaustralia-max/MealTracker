@@ -729,6 +729,7 @@ struct MealFormView: View {
                     VitaminsGroupView(
                         manager: l,
                         unitSuffix: vitaminsUnit.displaySuffix,
+                        vitaminsUnit: vitaminsUnit,
                         aText: $vitaminA, aIsGuess: $vitaminAIsGuess,
                         bText: $vitaminB, bIsGuess: $vitaminBIsGuess,
                         cText: $vitaminC, cIsGuess: $vitaminCIsGuess,
@@ -745,6 +746,7 @@ struct MealFormView: View {
                     MineralsGroupView(
                         manager: l,
                         unitSuffix: vitaminsUnit.displaySuffix,
+                        vitaminsUnit: vitaminsUnit,
                         calciumText: $calcium, calciumIsGuess: $calciumIsGuess,
                         ironText: $iron, ironIsGuess: $ironIsGuess,
                         potassiumText: $potassium, potassiumIsGuess: $potassiumIsGuess,
@@ -867,22 +869,29 @@ struct MealFormView: View {
         m.proteinSupplements = d(proteinSupplements)
 
         // Vitamins/Minerals stored in mg; UI may be mg or µg
-        func toStorageMG(_ s: String) -> Double {
-            let ui = Double(Int(s) ?? 0)
-            return vitaminsUnit.toStorageMG(ui)
+        // mg mode: parse Double; µg mode: parse Int then convert to mg
+        func parseVitaminMineralToStorageMG(_ s: String) -> Double {
+            switch vitaminsUnit {
+            case .milligrams:
+                let ui = Double(s.replacingOccurrences(of: ",", with: ".")) ?? 0
+                return vitaminsUnit.toStorageMG(ui)
+            case .micrograms:
+                let uiInt = Double(Int(s) ?? 0)
+                return vitaminsUnit.toStorageMG(uiInt)
+            }
         }
-        m.vitaminA = toStorageMG(vitaminA)
-        m.vitaminB = toStorageMG(vitaminB)
-        m.vitaminC = toStorageMG(vitaminC)
-        m.vitaminD = toStorageMG(vitaminD)
-        m.vitaminE = toStorageMG(vitaminE)
-        m.vitaminK = toStorageMG(vitaminK)
+        m.vitaminA = parseVitaminMineralToStorageMG(vitaminA)
+        m.vitaminB = parseVitaminMineralToStorageMG(vitaminB)
+        m.vitaminC = parseVitaminMineralToStorageMG(vitaminC)
+        m.vitaminD = parseVitaminMineralToStorageMG(vitaminD)
+        m.vitaminE = parseVitaminMineralToStorageMG(vitaminE)
+        m.vitaminK = parseVitaminMineralToStorageMG(vitaminK)
 
-        m.calcium = toStorageMG(calcium)
-        m.iron = toStorageMG(iron)
-        m.potassium = toStorageMG(potassium)
-        m.zinc = toStorageMG(zinc)
-        m.magnesium = toStorageMG(magnesium)
+        m.calcium = parseVitaminMineralToStorageMG(calcium)
+        m.iron = parseVitaminMineralToStorageMG(iron)
+        m.potassium = parseVitaminMineralToStorageMG(potassium)
+        m.zinc = parseVitaminMineralToStorageMG(zinc)
+        m.magnesium = parseVitaminMineralToStorageMG(magnesium)
 
         // Guess flags
         m.caloriesIsGuess = caloriesIsGuess
@@ -942,7 +951,6 @@ struct MealFormView: View {
             if meal == nil { meal = m }
             dismiss()
         } catch {
-            // In a production app, surface an alert; for now, log
             #if DEBUG
             print("Failed to save meal: \(error)")
             #endif
@@ -1001,5 +1009,51 @@ private extension MealFormView {
                 source.wrappedValue = filtered
             }
         )
+    }
+}
+
+extension MealFormView {
+    // MARK: - Validation
+
+    var isValid: Bool {
+        guard let cal = Int(calories), cal > 0 else { return false }
+
+        func isEmptyOrPositiveDouble(_ s: String) -> Bool {
+            guard !s.isEmpty else { return true }
+            let v = Double(s.replacingOccurrences(of: ",", with: ".")) ?? -1
+            return v > 0
+        }
+        func isEmptyOrPositiveInt(_ s: String) -> Bool {
+            guard !s.isEmpty else { return true }
+            return (Int(s) ?? -1) > 0
+        }
+
+        // grams-based
+        let gramsFields = [carbohydrates, protein, fat, sugars, starch, fibre, monounsaturatedFat, polyunsaturatedFat, saturatedFat, transFat, omega3, omega6, alcohol, animalProtein, plantProtein, proteinSupplements]
+        guard gramsFields.allSatisfy(isEmptyOrPositiveDouble) else { return false }
+
+        // sodium depends on unit
+        if sodiumUnit == .grams {
+            guard isEmptyOrPositiveDouble(sodium) else { return false }
+        } else {
+            guard isEmptyOrPositiveInt(sodium) else { return false }
+        }
+
+        // Stimulants (mg-only, integer UI)
+        let stimulantsIntFields = [nicotine, theobromine, caffeine, taurine]
+        guard stimulantsIntFields.allSatisfy(isEmptyOrPositiveInt) else { return false }
+
+        // Vitamins/minerals validation depends on vitaminsUnit
+        if vitaminsUnit == .milligrams {
+            // allow decimals in mg mode
+            let vitaminMineralDoubleFields = [vitaminA, vitaminB, vitaminC, vitaminD, vitaminE, vitaminK, calcium, iron, potassium, zinc, magnesium]
+            guard vitaminMineralDoubleFields.allSatisfy(isEmptyOrPositiveDouble) else { return false }
+        } else {
+            // µg mode: integers only
+            let vitaminMineralIntFields = [vitaminA, vitaminB, vitaminC, vitaminD, vitaminE, vitaminK, calcium, iron, potassium, zinc, magnesium]
+            guard vitaminMineralIntFields.allSatisfy(isEmptyOrPositiveInt) else { return false }
+        }
+
+        return true
     }
 }

@@ -13,6 +13,23 @@ import AVFoundation
 
 extension MealFormView {
 
+    // Shared formatter for vitamins/minerals shown in mg/µg (preserve decimals in mg mode)
+    private func mgToUIText(_ mgValue: Double) -> String {
+        switch vitaminsUnit {
+        case .milligrams:
+            // Up to 3 fractional digits, trim trailing zeros
+            let nf = NumberFormatter()
+            nf.locale = Locale.current
+            nf.minimumFractionDigits = 0
+            nf.maximumFractionDigits = 3
+            nf.minimumIntegerDigits = 1
+            return nf.string(from: NSNumber(value: mgValue)) ?? mgValue.cleanString
+        case .micrograms:
+            let micro = (mgValue * 1000.0).rounded()
+            return String(Int(micro))
+        }
+    }
+
     // MARK: - Lifecycle wiring
 
     func onAppearSetup(l: LocalizationManager) {
@@ -56,16 +73,18 @@ extension MealFormView {
             plantProtein = meal.plantProtein.cleanString
             proteinSupplements = meal.proteinSupplements.cleanString
 
-            vitaminA = Int(vitaminsUnit.fromStorageMG(meal.vitaminA)).description
-            vitaminB = Int(vitaminsUnit.fromStorageMG(meal.vitaminB)).description
-            vitaminC = Int(vitaminsUnit.fromStorageMG(meal.vitaminC)).description
-            vitaminD = Int(vitaminsUnit.fromStorageMG(meal.vitaminD)).description
-            vitaminE = Int(vitaminsUnit.fromStorageMG(meal.vitaminE)).description
-            vitaminK = Int(vitaminsUnit.fromStorageMG(meal.vitaminK)).description
+            // Preserve decimals for vitamins (stored mg Double) and potassium
+            vitaminA = mgToUIText(meal.vitaminA)
+            vitaminB = mgToUIText(meal.vitaminB)
+            vitaminC = mgToUIText(meal.vitaminC)
+            vitaminD = mgToUIText(meal.vitaminD)
+            vitaminE = mgToUIText(meal.vitaminE)
+            vitaminK = mgToUIText(meal.vitaminK)
 
+            // Minerals: calcium/iron/zinc/magnesium are Int mg; potassium is Double mg
             calcium = Int(vitaminsUnit.fromStorageMG(meal.calcium)).description
             iron = Int(vitaminsUnit.fromStorageMG(meal.iron)).description
-            potassium = Int(vitaminsUnit.fromStorageMG(meal.potassium)).description
+            potassium = mgToUIText(meal.potassium)
             zinc = Int(vitaminsUnit.fromStorageMG(meal.zinc)).description
             magnesium = Int(vitaminsUnit.fromStorageMG(meal.magnesium)).description
 
