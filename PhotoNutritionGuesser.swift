@@ -299,6 +299,67 @@ struct PhotoNutritionGuesser {
         }
     }
 
+    // New: richer barcode presence probe to distinguish unreadable vs none
+    enum BarcodePresence {
+        case decoded(String)
+        case presentButUnreadable
+        case none
+    }
+
+    static func probeBarcodePresence(in image: UIImage) async -> BarcodePresence {
+        guard let cgImage = image.cgImage else { return .none }
+
+        return await withCheckedContinuation { continuation in
+            var didResume = false
+            func resumeOnce(_ value: BarcodePresence) {
+                guard !didResume else { return }
+                didResume = true
+                continuation.resume(returning: value)
+            }
+
+            let request = VNDetectBarcodesRequest { request, error in
+                if let _ = error {
+                    resumeOnce(.none)
+                    return
+                }
+                guard let obs = request.results as? [VNBarcodeObservation], !obs.isEmpty else {
+                    resumeOnce(.none)
+                    return
+                }
+
+                // If any payload decodes, report decoded
+                if let code = obs.compactMap({ $0.payloadStringValue }).first, !code.isEmpty {
+                    resumeOnce(.decoded(code))
+                    return
+                }
+
+                // Otherwise, heuristically decide if something barcode-like is present but unreadable:
+                // - at least one observation
+                // - confidence reasonable OR bounding box size suggests a visible region
+                let unreadableLikely = obs.contains { o in
+                    let area = o.boundingBox.width * o.boundingBox.height
+                    let conf = o.confidence
+                    // area is in normalized 0..1; threshold ~1.5% of frame, or moderate confidence
+                    return area > 0.015 || conf > 0.4
+                }
+                resumeOnce(unreadableLikely ? .presentButUnreadable : .none)
+            }
+
+            if #available(iOS 15.0, *) {
+                request.symbologies = [.UPCE, .EAN13, .EAN8, .Code128, .Code39, .Code93, .ITF14]
+            }
+
+            let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    try handler.perform([request])
+                } catch {
+                    resumeOnce(.none)
+                }
+            }
+        }
+    }
+
     // MARK: - OCR
 
     // Try .fast first; if the text is empty/too short, try .accurate
@@ -580,7 +641,7 @@ struct PhotoNutritionGuesser {
             // Hebrew
             "פחמימות","מתוכן סוכרים",
             // Hindi/Bengali
-            "कार्बोहाइड्रेट","कार्ब्स","शर्करा","जिसमें शर्करा","কার্বোহাইড্রेट","কার্বস","চিনি","যার মধ্যে চিনি",
+            "कार्बोहाइड्रेट","कार्ब्स","शर्करा","जिसमें शर्करा","কার্বোহাইড্রেট","কার্বস","চিনি","যার মধ্যে চিনি",
             // Thai
             "คาร์โบไฮเดรต","คาร์บ","น้ำตาลรวม","ซึ่งน้ำตาล",
             // Vietnamese
@@ -600,7 +661,7 @@ struct PhotoNutritionGuesser {
             "protein","proteins","proteína","proteínas","proteine","eiweiß","eiweiss","eiweıß",
             "proteína","proteine","proteínas",
             "proteine","протеин","белки","білки","протеини",
-            "البروتين","بروتين",
+            "العربوين","بروتين",
             "חלבון",
             "प्रोटीन","প্রোটিন",
             "โปรตีน",
@@ -816,7 +877,7 @@ struct PhotoNutritionGuesser {
             "energia","kalorien","kilokalorien","kcal",
             "energia","kcal","kalorii",
             "energia","kcal","калории","ккал",
-            "طاقة","كيلوكалوري","सعرات","سعرات حرارية","كيلो كالوري","كيلो-كالوري","kcal",
+            "طاقة","كيلوكالوري","सعرات","سعرات حرارية","كيلو كالوري","كيلو-كالوري","kcal",
             "אנרגיה","קק\"ל","קק״ל","kcal",
             "ऊर्जा","किलो कैलोरी","किलो-कैलोरी","kcal",
             "শক্তি","কিলোক্যালোরি","kcal",

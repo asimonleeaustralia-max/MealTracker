@@ -807,5 +807,208 @@ struct MealFormView: View {
         }
     }
 
+    // MARK: - Save
+
+    private func save() {
+        // Only allow save if valid or forced by wizard
+        guard isValid || forceEnableSave else { return }
+
+        let m: Meal = meal ?? Meal(context: context)
+
+        // If new, setup basic fields
+        if meal == nil {
+            m.id = UUID()
+            m.date = Date()
+            let locale = Locale(identifier: appLanguageCode)
+            m.title = mealDescription.isEmpty ? Meal.autoTitle(for: m.date, locale: locale) : mealDescription
+        } else {
+            // Update title if user changed description
+            if !mealDescription.isEmpty {
+                m.title = mealDescription
+            } else if m.title.isEmpty {
+                let locale = Locale(identifier: appLanguageCode)
+                m.title = Meal.autoTitle(for: m.date, locale: locale)
+            }
+        }
+
+        // Helper parsers
+        func d(_ s: String) -> Double { Double(s.replacingOccurrences(of: ",", with: ".")) ?? 0 }
+        func i(_ s: String) -> Double { Double(Int(s) ?? 0) }
+
+        // Calories (stored as kcal)
+        m.calories = Double(Int(calories) ?? 0)
+
+        // Grams-based doubles
+        m.carbohydrates = d(carbohydrates)
+        m.protein = d(protein)
+        m.fat = d(fat)
+
+        // Sodium stored in mg
+        if sodiumUnit == .grams {
+            m.sodium = d(sodium) * 1000.0
+        } else {
+            m.sodium = i(sodium)
+        }
+
+        // Stimulants
+        m.alcohol = d(alcohol) // grams
+        m.nicotine = i(nicotine) // mg
+        m.theobromine = i(theobromine) // mg
+        m.caffeine = i(caffeine) // mg
+        m.taurine = i(taurine) // mg
+
+        // Sub-macros (grams)
+        m.starch = d(starch)
+        m.sugars = d(sugars)
+        m.fibre = d(fibre)
+
+        // Fat breakdown (grams)
+        m.monounsaturatedFat = d(monounsaturatedFat)
+        m.polyunsaturatedFat = d(polyunsaturatedFat)
+        m.saturatedFat = d(saturatedFat)
+        m.transFat = d(transFat)
+        m.omega3 = d(omega3)
+        m.omega6 = d(omega6)
+
+        // Protein breakdown (grams)
+        m.animalProtein = d(animalProtein)
+        m.plantProtein = d(plantProtein)
+        m.proteinSupplements = d(proteinSupplements)
+
+        // Vitamins/Minerals stored in mg; UI may be mg or µg
+        func toStorageMG(_ s: String) -> Double {
+            let ui = Double(Int(s) ?? 0)
+            return vitaminsUnit.toStorageMG(ui)
+        }
+        m.vitaminA = toStorageMG(vitaminA)
+        m.vitaminB = toStorageMG(vitaminB)
+        m.vitaminC = toStorageMG(vitaminC)
+        m.vitaminD = toStorageMG(vitaminD)
+        m.vitaminE = toStorageMG(vitaminE)
+        m.vitaminK = toStorageMG(vitaminK)
+
+        m.calcium = toStorageMG(calcium)
+        m.iron = toStorageMG(iron)
+        m.potassium = toStorageMG(potassium)
+        m.zinc = toStorageMG(zinc)
+        m.magnesium = toStorageMG(magnesium)
+
+        // Guess flags
+        m.caloriesIsGuess = caloriesIsGuess
+        m.carbohydratesIsGuess = carbohydratesIsGuess
+        m.proteinIsGuess = proteinIsGuess
+        m.sodiumIsGuess = sodiumIsGuess
+        m.fatIsGuess = fatIsGuess
+
+        m.alcoholIsGuess = alcoholIsGuess
+        m.nicotineIsGuess = nicotineIsGuess
+        m.theobromineIsGuess = theobromineIsGuess
+        m.caffeineIsGuess = caffeineIsGuess
+        m.taurineIsGuess = taurineIsGuess
+
+        m.starchIsGuess = starchIsGuess
+        m.sugarsIsGuess = sugarsIsGuess
+        m.fibreIsGuess = fibreIsGuess
+
+        m.monounsaturatedFatIsGuess = monounsaturatedFatIsGuess
+        m.polyunsaturatedFatIsGuess = polyunsaturatedFatIsGuess
+        m.saturatedFatIsGuess = saturatedFatIsGuess
+        m.transFatIsGuess = transFatIsGuess
+        m.omega3IsGuess = omega3IsGuess
+        m.omega6IsGuess = omega6IsGuess
+
+        m.animalProteinIsGuess = animalProteinIsGuess
+        m.plantProteinIsGuess = plantProteinIsGuess
+        m.proteinSupplementsIsGuess = proteinSupplementsIsGuess
+
+        m.vitaminAIsGuess = vitaminAIsGuess
+        m.vitaminBIsGuess = vitaminBIsGuess
+        m.vitaminCIsGuess = vitaminCIsGuess
+        m.vitaminDIsGuess = vitaminDIsGuess
+        m.vitaminEIsGuess = vitaminEIsGuess
+        m.vitaminKIsGuess = vitaminKIsGuess
+
+        m.calciumIsGuess = calciumIsGuess
+        m.ironIsGuess = ironIsGuess
+        m.potassiumIsGuess = potassiumIsGuess
+        m.zincIsGuess = zincIsGuess
+        m.magnesiumIsGuess = magnesiumIsGuess
+
+        // Coordinates from last known location (optional)
+        if let loc = locationManager.lastLocation {
+            m.latitude = loc.coordinate.latitude
+            m.longitude = loc.coordinate.longitude
+        }
+
+        // Associate person if eligible and selected (model shows Person.meal to-many without inverse)
+        if let person = selectedPerson {
+            person.addToMeal(m)
+        }
+
+        do {
+            try context.save()
+            // Keep reference if it was new
+            if meal == nil { meal = m }
+            dismiss()
+        } catch {
+            // In a production app, surface an alert; for now, log
+            #if DEBUG
+            print("Failed to save meal: \(error)")
+            #endif
+        }
+    }
+
     // ... rest of file remains unchanged ...
+}
+
+// MARK: - Numeric input sanitizers used by MetricField bindings
+
+private extension MealFormView {
+    // Allow only digits and a single decimal separator.
+    // Normalize comma to dot and collapse multiple dots to one.
+    func numericBindingDecimal(_ source: Binding<String>) -> Binding<String> {
+        Binding<String>(
+            get: {
+                source.wrappedValue
+            },
+            set: { newValue in
+                var s = newValue
+
+                // Normalize comma to dot
+                s = s.replacingOccurrences(of: ",", with: ".")
+
+                // Keep digits and dots only
+                s = s.filter { ("0"..."9").contains($0) || $0 == "." }
+
+                // Collapse multiple dots to a single one (keep first)
+                if let firstDot = s.firstIndex(of: ".") {
+                    let after = s.index(after: firstDot)
+                    let tail = s[after...].replacingOccurrences(of: ".", with: "")
+                    s = String(s[..<after]) + tail
+                }
+
+                // Optional: prevent leading zeros like "00" (keep "0." cases intact)
+                if s.hasPrefix("00") {
+                    // reduce to single leading zero
+                    while s.hasPrefix("00") { s.removeFirst() }
+                    if s.isEmpty { s = "0" }
+                }
+
+                source.wrappedValue = s
+            }
+        )
+    }
+
+    // Allow only digits (non-negative integers).
+    func numericBindingInt(_ source: Binding<String>) -> Binding<String> {
+        Binding<String>(
+            get: {
+                source.wrappedValue
+            },
+            set: { newValue in
+                let filtered = newValue.filter { ("0"..."9").contains($0) }
+                source.wrappedValue = filtered
+            }
+        )
+    }
 }
