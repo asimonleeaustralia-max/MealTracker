@@ -91,7 +91,12 @@ struct PhotoNutritionGuesser {
                 if debugOCR {
                     print("OCR text (rotation variant):\n\(text)\n--- end OCR ---")
                 }
+                #if DEBUG
+                var parseDiag: [String]? = []
+                let result = parseNutrition(from: text, collecting: &parseDiag)
+                #else
                 let result = parseNutrition(from: text)
+                #endif
                 let score = result.parsedFieldCount
                 if score > bestParsedScore {
                     bestParsedScore = score
@@ -479,7 +484,27 @@ struct PhotoNutritionGuesser {
 
     // MARK: - Parsing
 
+    // DEBUG-aware entry point: forwards to diagnostics-collecting variant when DEBUG is active.
     static func parseNutrition(from rawText: String) -> GuessResult {
+        #if DEBUG
+        var diags: [String]? = []
+        let r = parseNutrition(from: rawText, collecting: &diags)
+        // We don’t emit here (caller logs); this keeps this function side-effect-free.
+        return r
+        #else
+        return parseNutrition_impl(from: rawText, collecting: nil)
+        #endif
+    }
+
+    #if DEBUG
+    // DEBUG-only: collect human-readable diagnostics about misses and unit/keyword presence.
+    static func parseNutrition(from rawText: String, collecting diags: inout [String]?) -> GuessResult {
+        return parseNutrition_impl(from: rawText, collecting: &diags)
+    }
+    #endif
+
+    // Core implementation with optional diagnostics sink (DEBUG passes a non-nil array).
+    private static func parseNutrition_impl(from rawText: String, collecting diags: inout [String]?) -> GuessResult {
         // Normalize OCR text robustly for multilingual matching
         let lines = rawText
             .components(separatedBy: .newlines)
@@ -488,6 +513,12 @@ struct PhotoNutritionGuesser {
             .filter { !$0.isEmpty }
 
         var result = GuessResult()
+
+        // If no lines at all, short-circuit
+        if lines.isEmpty {
+            diags?.append("No normalized lines after OCR; nothing to parse.")
+            return result
+        }
 
         // Regex helpers with non-Latin-aware boundaries
         func firstMatch(_ pattern: String, in text: String) -> NSTextCheckingResult? {
@@ -504,7 +535,6 @@ struct PhotoNutritionGuesser {
 
         func toInt(_ s: String?) -> Int? {
             guard var str = s?.trimmingCharacters(in: .whitespacesAndNewlines), !str.isEmpty else { return nil }
-            // normalize decimal comma to dot
             str = str.replacingOccurrences(of: ",", with: ".")
             if let val = Double(str) {
                 return Int(round(val))
@@ -676,9 +706,9 @@ struct PhotoNutritionGuesser {
             "protein","proteins","proteína","proteínas","proteine","eiweiß","eiweiss","eiweıß",
             "proteína","proteine","proteínas",
             "proteine","протеин","белки","білки","протеини",
-            "العربوين","بروتين",
+            "العربوين","बرو틴",
             "חלבון",
-            "प्रोटीन","প্রোটিন",
+            "प्रोटीन","प्रोटिन","প্রোটিন",
             "โปรตีน",
             "proteină","proteine","proteínas",
             "蛋白质","蛋白","たんぱく質","蛋白質","단백질"
@@ -694,7 +724,7 @@ struct PhotoNutritionGuesser {
             "жиры","жир","жиры всего","жири",
             "دهون","دهن",
             "שומן",
-            "वसा","চর্বি",
+            "वसा","चर्बी",
             "ไขมัน",
             "lemak","lemak total",
             "脂肪","總脂肪","總脂","脂質","脂肪総量",
@@ -771,7 +801,7 @@ struct PhotoNutritionGuesser {
             "насыщенные жирные кислоты","в т.ч. насыщенные",
             "دهون مشبعة",
             "שומן רווי",
-            "संतृप्त वसा","স্যাচুরেটেড ফ্যাট",
+            "संतृप्त वसा","স্যাচুরेटেড ফ্যাট",
             "ไขมันอิ่มตัว",
             "chất béo bão hòa",
             "lemak jenuh",
@@ -892,7 +922,7 @@ struct PhotoNutritionGuesser {
             "energia","kalorien","kilokalorien","kcal",
             "energia","kcal","kalorii",
             "energia","kcal","калории","ккал",
-            "طاقة","كيلوكалوري","سعرات","سعرات حرارية","كيلو كالوري","كيلو-कालोरी","kcal",
+            "طاقة","كيلوكалوري","سعرات","سعرات حرارية","كيلو كالोरी","كيلو-कालोरी","kcal",
             "אנרגיה","קק\"ל","קק״ל","kcal",
             "ऊर्जा","किलो कैलोरी","किलो-कैलोरी","kcal",
             "শক্তি","কিলোক্যালোরি","kcal",
@@ -924,56 +954,116 @@ struct PhotoNutritionGuesser {
             "에너지","킬로줄","kJ"
         ])
 
+        // Unit/keyword presence summary for diagnostics
+        let joinedAll = lines.joined(separator: " ")
+        let hasG = (firstMatch("(?:\\s|^)(?:\(grams))(?:\\s|$)", in: joinedAll) != nil)
+        let hasMG = (firstMatch("(?:\\s|^)(?:\(milligrams))(?:\\s|$)", in: joinedAll) != nil)
+        let hasUG = (firstMatch("(?:\\s|^)(?:\(micrograms))(?:\\s|$)", in: joinedAll) != nil)
+        let hasKcal = (firstMatch("(?:\\s|^)(?:\(kcalUnits))(?:\\s|$)", in: joinedAll) != nil)
+        let hasKJ = (firstMatch("(?:\\s|^)(?:\(kJUnits))(?:\\s|$)", in: joinedAll) != nil)
+        diags?.append("Units present: g=\(hasG) mg=\(hasMG) ug=\(hasUG) kcal=\(hasKcal) kj=\(hasKJ)")
+
         // 1) Pass 1: simple per-line extraction (existing logic)
+        // Track per-field misses to explain “keyword seen but value/unit missing”
+        var seenTokens: Set<String> = []
+
+        func lineContainsAny(_ line: String, keys: [String]) -> Bool {
+            for k in keys {
+                if line.contains(k) { return true }
+            }
+            return false
+        }
+
         for raw in lines {
             let line = raw
 
-            if result.calories == nil, let kcal = parseEnergy(line) {
-                result.calories = kcal
-                continue
+            if result.calories == nil {
+                if let kcal = parseEnergy(line) {
+                    result.calories = kcal
+                } else if lineContainsAny(line, keys: ["energy","kcal","kj","kilojoule","calorie","calories"]) {
+                    seenTokens.insert("energy")
+                }
             }
 
-            if result.carbohydrates == nil, let v = parseGramValue(line, keywords: carbsKeys) {
-                result.carbohydrates = v
-                continue
+            if result.carbohydrates == nil {
+                if let v = parseGramValue(line, keywords: carbsKeys) {
+                    result.carbohydrates = v
+                } else if lineContainsAny(line, keys: carbsKeys) {
+                    seenTokens.insert("carbohydrates")
+                }
             }
-            if result.protein == nil, let v = parseGramValue(line, keywords: proteinKeys) {
-                result.protein = v
-                continue
+            if result.protein == nil {
+                if let v = parseGramValue(line, keywords: proteinKeys) {
+                    result.protein = v
+                } else if lineContainsAny(line, keys: proteinKeys) {
+                    seenTokens.insert("protein")
+                }
             }
-            if result.fat == nil, let v = parseGramValue(line, keywords: fatKeys) {
-                result.fat = v
-            }
-
-            if result.sodiumMg == nil, let mg = parseSodiumOrSalt(line) {
-                result.sodiumMg = mg
-                continue
-            }
-
-            if result.sugars == nil, let v = parseGramValue(line, keywords: sugarKeys) {
-                result.sugars = v
-                continue
-            }
-            if result.fibre == nil, let v = parseGramValue(line, keywords: fibreKeys) {
-                result.fibre = v
-                continue
-            }
-            if result.starch == nil, let v = parseGramValue(line, keywords: starchKeys) {
-                result.starch = v
-                continue
+            if result.fat == nil {
+                if let v = parseGramValue(line, keywords: fatKeys) {
+                    result.fat = v
+                } else if lineContainsAny(line, keys: fatKeys) {
+                    seenTokens.insert("fat")
+                }
             }
 
-            if result.saturatedFat == nil, let v = parseGramValue(line, keywords: satKeys) {
-                result.saturatedFat = v
+            if result.sodiumMg == nil {
+                if let mg = parseSodiumOrSalt(line) {
+                    result.sodiumMg = mg
+                } else if lineContainsAny(line, keys: sodiumKeys + saltKeys) {
+                    seenTokens.insert("sodium/salt")
+                }
             }
-            if result.transFat == nil, let v = parseGramValue(line, keywords: transKeys) {
-                result.transFat = v
+
+            if result.sugars == nil {
+                if let v = parseGramValue(line, keywords: sugarKeys) {
+                    result.sugars = v
+                } else if lineContainsAny(line, keys: sugarKeys) {
+                    seenTokens.insert("sugars")
+                }
             }
-            if result.monounsaturatedFat == nil, let v = parseGramValue(line, keywords: monoKeys) {
-                result.monounsaturatedFat = v
+            if result.fibre == nil {
+                if let v = parseGramValue(line, keywords: fibreKeys) {
+                    result.fibre = v
+                } else if lineContainsAny(line, keys: fibreKeys) {
+                    seenTokens.insert("fibre")
+                }
             }
-            if result.polyunsaturatedFat == nil, let v = parseGramValue(line, keywords: polyKeys) {
-                result.polyunsaturatedFat = v
+            if result.starch == nil {
+                if let v = parseGramValue(line, keywords: starchKeys) {
+                    result.starch = v
+                } else if lineContainsAny(line, keys: starchKeys) {
+                    seenTokens.insert("starch")
+                }
+            }
+
+            if result.saturatedFat == nil {
+                if let v = parseGramValue(line, keywords: satKeys) {
+                    result.saturatedFat = v
+                } else if lineContainsAny(line, keys: satKeys) {
+                    seenTokens.insert("saturatedFat")
+                }
+            }
+            if result.transFat == nil {
+                if let v = parseGramValue(line, keywords: transKeys) {
+                    result.transFat = v
+                } else if lineContainsAny(line, keys: transKeys) {
+                    seenTokens.insert("transFat")
+                }
+            }
+            if result.monounsaturatedFat == nil {
+                if let v = parseGramValue(line, keywords: monoKeys) {
+                    result.monounsaturatedFat = v
+                } else if lineContainsAny(line, keys: monoKeys) {
+                    seenTokens.insert("monounsaturatedFat")
+                }
+            }
+            if result.polyunsaturatedFat == nil {
+                if let v = parseGramValue(line, keywords: polyKeys) {
+                    result.polyunsaturatedFat = v
+                } else if lineContainsAny(line, keys: polyKeys) {
+                    seenTokens.insert("polyunsaturatedFat")
+                }
             }
 
             // Vitamins (mg or µg → mg) as Double
@@ -982,6 +1072,8 @@ struct PhotoNutritionGuesser {
                     result.vitaminA = mg
                 } else if let mgFromMicro = parseMicrogramValueDouble(line, keywords: vitAKeys) {
                     result.vitaminA = mgFromMicro
+                } else if lineContainsAny(line, keys: vitAKeys) {
+                    seenTokens.insert("vitaminA")
                 }
             }
             if result.vitaminB == nil {
@@ -989,6 +1081,8 @@ struct PhotoNutritionGuesser {
                     result.vitaminB = mg
                 } else if let mgFromMicro = parseMicrogramValueDouble(line, keywords: vitBKeys) {
                     result.vitaminB = mgFromMicro
+                } else if lineContainsAny(line, keys: vitBKeys) {
+                    seenTokens.insert("vitaminB")
                 }
             }
             if result.vitaminC == nil {
@@ -996,6 +1090,8 @@ struct PhotoNutritionGuesser {
                     result.vitaminC = mg
                 } else if let mgFromMicro = parseMicrogramValueDouble(line, keywords: vitCKeys) {
                     result.vitaminC = mgFromMicro
+                } else if lineContainsAny(line, keys: vitCKeys) {
+                    seenTokens.insert("vitaminC")
                 }
             }
             if result.vitaminD == nil {
@@ -1003,6 +1099,8 @@ struct PhotoNutritionGuesser {
                     result.vitaminD = mg
                 } else if let mgFromMicro = parseMicrogramValueDouble(line, keywords: vitDKeys) {
                     result.vitaminD = mgFromMicro
+                } else if lineContainsAny(line, keys: vitDKeys) {
+                    seenTokens.insert("vitaminD")
                 }
             }
             if result.vitaminE == nil {
@@ -1010,6 +1108,8 @@ struct PhotoNutritionGuesser {
                     result.vitaminE = mg
                 } else if let mgFromMicro = parseMicrogramValueDouble(line, keywords: vitEKeys) {
                     result.vitaminE = mgFromMicro
+                } else if lineContainsAny(line, keys: vitEKeys) {
+                    seenTokens.insert("vitaminE")
                 }
             }
             if result.vitaminK == nil {
@@ -1017,6 +1117,8 @@ struct PhotoNutritionGuesser {
                     result.vitaminK = mg
                 } else if let mgFromMicro = parseMicrogramValueDouble(line, keywords: vitKKeys) {
                     result.vitaminK = mgFromMicro
+                } else if lineContainsAny(line, keys: vitKKeys) {
+                    seenTokens.insert("vitaminK")
                 }
             }
 
@@ -1026,6 +1128,8 @@ struct PhotoNutritionGuesser {
                     result.calcium = mg
                 } else if let mgFromMicro = parseMicrogramValueInt(line, keywords: calciumKeys) {
                     result.calcium = mgFromMicro
+                } else if lineContainsAny(line, keys: calciumKeys) {
+                    seenTokens.insert("calcium")
                 }
             }
             if result.iron == nil {
@@ -1033,6 +1137,8 @@ struct PhotoNutritionGuesser {
                     result.iron = mg
                 } else if let mgFromMicro = parseMicrogramValueInt(line, keywords: ironKeys) {
                     result.iron = mgFromMicro
+                } else if lineContainsAny(line, keys: ironKeys) {
+                    seenTokens.insert("iron")
                 }
             }
             if result.potassium == nil {
@@ -1040,6 +1146,8 @@ struct PhotoNutritionGuesser {
                     result.potassium = mg
                 } else if let mgFromMicro = parseMicrogramValueDouble(line, keywords: potassiumKeys) {
                     result.potassium = mgFromMicro
+                } else if lineContainsAny(line, keys: potassiumKeys) {
+                    seenTokens.insert("potassium")
                 }
             }
             if result.zinc == nil {
@@ -1047,6 +1155,8 @@ struct PhotoNutritionGuesser {
                     result.zinc = mg
                 } else if let mgFromMicro = parseMicrogramValueInt(line, keywords: zincKeys) {
                     result.zinc = mgFromMicro
+                } else if lineContainsAny(line, keys: zincKeys) {
+                    seenTokens.insert("zinc")
                 }
             }
             if result.magnesium == nil {
@@ -1054,6 +1164,8 @@ struct PhotoNutritionGuesser {
                     result.magnesium = mg
                 } else if let mgFromMicro = parseMicrogramValueInt(line, keywords: magnesiumKeys) {
                     result.magnesium = mgFromMicro
+                } else if lineContainsAny(line, keys: magnesiumKeys) {
+                    seenTokens.insert("magnesium")
                 }
             }
         }
@@ -1076,39 +1188,56 @@ struct PhotoNutritionGuesser {
         let hasPerServing = containsRegex("(?:" + avgQty + ")?"+per+serving, in: headerJoined)
         let hasPer100g = containsRegex(per + hundred, in: headerJoined) || containsRegex("(?:" + avgQty + ")"+per+hundred, in: headerJoined)
 
-        func maybeApplyGrams(_ name: [String], into field: inout Double?) {
+        func maybeApplyGrams(_ name: [String], into field: inout Double?, label: String) {
             guard field == nil else { return }
+            var matched = false
             for line in lines {
                 if let parsed = parseTwoColumnRow(line: line, nameKeys: name, preferFirst: hasPerServing || !hasPer100g, unitPattern: grams) {
                     field = parsed
+                    matched = true
                     break
                 }
             }
+            if !matched, lines.contains(where: { lineContainsAny($0, keys: name) }) {
+                seenTokens.insert(label)
+            }
         }
 
-        func maybeApplyMilligramsInt(_ name: [String], into field: inout Int?) {
+        func maybeApplyMilligramsInt(_ name: [String], into field: inout Int?, label: String) {
             guard field == nil else { return }
+            var matched = false
             for line in lines {
                 if let parsedD = parseTwoColumnRow(line: line, nameKeys: name, preferFirst: hasPerServing || !hasPer100g, unitPattern: milligrams) {
                     field = Int(round(parsedD))
+                    matched = true
                     break
                 } else if let parsedG = parseTwoColumnRow(line: line, nameKeys: name, preferFirst: hasPerServing || !hasPer100g, unitPattern: grams) {
                     field = Int(round(parsedG * 1000.0))
+                    matched = true
                     break
                 }
             }
+            if !matched, lines.contains(where: { lineContainsAny($0, keys: name) }) {
+                seenTokens.insert(label)
+            }
         }
 
-        func maybeApplyMilligramsDouble(_ name: [String], into field: inout Double?) {
+        func maybeApplyMilligramsDouble(_ name: [String], into field: inout Double?, label: String) {
             guard field == nil else { return }
+            var matched = false
             for line in lines {
                 if let parsedD = parseTwoColumnRow(line: line, nameKeys: name, preferFirst: hasPerServing || !hasPer100g, unitPattern: milligrams) {
                     field = parsedD
+                    matched = true
                     break
                 } else if let parsedUG = parseTwoColumnRow(line: line, nameKeys: name, preferFirst: hasPerServing || !hasPer100g, unitPattern: micrograms) {
                     field = parsedUG / 1000.0
+                    matched = true
                     break
                 }
+            }
+            if !matched, lines.contains(where: { lineContainsAny($0, keys: name) }) {
+                seenTokens.insert(label)
             }
         }
 
@@ -1149,19 +1278,20 @@ struct PhotoNutritionGuesser {
         }
 
         // Apply table-aware extraction for typical nutrients if not already found
-        maybeApplyGrams(carbsKeys, into: &result.carbohydrates)
-        maybeApplyGrams(proteinKeys, into: &result.protein)
-        maybeApplyGrams(fatKeys, into: &result.fat)
-        maybeApplyGrams(sugarKeys, into: &result.sugars)
-        maybeApplyGrams(fibreKeys, into: &result.fibre)
-        maybeApplyGrams(satKeys, into: &result.saturatedFat)
-        maybeApplyGrams(transKeys, into: &result.transFat)
-        maybeApplyGrams(monoKeys, into: &result.monounsaturatedFat)
-        maybeApplyGrams(polyKeys, into: &result.polyunsaturatedFat)
-        maybeApplyMilligramsInt(sodiumKeys, into: &result.sodiumMg)
+        maybeApplyGrams(carbsKeys, into: &result.carbohydrates, label: "carbohydrates")
+        maybeApplyGrams(proteinKeys, into: &result.protein, label: "protein")
+        maybeApplyGrams(fatKeys, into: &result.fat, label: "fat")
+        maybeApplyGrams(sugarKeys, into: &result.sugars, label: "sugars")
+        maybeApplyGrams(fibreKeys, into: &result.fibre, label: "fibre")
+        maybeApplyGrams(satKeys, into: &result.saturatedFat, label: "saturatedFat")
+        maybeApplyGrams(transKeys, into: &result.transFat, label: "transFat")
+        maybeApplyGrams(monoKeys, into: &result.monounsaturatedFat, label: "monounsaturatedFat")
+        maybeApplyGrams(polyKeys, into: &result.polyunsaturatedFat, label: "polyunsaturatedFat")
+        maybeApplyMilligramsInt(sodiumKeys, into: &result.sodiumMg, label: "sodium/salt")
 
         // Energy row often appears as "Energy 1190 kJ 1980 kJ"
         if result.calories == nil {
+            var matchedEnergy = false
             for line in lines {
                 // Try kJ two-column row (second unit optional)
                 let kjNum = "([0-9]+[\\.,]?[0-9]*)"
@@ -1177,6 +1307,7 @@ struct PhotoNutritionGuesser {
                     }()
                     let kj = ((hasPerServing || !hasPer100g) ? firstKJ : (secondKJ ?? firstKJ))
                     result.calories = Int(round(Double(kj) / 4.184))
+                    matchedEnergy = true
                     break
                 }
                 // Try kcal two-column row (second unit optional)
@@ -1192,9 +1323,26 @@ struct PhotoNutritionGuesser {
                         return nil
                     }()
                     result.calories = (hasPerServing || !hasPer100g) ? first : (second ?? first)
+                    matchedEnergy = true
                     break
                 }
             }
+            if !matchedEnergy && (hasKcal || hasKJ || seenTokens.contains("energy")) {
+                diags?.append("Energy token present but no number+unit match on same line.")
+            }
+        }
+
+        // Emit per-field “token seen but no numeric+unit match” explanations
+        if !seenTokens.isEmpty {
+            let sorted = Array(seenTokens).sorted()
+            diags?.append("Saw nutrient keywords but could not match value+unit nearby for: \(sorted.joined(separator: ", ")).")
+            diags?.append("Common causes: unit missing near number (e.g., '10' without 'g'), OCR split across lines, or label uses unsupported synonym.")
+        }
+
+        // If still nothing at all, include a couple of normalized lines for context
+        if !result.hasAnyValue {
+            let sample = lines.prefix(5).joined(separator: " | ")
+            diags?.append("Sample normalized lines: \(sample)")
         }
 
         return result
@@ -1580,7 +1728,7 @@ private enum LocalizedUnits {
             "ไมโครกรัม",
             "מק\"ג","מקג","מיקרוגרם",
             "माइक्रोग्राम",
-            "মাইক্রোগ্রাম",
+            "মাইক্রोग্রাম",
             "ميكروغرام"
         ])
     }()
@@ -1603,3 +1751,4 @@ private enum LocalizedUnits {
         words.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
     }
 }
+

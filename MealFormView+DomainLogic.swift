@@ -474,9 +474,14 @@ extension MealFormView {
             await LabelDiagnosticsStore.shared.appendEvent(.init(stage: .ocrFinished, textLength: text.count, message: text))
             #endif
 
-            let parsed = PhotoNutritionGuesser.parseNutrition(from: text)
             #if DEBUG
-            await LabelDiagnosticsStore.shared.appendEvent(.init(stage: .parseResult, parsedFieldCount: parsed.parsedFieldCount))
+            var parseDiag: [String]? = []
+            let parsed = PhotoNutritionGuesser.parseNutrition(from: text, collecting: &parseDiag)
+            await LabelDiagnosticsStore.shared.appendEvent(
+                .init(stage: .parseResult, parsedFieldCount: parsed.parsedFieldCount, message: (parseDiag ?? []).joined(separator: "\n"))
+            )
+            #else
+            let parsed = PhotoNutritionGuesser.parseNutrition(from: text)
             #endif
 
             // NEW: Upsert parsed OCR text into DuckDB (barcodes table)
@@ -787,12 +792,10 @@ extension MealFormView {
 
     // Wrapper that uses PhotoNutritionGuesser’s OCR dual-pass with preprocessing and rotations.
     func recognizeTextForWizard(in image: UIImage, languageCode: String?) async -> String? {
-        // Reuse PhotoNutritionGuesser OCR pipeline to keep preprocessing and language hints consistent.
-        // Build rotation variants and pick the longest recognized text among them.
         let variants = PhotoNutritionGuesser.rotationVariants(of: image)
         var best: String?
         for img in variants {
-            let ocrReady = img // PhotoNutritionGuesser.recognizeTextDualPass does its own preprocessing
+            let ocrReady = img
             if let text = await withUnsafeContinuation({ (cont: UnsafeContinuation<String?, Never>) in
                 Task {
                     let t = await PhotoNutritionGuesser.recognizeTextDualPass(in: ocrReady, languageCode: languageCode)
@@ -843,7 +846,6 @@ extension MealFormView {
         carbsHelperVisible = sum > 0 && abs(sum - top) > 0.01
         carbsHelperText = sum > 0 ? sum.cleanString : ""
 
-        // If user entered a manual top different from auto-sum, stop auto-updating
         carbsLastAutoSum = nil
 
         // Clear red blink if user filled the top
