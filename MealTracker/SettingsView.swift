@@ -89,6 +89,7 @@ struct SettingsView: View {
 
     #if DEBUG
     @State private var barcodeLogCount: Int = 0
+    @State private var labelDiagCount: Int = 0
     #endif
 
     var body: some View {
@@ -167,6 +168,29 @@ struct SettingsView: View {
                     }
                     .onReceive(BarcodeLogStore.shared.publisher.receive(on: DispatchQueue.main)) { lines in
                         barcodeLogCount = lines.count
+                    }
+
+                    NavigationLink {
+                        LabelDiagnosticsView()
+                    } label: {
+                        HStack {
+                            Text("Label Diagnostics")
+                            Spacer()
+                            if labelDiagCount > 0 {
+                                Text("\(labelDiagCount)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .onAppear {
+                        Task {
+                            let count = await LabelDiagnosticsStore.shared.lineCount()
+                            await MainActor.run { labelDiagCount = count }
+                        }
+                    }
+                    .onReceive(LabelDiagnosticsStore.shared.eventsPublisher.receive(on: DispatchQueue.main)) { events in
+                        labelDiagCount = events.count
                     }
                 }
                 #endif
@@ -413,4 +437,3 @@ struct SettingsView: View {
         }
     }
 }
-

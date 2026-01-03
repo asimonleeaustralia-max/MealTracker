@@ -365,7 +365,7 @@ struct PhotoNutritionGuesser {
     // MARK: - OCR
 
     // Try .fast first; if the text is empty/too short, try .accurate
-    private static func recognizeTextDualPass(in image: UIImage, languageCode: String?) async -> String? {
+    static func recognizeTextDualPass(in image: UIImage, languageCode: String?) async -> String? {
         // Run .fast; if we get a small amount of text, still run .accurate and prefer the longer output.
         async let tFastOpt = recognizeText(in: image, languageCode: languageCode, level: .fast)
         let tFast = await tFastOpt
@@ -426,7 +426,7 @@ struct PhotoNutritionGuesser {
 
         // If no preferred code and we're running the accurate pass, strongly bias to English.
         if normalizedPreferred == nil && level == .accurate {
-            return ["en", "en-US"]
+            return ["en", "en-US", "en-AU"]
         }
 
         // Otherwise, query supported languages and bias if preferred provided.
@@ -464,10 +464,9 @@ struct PhotoNutritionGuesser {
             languages.insert(pref, at: 0)
         }
 
-        // Ensure English is present (common labels) but avoid duplicates.
-        if !languages.contains("en") {
-            languages.append("en")
-        }
+        // Ensure English (and AU) is present (common labels) but avoid duplicates.
+        if !languages.contains("en-AU") { languages.append("en-AU") }
+        if !languages.contains("en") { languages.append("en") }
 
         return languages
     }
@@ -648,47 +647,27 @@ struct PhotoNutritionGuesser {
 
         // MARK: Multilingual keyword aliases
 
-        // Carbohydrates
+        // Carbohydrates (include singular “carbohydrate” for AU/NZ)
         let carbsKeys: [String] = [
-            // English
             "carb","carbs","carbohydrate","carbohydrates",
-            // French
             "glucide","glucides","dont sucres",
-            // German
             "kohlenhydrat","kohlenhydrate","davon zucker",
-            // Spanish/Portuguese
             "hidratos de carbono","hidratos","carbohidrato","carbohidratos","carboidrato","carboidratos",
-            // Italian
             "carboidrati","di cui zuccheri",
-            // Dutch
             "koolhydraten","waarvan suikers",
-            // Nordic
             "kolhydrater","kulhydrater","karbohydrater",
-            // Polish/Czech/Slovak/Hungarian/Romanian
             "węglowodany","cukry","sacharidy","cukry z toho","sacharidov","cukry z toho","szénhidrát","zaharuri","carbohidrați",
-            // Greek
             "υδατάνθρακες","εκ των οποίων σάκχαρα",
-            // Turkish
             "karbonhidrat","şekerler",
-            // Russian/Ukrainian/Bulgarian (Cyrillic)
             "углеводы","в том числе сахара","вуглеводи","в т.ч. цукри","въглехидрати","от които захари",
-            // Arabic
             "كربوهيدرات","نشويات","منها سكريات","منها سكر",
-            // Hebrew
             "פחמימות","מתוכן סוכרים",
-            // Hindi/Bengali
             "कार्बोहाइड्रेट","कार्ब्स","शर्करा","जिसमें शर्करा","কার্বোহাইড্রেট","কার্বস","চিনি","যার মধ্যে চিনি",
-            // Thai
             "คาร์โบไฮเดรต","คาร์บ","น้ำตาลรวม","ซึ่งน้ำตาล",
-            // Vietnamese
             "carbohydrat","carb","tinh bột","đường trong đó",
-            // Indonesian/Malay
             "karbohidrat","karbo","gula termasuk",
-            // Chinese (Simplified/Traditional)
             "碳水化合物","碳水","其中糖","糖",
-            // Japanese
             "炭水化物","糖質","うち糖類",
-            // Korean
             "탄수화물","당류","그중 당류","그중당류"
         ]
 
@@ -753,7 +732,7 @@ struct PhotoNutritionGuesser {
             "балластные вещества","клетчатка","харчові волокна",
             "ألياف","الياف",
             "סיבים תזונתיים","סיבים",
-            "रेशा","फाइबर","আঁশ","ফাইबर",
+            "रेशा","फाइबर","আঁশ","ফাইবার",
             "ใยอาหาร",
             "chất xơ",
             "serat",
@@ -890,7 +869,7 @@ struct PhotoNutritionGuesser {
         let vitCKeys = ["vitamin c","vit c","ascorbic","ascorbate","ácido ascórbico","витамин c","维生素c","維生素c","ビタミンc","비타민c","فيتامين c","ויטמין c","विटामिन c","ভিটামিন c"]
         let vitDKeys = ["vitamin d","vit d","cholecalciferol","витамин d","维生素d","維生素d","ビタミンd","비타민d","فيتامين d","ויטמין d","विटामिन d","ভিটামিন d"]
         let vitEKeys = ["vitamin e","vit e","tocopherol","витамин e","维生素e","維生素e","ビタミンe","비타민e","فيتامين e","ויטמין e","विटामिन e","ভিটামিন e"]
-        let vitKKeys = ["vitamin k","vit k","phylloquinone","menaquinone","витамин k","维生素k","維生素k","ビタミンk","비타민k","فيتامين k","ויטמין k","विटामिन k","ভिटামিন k"]
+        let vitKKeys = ["vitamin k","vit k","phylloquinone","menaquinone","витамин k","维生素k","維生素k","ビタミンk","비타민k","فيتامين k","ויטמין k","विटामिन k","ভিটামিন k"]
 
         let calciumKeys = ["calcium","ca","кальций","кальций (ca)","钙","鈣","カルシウム","칼슘","كالسيوم","סידן","कैल्शियम","ক্যালসিয়াম"]
         let ironKeys = ["iron","fe","железо","залізо","铁","鐵","鉄","철","حديد","ברזל","लोहा","আয়রন"]
@@ -913,7 +892,7 @@ struct PhotoNutritionGuesser {
             "energia","kalorien","kilokalorien","kcal",
             "energia","kcal","kalorii",
             "energia","kcal","калории","ккал",
-            "طاقة","كيلوكالوري","सعرات","سعرات حرارية","كيلو كالوري","كيلو-कालोरी","kcal",
+            "طاقة","كيلوكалوري","سعرات","سعرات حرارية","كيلو كالوري","كيلو-कालोरी","kcal",
             "אנרגיה","קק\"ל","קק״ל","kcal",
             "ऊर्जा","किलो कैलोरी","किलो-कैलोरी","kcal",
             "শক্তি","কিলোক্যালোরি","kcal",
@@ -945,6 +924,7 @@ struct PhotoNutritionGuesser {
             "에너지","킬로줄","kJ"
         ])
 
+        // 1) Pass 1: simple per-line extraction (existing logic)
         for raw in lines {
             let line = raw
 
@@ -1074,6 +1054,145 @@ struct PhotoNutritionGuesser {
                     result.magnesium = mg
                 } else if let mgFromMicro = parseMicrogramValueInt(line, keywords: magnesiumKeys) {
                     result.magnesium = mgFromMicro
+                }
+            }
+        }
+
+        // 2) Pass 2: AU/NZ table-aware parsing (e.g., "Protein 2.1 g 3.5 g")
+        // Robust header detection for “Avg. Qty per serving / per 100g”
+        let headerJoined = lines.joined(separator: " ")
+
+        // Regex fragments for AU headers
+        let avgQty = "(?:avg\\.?\\s*qty|average\\s*qty|average\\s*quantity)"
+        let per = "\\s*per\\s*"
+        let serving = "(?:serving|serve)"
+        let hundred = "(?:100\\s*(?:g|gram|ml))"
+
+        func containsRegex(_ pattern: String, in text: String) -> Bool {
+            return firstMatch(pattern, in: text) != nil
+        }
+
+        // Detect presence of per-serving and per-100g columns, tolerant to spacing/punctuation
+        let hasPerServing = containsRegex("(?:" + avgQty + ")?"+per+serving, in: headerJoined)
+        let hasPer100g = containsRegex(per + hundred, in: headerJoined) || containsRegex("(?:" + avgQty + ")"+per+hundred, in: headerJoined)
+
+        func maybeApplyGrams(_ name: [String], into field: inout Double?) {
+            guard field == nil else { return }
+            for line in lines {
+                if let parsed = parseTwoColumnRow(line: line, nameKeys: name, preferFirst: hasPerServing || !hasPer100g, unitPattern: grams) {
+                    field = parsed
+                    break
+                }
+            }
+        }
+
+        func maybeApplyMilligramsInt(_ name: [String], into field: inout Int?) {
+            guard field == nil else { return }
+            for line in lines {
+                if let parsedD = parseTwoColumnRow(line: line, nameKeys: name, preferFirst: hasPerServing || !hasPer100g, unitPattern: milligrams) {
+                    field = Int(round(parsedD))
+                    break
+                } else if let parsedG = parseTwoColumnRow(line: line, nameKeys: name, preferFirst: hasPerServing || !hasPer100g, unitPattern: grams) {
+                    field = Int(round(parsedG * 1000.0))
+                    break
+                }
+            }
+        }
+
+        func maybeApplyMilligramsDouble(_ name: [String], into field: inout Double?) {
+            guard field == nil else { return }
+            for line in lines {
+                if let parsedD = parseTwoColumnRow(line: line, nameKeys: name, preferFirst: hasPerServing || !hasPer100g, unitPattern: milligrams) {
+                    field = parsedD
+                    break
+                } else if let parsedUG = parseTwoColumnRow(line: line, nameKeys: name, preferFirst: hasPerServing || !hasPer100g, unitPattern: micrograms) {
+                    field = parsedUG / 1000.0
+                    break
+                }
+            }
+        }
+
+        // Parse helper for two-column rows:
+        // Matches: ^<name> ... <val1><unit?> [optional header tokens] <val2><unit?>?
+        // This is more tolerant to OCR dropping the second unit and interleaving “avg qty per …” tokens.
+        func parseTwoColumnRow(line: String, nameKeys: [String], preferFirst: Bool, unitPattern: String) -> Double? {
+            let nameAlt = alternation(nameKeys)
+            // Optional AU header noise between values
+            let headerNoise = "(?:\\s*(?:avg\\.?\\s*qty|average\\s*qty|average\\s*quantity)?\\s*(?:per)?\\s*(?:serving|serve|100\\s*(?:g|gram|ml))\\s*)*"
+
+            // number + optional unit
+            let num = "([0-9]+[\\.,]?[0-9]*)"
+            let unitOpt = "(?:\\s*(?:\(unitPattern)))?"
+
+            // Full pattern: name ... first num+unitOpt ... headerNoise ... optional second num+unitOpt
+            let pattern = "\(BSTART)(?:\(nameAlt))\(BEND).*?\(num)\(unitOpt)(?:[^0-9]+\(headerNoise))?(?:[^0-9]+\(num)\(unitOpt))?"
+
+            guard let m = firstMatch(pattern, in: line) else { return nil }
+
+            // Group mapping:
+            // 1 -> first number
+            // 2 -> (optional) first unit
+            // 3 -> (optional) second number (if present)
+            // 4 -> (optional) second unit
+            let firstStr = extractNumber(from: line, group: 1, in: m)
+            var secondStr: String? = nil
+            if m.numberOfRanges >= 3, m.range(at: 3).location != NSNotFound {
+                secondStr = extractNumber(from: line, group: 3, in: m)
+            }
+
+            // Choose column according to preference; fall back gracefully
+            if preferFirst || secondStr == nil {
+                return toDouble(firstStr)
+            } else {
+                return toDouble(secondStr)
+            }
+        }
+
+        // Apply table-aware extraction for typical nutrients if not already found
+        maybeApplyGrams(carbsKeys, into: &result.carbohydrates)
+        maybeApplyGrams(proteinKeys, into: &result.protein)
+        maybeApplyGrams(fatKeys, into: &result.fat)
+        maybeApplyGrams(sugarKeys, into: &result.sugars)
+        maybeApplyGrams(fibreKeys, into: &result.fibre)
+        maybeApplyGrams(satKeys, into: &result.saturatedFat)
+        maybeApplyGrams(transKeys, into: &result.transFat)
+        maybeApplyGrams(monoKeys, into: &result.monounsaturatedFat)
+        maybeApplyGrams(polyKeys, into: &result.polyunsaturatedFat)
+        maybeApplyMilligramsInt(sodiumKeys, into: &result.sodiumMg)
+
+        // Energy row often appears as "Energy 1190 kJ 1980 kJ"
+        if result.calories == nil {
+            for line in lines {
+                // Try kJ two-column row (second unit optional)
+                let kjNum = "([0-9]+[\\.,]?[0-9]*)"
+                let kjOpt = "(?:\\s*(?:\(kJUnits)))?"
+                let kjPattern = "\(BSTART)(?:\(energyKeysKJ))\(BEND).*?\(kjNum)\(kjOpt)(?:[^0-9]+\(kjNum)\(kjOpt))?"
+                if let m = firstMatch(kjPattern, in: line) {
+                    let firstKJ = toInt(extractNumber(from: line, group: 1, in: m)) ?? 0
+                    let secondKJ: Int? = {
+                        if m.numberOfRanges > 2, m.range(at: 2).location != NSNotFound {
+                            return toInt(extractNumber(from: line, group: 2, in: m))
+                        }
+                        return nil
+                    }()
+                    let kj = ((hasPerServing || !hasPer100g) ? firstKJ : (secondKJ ?? firstKJ))
+                    result.calories = Int(round(Double(kj) / 4.184))
+                    break
+                }
+                // Try kcal two-column row (second unit optional)
+                let kcalNum = "([0-9]+[\\.,]?[0-9]*)"
+                let kcalOpt = "(?:\\s*(?:\(kcalUnits)))?"
+                let kcalPattern = "\(BSTART)(?:\(energyKeysKcal))\(BEND).*?\(kcalNum)\(kcalOpt)(?:[^0-9]+\(kcalNum)\(kcalOpt))?"
+                if let m = firstMatch(kcalPattern, in: line) {
+                    let first = toInt(extractNumber(from: line, group: 1, in: m)) ?? 0
+                    let second: Int? = {
+                        if m.numberOfRanges > 2, m.range(at: 2).location != NSNotFound {
+                            return toInt(extractNumber(from: line, group: 2, in: m))
+                        }
+                        return nil
+                    }()
+                    result.calories = (hasPerServing || !hasPer100g) ? first : (second ?? first)
+                    break
                 }
             }
         }
@@ -1476,7 +1595,7 @@ private enum LocalizedUnits {
     // kJ
     static let kjPattern: String = {
         alternation([
-            "kj","кдж","千焦","キロジュール","킬로줄","กิโลจูล","كيلوجול","ק\"ג'","קג׳"
+            "kj","кдж","千焦","キロジュール","킬로줄","กิโลจูล","كيلوجول","ק\"ג'","קג׳"
         ])
     }()
 
@@ -1484,4 +1603,3 @@ private enum LocalizedUnits {
         words.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
     }
 }
-

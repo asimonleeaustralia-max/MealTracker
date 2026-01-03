@@ -11,6 +11,7 @@ import CoreLocation
 import UIKit
 import AVFoundation
 import Vision
+import CryptoKit
 
 extension MealFormView {
 
@@ -281,65 +282,19 @@ extension MealFormView {
         markGuess = true
     }
 
-    // Wrap analyzePhoto() to manage snapshot and undo state
-    func analyzePhotoWithSnapshot() async {
-        // If undo is active, ignore to avoid stacking
-        guard !wizardCanUndo else { return }
-        // Make sure we have a photo selected
-        guard selectedIndex < galleryItems.count else { return }
-
-        // Capture snapshot before we mutate any field
-        await MainActor.run {
-            wizardUndoSnapshot = captureSnapshotForWizard()
-            // Clear transient barcode at the start of a new run
-            lastDetectedBarcode = nil
-        }
-
-        // Run analysis
-        await analyzePhoto()
-
-        // If there was an error or nothing changed, do not enable undo
-        let enableUndo: Bool = await MainActor.run {
-            // Heuristic: enable if at least one field differs from snapshot
-            guard let snap = wizardUndoSnapshot else { return false }
-            let changed =
-                calories != snap.calories ||
-                carbohydrates != snap.carbohydrates ||
-                protein != snap.protein ||
-                sodium != snap.sodium ||
-                fat != snap.fat ||
-                sugars != snap.sugars ||
-                starch != snap.starch ||
-                fibre != snap.fibre ||
-                monounsaturatedFat != snap.monounsaturatedFat ||
-                polyunsaturatedFat != snap.polyunsaturatedFat ||
-                saturatedFat != snap.saturatedFat ||
-                transFat != snap.transFat ||
-                vitaminA != snap.vitaminA ||
-                vitaminB != snap.vitaminB ||
-                vitaminC != snap.vitaminC ||
-                vitaminD != snap.vitaminD ||
-                vitaminE != snap.vitaminE ||
-                vitaminK != snap.vitaminK ||
-                calcium != snap.calcium ||
-                iron != snap.iron ||
-                potassium != snap.potassium ||
-                zinc != snap.zinc ||
-                magnesium != snap.magnesium
-            return changed && analyzeError == nil
-        }
-
-        await MainActor.run {
-            wizardCanUndo = enableUndo
-            if !enableUndo {
-                // Drop snapshot if nothing to undo
-                wizardUndoSnapshot = nil
-            }
-        }
+    // Wrapper: SHA-256 of normalized OCR text -> hex string (for synthetic keys)
+    private func sha256Hex(of text: String) -> String {
+        let data = Data(text.utf8)
+        let digest = SHA256.hash(data: data)
+        return digest.compactMap { String(format: "%02x", $0) }.joined()
     }
 
-    // Add back: core analysis pipeline invoked by the wand
-    func analyzePhoto() async {
+    // Wrap analyzePhoto() to manage snapshot and undo state
+    func analyzePhotoWithSnapshot() async {
+        #if DEBUG
+        await LabelDiagnosticsStore.shared.appendEvent(.init(stage: .analyzeStart))
+        #endif
+
         await MainActor.run {
             isAnalyzing = true
             analyzeError = nil
@@ -360,6 +315,9 @@ extension MealFormView {
         }()
 
         guard let baseImage = image else {
+            #if DEBUG
+            await LabelDiagnosticsStore.shared.appendEvent(.init(stage: .analyzeError, message: "No image"))
+            #endif
             await MainActor.run {
                 analyzeError = "No image"
                 wizardProgress = nil
@@ -368,16 +326,27 @@ extension MealFormView {
             return
         }
 
+        #if DEBUG
+        await LabelDiagnosticsStore.shared.appendEvent(.init(stage: .imagePrepared))
+        #endif
+
         // 1) Try barcode on rotations; if found, apply via repository (local DB + OFF)
         var appliedFromBarcode = false
         var detectedCode: String?
         var sawUnreadableBarcode = false
         do {
             let variants = PhotoNutritionGuesser.rotationVariants(of: baseImage)
-            for img in variants {
+            let degrees = [0, 90, 180, 270]
+            for (idx, img) in variants.enumerated() {
+                #if DEBUG
+                await LabelDiagnosticsStore.shared.appendEvent(.init(stage: .rotationAttempt, rotationDegrees: (idx < degrees.count ? degrees[idx] : 0)))
+                #endif
                 // First, quick decode attempt
                 if let code = await PhotoNutritionGuesser.detectFirstBarcode(in: img) {
                     detectedCode = code
+                    #if DEBUG
+                    await LabelDiagnosticsStore.shared.appendEvent(.init(stage: .barcodeDecoded, code: code))
+                    #endif
                     await MainActor.run {
                         lastDetectedBarcode = code
                         wizardProgress = "Barcode: \(code)"
@@ -464,6 +433,9 @@ extension MealFormView {
                             recomputeConsistency(resetPrevMismatch: false)
                             forceEnableSave = true
                         }
+                        #if DEBUG
+                        await LabelDiagnosticsStore.shared.appendEvent(.init(stage: .applyToForm, fieldsFilled: []))
+                        #endif
                         appliedFromBarcode = true
                     }
                     break
@@ -472,6 +444,13 @@ extension MealFormView {
                     let presence = await PhotoNutritionGuesser.probeBarcodePresence(in: img)
                     if case .presentButUnreadable = presence {
                         sawUnreadableBarcode = true
+                        #if DEBUG
+                        await LabelDiagnosticsStore.shared.appendEvent(.init(stage: .barcodeUnreadable))
+                        #endif
+                    } else if case .none = presence {
+                        #if DEBUG
+                        await LabelDiagnosticsStore.shared.appendEvent(.init(stage: .barcodeNone))
+                        #endif
                     }
                 }
             }
@@ -487,18 +466,117 @@ extension MealFormView {
 
         // 2) OCR if nothing applied yet, or to complement missing fields
         await MainActor.run { wizardProgress = appliedFromBarcode ? wizardProgress : "Reading label…" }
+
+        // For diagnostics, try both OCR passes explicitly to capture timing/length
         if let text = await recognizeTextForWizard(in: baseImage, languageCode: appLanguageCode) {
+            #if DEBUG
+            await LabelDiagnosticsStore.shared.appendEvent(.init(stage: .ocrFinished, textLength: text.count))
+            #endif
+
             let parsed = PhotoNutritionGuesser.parseNutrition(from: text)
+            #if DEBUG
+            await LabelDiagnosticsStore.shared.appendEvent(.init(stage: .parseResult, parsedFieldCount: parsed.parsedFieldCount))
+            #endif
+
+            // NEW: Upsert parsed OCR text into DuckDB (barcodes table)
+            Task.detached {
+                // Build a deterministic key: prefer detected barcode, else OCR hash
+                let key: String = {
+                    if let code = detectedCode, !code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        return code.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: " ", with: "")
+                    } else {
+                        // Normalize the OCR text a little for stability before hashing
+                        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let hash = self.sha256Hex(of: normalized)
+                        return "ocr:\(hash)"
+                    }
+                }()
+
+                #if DEBUG
+                await LabelDiagnosticsStore.shared.appendEvent(.init(stage: .ocrUpsertAttempt, upsertKey: key))
+                #endif
+
+                // Map GuessResult -> LocalBarcodeDB.Entry
+                let entry = LocalBarcodeDB.Entry(
+                    code: key,
+                    calories: parsed.calories,
+                    carbohydrates: parsed.carbohydrates,
+                    protein: parsed.protein,
+                    fat: parsed.fat,
+                    sodiumMg: parsed.sodiumMg,
+                    sugars: parsed.sugars,
+                    starch: parsed.starch,
+                    fibre: parsed.fibre,
+                    monounsaturatedFat: parsed.monounsaturatedFat,
+                    polyunsaturatedFat: parsed.polyunsaturatedFat,
+                    saturatedFat: parsed.saturatedFat,
+                    transFat: parsed.transFat,
+                    animalProtein: parsed.animalProtein,
+                    plantProtein: parsed.plantProtein,
+                    proteinSupplements: parsed.proteinSupplements,
+                    vitaminA: parsed.vitaminA,
+                    vitaminB: parsed.vitaminB,
+                    vitaminC: parsed.vitaminC,
+                    vitaminD: parsed.vitaminD,
+                    vitaminE: parsed.vitaminE,
+                    vitaminK: parsed.vitaminK,
+                    calcium: parsed.calcium,
+                    iron: parsed.iron,
+                    potassium: parsed.potassium,
+                    zinc: parsed.zinc,
+                    magnesium: parsed.magnesium
+                )
+
+                do {
+                    try await BarcodeRepository.shared.upsert(entry: entry)
+                    #if DEBUG
+                    await LabelDiagnosticsStore.shared.appendEvent(.init(stage: .ocrUpsertSuccess, upsertKey: key))
+                    #endif
+                    await MainActor.run {
+                        #if DEBUG
+                        self.appendWizardLog("OCR upserted to DuckDB with key \(key)")
+                        #endif
+                        if self.wizardProgress == nil || self.wizardProgress?.isEmpty == true {
+                            self.wizardProgress = "Saved OCR to DB"
+                        }
+                    }
+                } catch {
+                    #if DEBUG
+                    await LabelDiagnosticsStore.shared.appendEvent(.init(stage: .ocrUpsertFailure, upsertKey: key, message: error.localizedDescription))
+                    #endif
+                    await MainActor.run {
+                        #if DEBUG
+                        self.appendWizardLog("OCR upsert failed: \(error.localizedDescription)")
+                        #endif
+                        // Don’t surface as fatal; continue filling the form.
+                    }
+                }
+            }
+
             // Apply empty-only fields from parsed result
             await MainActor.run {
+                var filled: [String] = []
+
                 // calories (kcal)
+                let beforeCalories = calories
                 applyIfEmpty(&calories, with: parsed.calories, markGuess: &caloriesIsGuess)
+                if calories != beforeCalories { filled.append("calories") }
+
                 // grams
+                let bCarb = carbohydrates
                 applyIfEmpty(&carbohydrates, with: parsed.carbohydrates, markGuess: &carbohydratesIsGuess)
+                if carbohydrates != bCarb { filled.append("carbohydrates") }
+
+                let bProt = protein
                 applyIfEmpty(&protein, with: parsed.protein, markGuess: &proteinIsGuess)
+                if protein != bProt { filled.append("protein") }
+
+                let bFat = fat
                 applyIfEmpty(&fat, with: parsed.fat, markGuess: &fatIsGuess)
+                if fat != bFat { filled.append("fat") }
 
                 // sodium UI: parsed.sodiumMg is mg
+                let bSodium = sodium
                 if sodium.isEmpty, let mg = parsed.sodiumMg {
                     if sodiumUnit == .milligrams {
                         sodium = String(max(0, mg))
@@ -508,29 +586,56 @@ extension MealFormView {
                     }
                     sodiumIsGuess = true
                 }
+                if sodium != bSodium { filled.append("sodium") }
 
                 // sub-macros (grams)
+                let bSug = sugars
                 applyIfEmpty(&sugars, with: parsed.sugars, markGuess: &sugarsIsGuess)
+                if sugars != bSug { filled.append("sugars") }
+
+                let bSta = starch
                 applyIfEmpty(&starch, with: parsed.starch, markGuess: &starchIsGuess)
+                if starch != bSta { filled.append("starch") }
+
+                let bFib = fibre
                 applyIfEmpty(&fibre, with: parsed.fibre, markGuess: &fibreIsGuess)
+                if fibre != bFib { filled.append("fibre") }
 
                 // fat breakdown (grams)
+                let bMono = monounsaturatedFat
                 applyIfEmpty(&monounsaturatedFat, with: parsed.monounsaturatedFat, markGuess: &monounsaturatedFatIsGuess)
+                if monounsaturatedFat != bMono { filled.append("monounsaturatedFat") }
+
+                let bPoly = polyunsaturatedFat
                 applyIfEmpty(&polyunsaturatedFat, with: parsed.polyunsaturatedFat, markGuess: &polyunsaturatedFatIsGuess)
+                if polyunsaturatedFat != bPoly { filled.append("polyunsaturatedFat") }
+
+                let bSat = saturatedFat
                 applyIfEmpty(&saturatedFat, with: parsed.saturatedFat, markGuess: &saturatedFatIsGuess)
+                if saturatedFat != bSat { filled.append("saturatedFat") }
+
+                let bTrans = transFat
                 applyIfEmpty(&transFat, with: parsed.transFat, markGuess: &transFatIsGuess)
+                if transFat != bTrans { filled.append("transFat") }
 
                 // protein breakdown (grams)
+                let bAni = animalProtein
                 applyIfEmpty(&animalProtein, with: parsed.animalProtein, markGuess: &animalProteinIsGuess)
-                applyIfEmpty(&plantProtein, with: parsed.plantProtein, markGuess: &plantProteinIsGuess)
-                applyIfEmpty(&proteinSupplements, with: parsed.proteinSupplements, markGuess: &proteinSupplementsIsGuess)
+                if animalProtein != bAni { filled.append("animalProtein") }
 
-                // vitamins/minerals: parsed in mg base, convert to UI unit
-                func setVitaminUI(_ target: inout String, _ valueMg: Double?, _ flag: inout Bool) {
+                let bPlant = plantProtein
+                applyIfEmpty(&plantProtein, with: parsed.plantProtein, markGuess: &plantProteinIsGuess)
+                if plantProtein != bPlant { filled.append("plantProtein") }
+
+                let bSupp = proteinSupplements
+                applyIfEmpty(&proteinSupplements, with: parsed.proteinSupplements, markGuess: &proteinSupplementsIsGuess)
+                if proteinSupplements != bSupp { filled.append("proteinSupplements") }
+
+                func setVitaminUI(_ target: inout String, _ valueMg: Double?, _ flag: inout Bool, name: String) {
+                    let before = target
                     guard target.isEmpty, let mg = valueMg else { return }
                     switch vitaminsUnit {
                     case .milligrams:
-                        // Preserve decimals up to 3 places
                         let nf = NumberFormatter()
                         nf.locale = Locale.current
                         nf.minimumFractionDigits = 0
@@ -541,15 +646,17 @@ extension MealFormView {
                         target = String(max(0, Int((mg * 1000.0).rounded())))
                     }
                     flag = true
+                    if target != before { filled.append(name) }
                 }
-                setVitaminUI(&vitaminA, parsed.vitaminA, &vitaminAIsGuess)
-                setVitaminUI(&vitaminB, parsed.vitaminB, &vitaminBIsGuess)
-                setVitaminUI(&vitaminC, parsed.vitaminC, &vitaminCIsGuess)
-                setVitaminUI(&vitaminD, parsed.vitaminD, &vitaminDIsGuess)
-                setVitaminUI(&vitaminE, parsed.vitaminE, &vitaminEIsGuess)
-                setVitaminUI(&vitaminK, parsed.vitaminK, &vitaminKIsGuess)
+                setVitaminUI(&vitaminA, parsed.vitaminA, &vitaminAIsGuess, name: "vitaminA")
+                setVitaminUI(&vitaminB, parsed.vitaminB, &vitaminBIsGuess, name: "vitaminB")
+                setVitaminUI(&vitaminC, parsed.vitaminC, &vitaminCIsGuess, name: "vitaminC")
+                setVitaminUI(&vitaminD, parsed.vitaminD, &vitaminDIsGuess, name: "vitaminD")
+                setVitaminUI(&vitaminE, parsed.vitaminE, &vitaminEIsGuess, name: "vitaminE")
+                setVitaminUI(&vitaminK, parsed.vitaminK, &vitaminKIsGuess, name: "vitaminK")
 
-                func setMineralUIInt(_ target: inout String, _ valueMg: Int?, _ flag: inout Bool) {
+                func setMineralUIInt(_ target: inout String, _ valueMg: Int?, _ flag: inout Bool, name: String) {
+                    let before = target
                     guard target.isEmpty, let mg = valueMg else { return }
                     switch vitaminsUnit {
                     case .milligrams:
@@ -558,12 +665,13 @@ extension MealFormView {
                         target = String(max(0, mg * 1000))
                     }
                     flag = true
+                    if target != before { filled.append(name) }
                 }
-                func setMineralUIDouble(_ target: inout String, _ valueMg: Double?, _ flag: inout Bool) {
+                func setMineralUIDouble(_ target: inout String, _ valueMg: Double?, _ flag: inout Bool, name: String) {
+                    let before = target
                     guard target.isEmpty, let mg = valueMg else { return }
                     switch vitaminsUnit {
                     case .milligrams:
-                        // Preserve decimals for potassium (Double mg)
                         let nf = NumberFormatter()
                         nf.locale = Locale.current
                         nf.minimumFractionDigits = 0
@@ -574,15 +682,20 @@ extension MealFormView {
                         target = String(max(0, Int((mg * 1000.0).rounded())))
                     }
                     flag = true
+                    if target != before { filled.append(name) }
                 }
 
-                setMineralUIInt(&calcium, parsed.calcium, &calciumIsGuess)
-                setMineralUIInt(&iron, parsed.iron, &ironIsGuess)
-                setMineralUIDouble(&potassium, parsed.potassium, &potassiumIsGuess)
-                setMineralUIInt(&zinc, parsed.zinc, &zincIsGuess)
-                setMineralUIInt(&magnesium, parsed.magnesium, &magnesiumIsGuess)
+                setMineralUIInt(&calcium, parsed.calcium, &calciumIsGuess, name: "calcium")
+                setMineralUIInt(&iron, parsed.iron, &ironIsGuess, name: "iron")
+                setMineralUIDouble(&potassium, parsed.potassium, &potassiumIsGuess, name: "potassium")
+                setMineralUIInt(&zinc, parsed.zinc, &zincIsGuess, name: "zinc")
+                setMineralUIInt(&magnesium, parsed.magnesium, &magnesiumIsGuess, name: "magnesium")
 
                 recomputeConsistency(resetPrevMismatch: false)
+
+                #if DEBUG
+                Task { await LabelDiagnosticsStore.shared.appendEvent(.init(stage: .applyToForm, fieldsFilled: filled)) }
+                #endif
             }
         }
 
@@ -590,7 +703,6 @@ extension MealFormView {
             if appliedFromBarcode {
                 wizardProgress = "Applied from barcode"
             } else if sawUnreadableBarcode {
-                // Keep the unreadable hint if set earlier, unless OCR filled something and you prefer a different message.
                 if wizardProgress == nil || wizardProgress?.isEmpty == true {
                     wizardProgress = "Barcode not readable."
                 }
@@ -598,9 +710,12 @@ extension MealFormView {
                 wizardProgress = "Analysis complete"
             }
             isAnalyzing = false
-            // If anything non-empty now, allow save button
             forceEnableSave = true
         }
+
+        #if DEBUG
+        await LabelDiagnosticsStore.shared.appendEvent(.init(stage: .analyzeComplete))
+        #endif
     }
 
     // MARK: - Consistency and helper text
@@ -669,48 +784,25 @@ extension MealFormView {
 
     // MARK: - OCR wrapper used by wizard
 
-    // Wrapper that uses PhotoNutritionGuesser’s OCR dual-pass with preprocessing.
+    // Wrapper that uses PhotoNutritionGuesser’s OCR dual-pass with preprocessing and rotations.
     func recognizeTextForWizard(in image: UIImage, languageCode: String?) async -> String? {
-        // Use the higher-quality OCR pipeline from PhotoNutritionGuesser
-        // The function expects a preprocessed image; we can just reuse the internal workflow
-        // by calling recognizeTextDualPass through a public facade if needed. Since that’s internal,
-        // we approximate by running accurate pass here; analyzePhoto already tries rotations.
-        // For better reuse you can expose a public API; for now, reuse the accurate pass logic here.
-        // We’ll leverage the same Vision request via PhotoNutritionGuesser.recognitionLanguagesFor.
-        // For simplicity, we call into the private dual-pass via a helper approach: re-run the accurate pass using Vision directly here if needed.
-
-        // Reuse PhotoNutritionGuesser’s preprocessing
+        // Reuse PhotoNutritionGuesser OCR pipeline to keep preprocessing and language hints consistent.
+        // Build rotation variants and pick the longest recognized text among them.
         let variants = PhotoNutritionGuesser.rotationVariants(of: image)
         var best: String?
         for img in variants {
-            // Use the same private helper behavior: try accurate pass via Vision here
-            if let text = await withCheckedContinuation({ (cont: CheckedContinuation<String?, Never>) in
-                let req = VNRecognizeTextRequest { req, _ in
-                    let lines = (req.results as? [VNRecognizedTextObservation])?.compactMap { $0.topCandidates(1).first?.string } ?? []
-                    cont.resume(returning: lines.isEmpty ? nil : lines.joined(separator: "\n"))
-                }
-                req.recognitionLevel = .accurate
-                req.usesLanguageCorrection = true
-                // Bias languages similar to PhotoNutritionGuesser
-                let langs = {
-                    // try to bias to English when no preferred
-                    if (languageCode?.isEmpty ?? true) {
-                        return ["en", "en-US"]
-                    }
-                    return [languageCode!,"en"]
-                }()
-                req.recognitionLanguages = langs
-                let handler = VNImageRequestHandler(cgImage: img.cgImage!, options: [:])
-                DispatchQueue.global(qos: .userInitiated).async {
-                    do { try handler.perform([req]) } catch { cont.resume(returning: nil) }
+            let ocrReady = img // PhotoNutritionGuesser.recognizeTextDualPass does its own preprocessing
+            if let text = await withUnsafeContinuation({ (cont: UnsafeContinuation<String?, Never>) in
+                Task {
+                    let t = await PhotoNutritionGuesser.recognizeTextDualPass(in: ocrReady, languageCode: languageCode)
+                    cont.resume(returning: t)
                 }
             }) {
-                if let b = best {
-                    if text.count > b.count { best = text }
+                if let current = best {
+                    if text.count > current.count { best = text }
                 } else {
                     best = text
                 }
-                if let b = best, b.count > 10 { /* good enough */ }
             }
         }
         return best
@@ -837,3 +929,4 @@ extension MealFormView {
 
     // ... rest of the file remains unchanged ...
 }
+
