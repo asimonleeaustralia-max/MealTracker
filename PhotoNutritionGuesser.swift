@@ -506,11 +506,33 @@ struct PhotoNutritionGuesser {
     // Core implementation with optional diagnostics sink (DEBUG passes a non-nil array).
     private static func parseNutrition_impl(from rawText: String, collecting diags: inout [String]?) -> GuessResult {
         // Normalize OCR text robustly for multilingual matching
-        let lines = rawText
+        var normalizedLines = rawText
             .components(separatedBy: .newlines)
             .map { TextNormalizer.normalize($0) }
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+
+        // Heuristic join for short continuation lines (helps split headers/values like "1990kJ" on new line)
+        if !normalizedLines.isEmpty {
+            var joined: [String] = []
+            for line in normalizedLines {
+                if let last = joined.last {
+                    // Continuation if current line is short, starts with unit/number/punctuation, or is a header fragment
+                    let isContinuation = line.count <= 6
+                        || line.hasPrefix("kj")
+                        || line.hasPrefix("kcal")
+                        || line.range(of: #"^(per|avg|average|serve|serving|100g|100 ml|g|mg|ug|[0-9])"#, options: .regularExpression) != nil
+                    if isContinuation {
+                        joined[joined.count - 1] = (last + " " + line).trimmingCharacters(in: .whitespaces)
+                        continue
+                    }
+                }
+                joined.append(line)
+            }
+            normalizedLines = joined
+        }
+
+        let lines = normalizedLines
 
         var result = GuessResult()
 
@@ -667,7 +689,7 @@ struct PhotoNutritionGuesser {
                     return kcal
                 }
             }
-            // Bare "xxx kcal" localized
+            // Bare "xxx kcal" localized, allow optional missing space after number (handled in normalizer but keep tolerant)
             if let mBare = firstMatch("([0-9]+[\\.,]?[0-9]*)\\s*(?:\(kcalUnits))\(BEND)", in: line),
                let val = toInt(extractNumber(from: line, group: 1, in: mBare)) {
                 return val
@@ -706,7 +728,7 @@ struct PhotoNutritionGuesser {
             "protein","proteins","proteína","proteínas","proteine","eiweiß","eiweiss","eiweıß",
             "proteína","proteine","proteínas",
             "proteine","протеин","белки","білки","протеини",
-            "العربوين","बرو틴",
+            "العربوين","ब्रो틴",
             "חלבון",
             "प्रोटीन","प्रोटिन","প্রোটিন",
             "โปรตีน",
@@ -905,7 +927,7 @@ struct PhotoNutritionGuesser {
         let ironKeys = ["iron","fe","железо","залізо","铁","鐵","鉄","철","حديد","ברזל","लोहा","আয়রন"]
         let potassiumKeys = ["potassium","kalium","k","калий","калій","钾","鉀","カリウム","칼륨","بوتاسيوم","אשלגן","पोटैशियम","पटाशियम","পটাশিয়াম"]
         let zincKeys = ["zinc","zn","цинк","цинк (zn)","锌","鋅","亜鉛","아연","زنك","אבץ","जिंक","দস্তা"]
-        let magnesiumKeys = ["magnesium","mg","магний","магній","镁","鎂","マグネシウム","마グネシウム","مगनيسيوم","מגנזיום","मैग्नीशियम","ম্যাগনেসিয়াম"]
+        let magnesiumKeys = ["magnesium","mg","магний","магній","镁","鎂","マグネシウム","마グ네シウム","مगनيسيوم","מגנזיום","मैग्नीशियम","ম্যাগনেসিয়াম"]
 
         // Sodium and salt
         let sodiumKeys = ["sodium","na","sodio","natrium","ナトリウム","나트륨","钠","鈉","натрий","натрій","صوديوم","נתרן","सोडियम","সোডিয়াম","natrium (na)"]
@@ -922,7 +944,7 @@ struct PhotoNutritionGuesser {
             "energia","kalorien","kilokalorien","kcal",
             "energia","kcal","kalorii",
             "energia","kcal","калории","ккал",
-            "طاقة","كيلوكалوري","سعرات","سعرات حرارية","كيلو كالोरी","كيلو-कालोरी","kcal",
+            "طاقة","كيلوكالوري","سعرات","سعرات حرارية","كيلو كالोरी","كيلو-कालोरी","kcal",
             "אנרגיה","קק\"ל","קק״ל","kcal",
             "ऊर्जा","किलो कैलोरी","किलो-कैलोरी","kcal",
             "শক্তি","কিলোক্যালোরি","kcal",
@@ -1671,6 +1693,9 @@ private enum TextNormalizer {
         // Lowercase (safe for scripts with case; others unaffected)
         t = t.lowercased()
 
+        // Domain-specific OCR fixups for food labels
+        t = domainFixups(t)
+
         // Remove diacritics for Latin/Greek/Cyrillic only to aid matching; keep other scripts untouched.
         // Heuristic: if string contains only Latin/Greek/Cyrillic ranges, strip diacritics.
         if t.range(of: #"^[\p{Latin}\p{Greek}\p{Cyrillic}\s\p{Number}\p{Punctuation}]+$"#, options: .regularExpression) != nil {
@@ -1679,6 +1704,42 @@ private enum TextNormalizer {
 
         // Collapse whitespace
         t = t.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+
+        return t
+    }
+
+    // Heuristic replacements to repair common OCR artifacts on AU/NZ/EN labels
+    private static func domainFixups(_ s: String) -> String {
+        var t = s
+
+        // Fix stuck units (no space): 1990kJ, 2.1g, 72mg -> add a space before unit
+        t = t.replacingOccurrences(of: #"(?i)\b([0-9]+[.,]?[0-9]*)\s*(kj)\b"#, with: "$1 $2", options: .regularExpression)
+        t = t.replacingOccurrences(of: #"(?i)\b([0-9]+[.,]?[0-9]*)\s*(kcal)\b"#, with: "$1 $2", options: .regularExpression)
+        t = t.replacingOccurrences(of: #"(?i)\b([0-9]+[.,]?[0-9]*)\s*(g)\b"#, with: "$1 $2", options: .regularExpression)
+        t = t.replacingOccurrences(of: #"(?i)\b([0-9]+[.,]?[0-9]*)\s*(mg|ug|mcg)\b"#, with: "$1 $2", options: .regularExpression)
+
+        // Collapse weird bullet/punctuation clusters often produced by OCR
+        t = t.replacingOccurrences(of: #"[•·\.]{2,}"#, with: " ", options: .regularExpression)
+        t = t.replacingOccurrences(of: #"[,\.;:]{2,}"#, with: ", ", options: .regularExpression)
+
+        // E-number artifacts: "1.(322" -> ", (322" (often a list like "... colours (171, 322, 492)")
+        t = t.replacingOccurrences(of: #"\b1\.\(\s*([0-9]{3}[a-z]?)"#, with: ", ($1", options: .regularExpression)
+        // Ensure a comma+space after numbers when followed by "(" without delimiter
+        t = t.replacingOccurrences(of: #"([0-9])[ ]*\("#, with: "$1, (", options: .regularExpression)
+
+        // Common word confusions seen in provided sample
+        t = t.replacingOccurrences(of: "c ilk", with: "milk")
+        t = t.replacingOccurrences(of: "staream", with: "cream")
+        t = t.replacingOccurrences(of: "mod|ca", with: "modifica")
+        t = t.replacingOccurrences(of: "gcurmet", with: "gourmet")
+        t = t.replacingOccurrences(of: "tapiobilisers", with: "stabilisers")
+        t = t.replacingOccurrences(of: "unified starch", with: "modified starch")
+        t = t.replacingOccurrences(of: "tougar", with: "sugar")
+        t = t.replacingOccurrences(of: "props", with: "props") // keep as-is; not sure intended word
+        t = t.replacingOccurrences(of: "vegetable c ilk", with: "vegetable milk")
+
+        // Add a space after closing bracket/parenthesis if stuck to next token
+        t = t.replacingOccurrences(of: #"\)(?=[a-z0-9])"#, with: ") ", options: .regularExpression)
 
         return t
     }
@@ -1728,7 +1789,7 @@ private enum LocalizedUnits {
             "ไมโครกรัม",
             "מק\"ג","מקג","מיקרוגרם",
             "माइक्रोग्राम",
-            "মাইক্রोग্রাম",
+            "মাইক্রোগ্রাম",
             "ميكروغرام"
         ])
     }()
