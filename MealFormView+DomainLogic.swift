@@ -470,7 +470,8 @@ extension MealFormView {
         // For diagnostics, try both OCR passes explicitly to capture timing/length
         if let text = await recognizeTextForWizard(in: baseImage, languageCode: appLanguageCode) {
             #if DEBUG
-            await LabelDiagnosticsStore.shared.appendEvent(.init(stage: .ocrFinished, textLength: text.count))
+            // Include both the length and the full recognized text in the event so it shows in LabelDiagnosticsView.
+            await LabelDiagnosticsStore.shared.appendEvent(.init(stage: .ocrFinished, textLength: text.count, message: text))
             #endif
 
             let parsed = PhotoNutritionGuesser.parseNutrition(from: text)
